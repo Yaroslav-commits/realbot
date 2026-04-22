@@ -19,6 +19,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # ================== НАСТРОЙКИ ==================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [6378471773]
+DB_PATH = os.path.join("data", "lookism_bot.db")
 
 GET_COOLDOWN_HOURS = 3
 BATTLE_COOLDOWN_HOURS = 1.5
@@ -147,7 +148,8 @@ NORMAL_PASS = {1:('krw',25), 2:('atm',5), 3:('bc',12), 4:('atm',2), 5:('pack','e
 ROYALE_PASS = {1:('krw',80), 2:('atm',10), 3:('bc',25), 4:('atm',8), 5:('pack','epic'), 6:('dia',25), 7:('krw',100), 8:('atm',8), 9:('krw',120), 10:('bc',50), 11:('atm',10), 12:('pack','epic'), 13:('krw',150), 14:('dia',150), 15:('krw',180), 16:('atm',5), 17:('bc',60), 18:('krw',200), 19:('pack','epic'), 20:('atm',10), 21:('krw',230), 22:('dia',50), 23:('krw',260), 24:('bc',50), 25:('pack','leg'), 26:('krw',300), 27:('atm',12), 28:('krw',350), 29:('dia',200), 30:('krw',400), 31:('atm',20)}
 
 def db_exec(query, params=(), fetch=False, fetchall=False):
-    with sqlite3.connect("lookism_bot.db") as conn:
+    os.makedirs("data", exist_ok=True)
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute(query, params)
         if fetchall: return c.fetchall()
