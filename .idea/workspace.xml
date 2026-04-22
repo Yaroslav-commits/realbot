@@ -6,7 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="9e9a111f-dea5-49ef-9a80-af6150603ae2" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lookism_bot.db" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -71,7 +71,7 @@
       <workItem from="1776620504174" duration="6876000" />
       <workItem from="1776675375659" duration="18000" />
       <workItem from="1776718463335" duration="32411000" />
-      <workItem from="1776896958894" duration="3176000" />
+      <workItem from="1776896958894" duration="4583000" />
     </task>
     <servers />
   </component>
