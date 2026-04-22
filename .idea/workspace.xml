@@ -52,6 +52,7 @@
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "configurable.group.python.group.settings",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -71,7 +72,7 @@
       <updated>1776620503186</updated>
       <workItem from="1776620504174" duration="6876000" />
       <workItem from="1776675375659" duration="18000" />
-      <workItem from="1776718463335" duration="26696000" />
+      <workItem from="1776718463335" duration="28267000" />
     </task>
     <servers />
   </component>
@@ -79,6 +80,6 @@
     <option name="version" value="3" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/RealBot$main.coverage" NAME="main Coverage Results" MODIFIED="1776847182102" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/RealBot$main.coverage" NAME="main Coverage Results" MODIFIED="1776877886287" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
