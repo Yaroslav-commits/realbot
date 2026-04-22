@@ -1,3 +1,4 @@
+import os
 import asyncio
 import logging
 import sqlite3
@@ -16,7 +17,7 @@ from aiogram.enums import ParseMode
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # ================== НАСТРОЙКИ ==================
-BOT_TOKEN = "8705965588:AAFRnPq3VHxVwXr2WXPgYp8cAgcZGfqQ5T8"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [6378471773]
 
 GET_COOLDOWN_HOURS = 3
