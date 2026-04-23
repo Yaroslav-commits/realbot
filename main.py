@@ -157,15 +157,27 @@ CARDS = {
 "reporter_kim": {"name": "Репортёр Ким", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 12, "intellect": 11, "file_id": "AgACAgIAAxkBAAIHtmnqUWZoySwz2Z-oLWbw4slpMKkcAAJfE2sbwYNYSyJQ9UpwyFv0AQADAgADdwADOwQ", "exclusive": False},
 
 "baek_hanggyeol": {"name": "Пэк Хангёль", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 11, "intellect": 12, "file_id": "AgACAgIAAxkBAAIHumnqUYMjpXR_S4hi6fZp41tOVyMmAAJhE2sbwYNYSzSN6ZhTCHrqAQADAgADdwADOwQ", "exclusive": False},
+"park_jiho": {"name": "Пак Джихо", "rarity": "Обычная ⚪️", "style": "Уличный (Тюремный)", "speed": 29, "strength": 27, "intellect": 28, "file_id": "AgACAgIAAxkBAAIH0GnqWYiveRllH6IpG-Nptl6HrAHSAAKiE2sbwYNYS63SWHtHj8RvAQADAgADdwADOwQ", "exclusive": False},
 
+"lim_lua": {"name": "Лим Луа", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 11, "strength": 10, "intellect": 12, "file_id": "AgACAgIAAxkBAAIHymnqVy6VhZowqnZXvNbaaIvZ9Sx0AAKHE2sbwYNYS7cX0qKNtOlwAQADAgADdwADOwQ", "exclusive": False},
+
+"vivi": {"name": "Виви", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 10, "intellect": 11, "file_id": "AgACAgIAAxkBAAIHzGnqWAABOK6Dsq2AyNkHJd_GaCMY7wACkhNrG8GDWEsD1ZeT1curJQEAAwIAA3cAAzsE", "exclusive": False},
+
+"kang_jinchan": {"name": "Кан Джинчан", "rarity": "Редкая 🟡", "style": "ММА", "speed": 57, "strength": 56, "intellect": 56, "file_id": "AgACAgIAAxkBAAIHzmnqWAwwsECfiPSmpWTIwO5iRUGsAAKTE2sbwYNYS2_K_qSMSxgiAQADAgADdwADOwQ", "exclusive": False},
+
+"wang_ochun": {"name": "Ван Очун", "rarity": "Редкая 🟡", "style": "Уличный", "speed": 55, "strength": 59, "intellect": 55, "file_id": "AgACAgIAAxkBAAIH0mnqWY2PdEur7Pre3Yu9la7h81taAAKjE2sbwYNYS-hstVwUDoAlAQADAgADdwADOwQ", "exclusive": False},
+
+
+#====LIMITED CARDS=====
+"exclusive_card_1": {"name": "Юк Сонджи и Джин Хобин", "rarity": "Легендарная 🔵", "style": "Дзюдо", "speed": 90, "strength": 90, "intellect": 85, "file_id": "AgACAgIAAxkBAAIH5GnqYmtCuh1zzWHavH8k5YOtq8S3AALkE2sbwYNYSxwTnoBWq5jFAQADAgADdwADOwQ", "exclusive": True},
 }
 
 RARITIES = {
     "Обычная ⚪️": {"chance": 55.0, "dup": 1},
-    "Редкая 🟡": {"chance": 29.0, "dup": 2},
+    "Редкая 🟡": {"chance": 29.7, "dup": 2},
     "Эпическая 🟢": {"chance": 14.47, "dup": (4, 5)},
-    "Легендарная 🔵": {"chance": 1.2, "dup": (8, 11)},
-    "Мифическая 🔴": {"chance": 0.3, "dup": (15, 20)},
+    "Легендарная 🔵": {"chance": 0.6, "dup": (8, 11)},
+    "Мифическая 🔴": {"chance": 0.2, "dup": (15, 20)},
     "Божественная ⚫️": {"chance": 0.03, "dup": (50, 100)}
 }
 
@@ -1023,7 +1035,7 @@ PASS_NORMAL_IMG_3 = "AgACAgIAAxkBAAICO2npT3qdFBDkzJEtJvpAv76tZfsPAALtFWsbYxlIS9S
 PASS_NORMAL_IMG_4 = "AgACAgIAAxkBAAICPWnpT4DmcHYmlKkeldmpIKAy4I9wAALuFWsbYxlIS5HkxNAVGOqGAQADAgADdwADOwQ"
 PASS_NORMAL_IMG_5 = "AgACAgIAAxkBAAICP2npT4bQwb50eaG4jiP9vxak_cJyAALvFWsbYxlIS0_NW8CdRi_FAQADAgADdwADOwQ"
 
-PASS_ROYALE_IMG_1 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
+PASS_ROYALE_IMG_1 = "AgACAgIAAxkBAAIH5mnqYyG_EeenGODy4EZWyhhS0uv5AALzE2sbwYNYS_eXd7RzSjByAQADAgADdwADOwQ"
 PASS_ROYALE_IMG_2 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
 PASS_ROYALE_IMG_3 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
 PASS_ROYALE_IMG_4 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
