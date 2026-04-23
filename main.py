@@ -973,253 +973,262 @@ async def buy_bg(cq: CallbackQuery):
     db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (cq.from_user.id, bg_id))
     await cq.message.answer("✅ Фон успешно куплен и добавлен в «🌄 Мои фоны»!")
 
-    # ============ ПАСС ============
-    PASS_NORMAL_IMG_1 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
-    PASS_NORMAL_IMG_2 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
-    PASS_NORMAL_IMG_3 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
-    PASS_NORMAL_IMG_4 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
-    PASS_NORMAL_IMG_5 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
 
-    PASS_ROYALE_IMG_1 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
-    PASS_ROYALE_IMG_2 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
-    PASS_ROYALE_IMG_3 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
-    PASS_ROYALE_IMG_4 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
-    PASS_ROYALE_IMG_5 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
+# ============ ПАСС ============
+from datetime import datetime, timezone, timedelta
+import calendar
 
-    @router.message(F.text == "🏞️ Пасс")
-    async def pass_menu(msg: types.Message):
-        bld = InlineKeyboardBuilder()
-        bld.button(text="🏙️ Обычный пасс", callback_data="pass:normal:start")
-        bld.button(text="🌠 Рояль пасс", callback_data="pass:royale:start")
-        await msg.answer("Выберите Пасс:", reply_markup=bld.as_markup())
+# Жесткая привязка к МСК (UTC+3)
+MSK = timezone(timedelta(hours=3))
 
-    @router.callback_query(F.data == "pass_back")
-    async def pass_back(cq: CallbackQuery):
-        await cq.message.delete()
-        await pass_menu(cq.message)
+PASS_NORMAL_IMG_1 = "AgACAgIAAxkBAAICN2npT2usTg9JKYcN77omcGfxSMy_AALrFWsbYxlIS8jrNH8Lp0d_AQADAgADdwADOwQ"
+PASS_NORMAL_IMG_2 = "AgACAgIAAxkBAAICOWnpT3Nb7Od3EEVKv7rF-ubLjKd-AALsFWsbYxlIS4xOhVzQesKRAQADAgADdwADOwQ"
+PASS_NORMAL_IMG_3 = "AgACAgIAAxkBAAICO2npT3qdFBDkzJEtJvpAv76tZfsPAALtFWsbYxlIS9SubA_87SHZAQADAgADdwADOwQ"
+PASS_NORMAL_IMG_4 = "AgACAgIAAxkBAAICPWnpT4DmcHYmlKkeldmpIKAy4I9wAALuFWsbYxlIS5HkxNAVGOqGAQADAgADdwADOwQ"
+PASS_NORMAL_IMG_5 = "AgACAgIAAxkBAAICP2npT4bQwb50eaG4jiP9vxak_cJyAALvFWsbYxlIS0_NW8CdRi_FAQADAgADdwADOwQ"
 
-    @router.callback_query(F.data.startswith("pass:"))
-    async def show_pass(cq: CallbackQuery):
-        _, p_type, page_str = cq.data.split(":")
-        uid = cq.from_user.id
-        u = get_user(uid)
-        now = datetime.now()
-        _, days_in_month = calendar.monthrange(now.year, now.month)
+PASS_ROYALE_IMG_1 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
+PASS_ROYALE_IMG_2 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
+PASS_ROYALE_IMG_3 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
+PASS_ROYALE_IMG_4 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
+PASS_ROYALE_IMG_5 = "AgACAgIAAxkBAAFHlWlp5RYNIdTKRATRsk13YOweDtWx-QAC_xhrG-CeKEvC9zzmqTrx3AEAAwIAA3cAAzsE"
 
-        # Автоматическое открытие страницы с текущим днем при первом входе
-        if page_str == "start":
-            if now.day <= 6:
-                page = 0
-            elif now.day <= 12:
-                page = 1
-            elif now.day <= 18:
-                page = 2
-            elif now.day <= 24:
-                page = 3
-            else:
-                page = 4
+
+@router.message(F.text == "🏞️ Пасс")
+async def pass_menu(msg: types.Message):
+    bld = InlineKeyboardBuilder()
+    bld.button(text="🏙️ Обычный пасс", callback_data="pass:normal:start")
+    bld.button(text="🌠 Рояль пасс", callback_data="pass:royale:start")
+    await msg.answer("Выберите Пасс:", reply_markup=bld.as_markup())
+
+
+@router.callback_query(F.data == "pass_back")
+async def pass_back(cq: CallbackQuery):
+    await cq.message.delete()
+    await pass_menu(cq.message)
+
+
+@router.callback_query(F.data.startswith("pass:"))
+async def show_pass(cq: CallbackQuery):
+    _, p_type, page_str = cq.data.split(":")
+    uid = cq.from_user.id
+    u = get_user(uid)
+    now = datetime.now(MSK)
+    _, days_in_month = calendar.monthrange(now.year, now.month)
+
+    # Автоматическое открытие страницы с текущим днем при первом входе
+    if page_str == "start":
+        if now.day <= 6:
+            page = 0
+        elif now.day <= 12:
+            page = 1
+        elif now.day <= 18:
+            page = 2
+        elif now.day <= 24:
+            page = 3
         else:
-            page = int(page_str)
-
-        await render_pass_page(cq, p_type, page, u, now, days_in_month)
-
-    async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, now: datetime, days_in_month: int):
-        uid = u[0]
-        is_royale = (p_type == "royale")
-        if is_royale and u[16] == 0:
-            bld = InlineKeyboardBuilder()
-            bld.button(text="Купить ⭐️", callback_data="buy_royale_pass")
-            bld.button(text="Назад 🔙", callback_data="pass_back")
-            bld.adjust(1)
-            try:
-                await cq.message.edit_media(
-                    media=types.InputMediaPhoto(media=PASS_ROYALE_IMG_1,
-                                                caption="🌠 Рояль пасс\n\n⚠️ Данный пасс у вас ещё не приобретен."),
-                    reply_markup=bld.as_markup()
-                )
-            except:
-                await cq.message.answer_photo(photo=PASS_ROYALE_IMG_1,
-                                              caption="🌠 Рояль пасс\n\n⚠️ Данный пасс у вас ещё не приобретен.",
-                                              reply_markup=bld.as_markup())
-            return
-
-        data = ROYALE_PASS if is_royale else NORMAL_PASS
-        imgs_normal = [PASS_NORMAL_IMG_1, PASS_NORMAL_IMG_2, PASS_NORMAL_IMG_3, PASS_NORMAL_IMG_4, PASS_NORMAL_IMG_5]
-        imgs_royale = [PASS_ROYALE_IMG_1, PASS_ROYALE_IMG_2, PASS_ROYALE_IMG_3, PASS_ROYALE_IMG_4, PASS_ROYALE_IMG_5]
-        img = imgs_royale[page] if is_royale else imgs_normal[page]
-
-        start_d = page * 6 + 1
-        end_d = min(start_d + 5, days_in_month)
-        if page == 4:
-            end_d = days_in_month
-
-        claims = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
-                         (uid, now.month, p_type), fetchall=True)
-        claimed_days = [d[0] for d in claims]
-
-        pass_name = "🌠 Рояль пасс" if is_royale else "🏙️ Обычный пасс"
-        icons = {'krw': '💴', 'atm': '💳', 'bc': '🪙', 'dia': '💎', 'pack': '🗃️'}
-        pack_names = {'epic': 'Эпический пак 🟢', 'leg': 'Легендарный Пак 🔵'}
-
-        rewards_txt = ""
-        for d in range(start_d, end_d + 1):
-            r_type, r_val = data.get(d, ('krw', 10))
-            if r_type == 'pack':
-                r_str = pack_names.get(r_val, 'Пак')
-            else:
-                r_str = f"{r_val} {icons.get(r_type, '')}"
-            rewards_txt += f"{d} день: {r_str}\n"
-
-        txt = (f"{pass_name}\n\n"
-               f"🟢 Заходи в пасс каждый день и получай награды, сегодня {now.day}-й день.\n\n"
-               f"Награды на этой странице:\n{rewards_txt}\n"
-               f"Обозначения:\n"
-               f"❌ - День пропущен\n"
-               f"✅ - Награда получена\n"
-               f"🕓 - Ожидание награды\n\n"
-               f"Получено дней - {len(claimed_days)}/{days_in_month}")
-
-        bld = InlineKeyboardBuilder()
-
-        # Кнопки ячеек
-        cells = []
-        for i in range(5):
-            text = f"[{i + 1}]" if i == page else str(i + 1)
-            cells.append(InlineKeyboardButton(text=text, callback_data=f"pass:{p_type}:{i}"))
-        bld.row(*cells)
-
-        # Кнопки дней
-        day_buttons = []
-        for d in range(start_d, end_d + 1):
-            if d in claimed_days:
-                status = "✅"
-            elif d < now.day:
-                status = "❌"
-            elif d == now.day:
-                status = "🎯"
-            else:
-                status = "🕓"
-            day_buttons.append(
-                InlineKeyboardButton(text=f"{status} {d}", callback_data=f"claim_pass:{p_type}:{d}:{page}"))
-
-        for i in range(0, len(day_buttons), 3):
-            bld.row(*day_buttons[i:i + 3])
-
-        bld.row(InlineKeyboardButton(text="Купить дни 💎", callback_data=f"buy_days_menu:{p_type}"))
-
-        # Главный приз только на последней ячейке
-        if page == 4:
-            bld.row(InlineKeyboardButton(text="Главный приз 🐦‍🔥", callback_data=f"pass_main_prize:{p_type}"))
-
-        bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="pass_back"))
-        try:
-            await cq.message.edit_media(media=types.InputMediaPhoto(media=img, caption=txt),
-                                        reply_markup=bld.as_markup())
-        except Exception as e:
-            if "message is not modified" not in str(e).lower():
-                try:
-                    await cq.message.delete()
-                    await cq.message.answer_photo(photo=img, caption=txt, reply_markup=bld.as_markup())
-                except:
-                    pass
-
-    @router.callback_query(F.data.startswith("claim_pass:"))
-    async def claim_pass(cq: CallbackQuery):
-        _, p_type, day_str, page_str = cq.data.split(":")
-        day = int(day_str)
+            page = 4
+    else:
         page = int(page_str)
-        uid = cq.from_user.id
-        now = datetime.now()
 
-        is_claimed = db_exec("SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = ?",
-                             (uid, now.month, day, p_type), fetch=True)
-        if is_claimed:
-            return await cq.answer("Вы уже забрали эту награду! ✅", show_alert=True)
+    await render_pass_page(cq, p_type, page, u, now, days_in_month)
 
-        if day > now.day:
-            return await cq.answer("Этот день еще не наступил! 🕓", show_alert=True)
-        if day < now.day:
-            return await cq.answer("Этот день пропущен! ❌ Используйте «Купить дни 💎»", show_alert=True)
 
-        data = ROYALE_PASS if p_type == "royale" else NORMAL_PASS
-        r_type, r_val = data.get(day, ('krw', 10))
-
-        if r_type == 'krw':
-            db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (r_val, uid))
-        elif r_type == 'atm':
-            db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (r_val, uid))
-        elif r_type == 'bc':
-            db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (r_val, uid))
-        elif r_type == 'dia':
-            db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (r_val, uid))
-        elif r_type == 'pack':
-            card_key = pull_random_card(force_rarity="Легендарная 🔵" if r_val == "leg" else "Эпическая 🟢")
-            if not card_key: card_key = pull_random_card()
-            give_card_to_user(uid, card_key)
-            await cq.message.answer(f"🎁 Из пака выпала карта: {CARDS[card_key]['name']}!")
-
-        db_exec("INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
-                (uid, now.month, day, p_type))
-
-        icon = {'krw': '💴', 'atm': '💳', 'bc': '🪙', 'dia': '💎', 'pack': '🗃️'}.get(r_type, '')
-        await cq.answer(f"✅ Вы забрали награду: {r_val} {icon}!", show_alert=True)
-
-        u = get_user(uid)
-        _, days_in_month = calendar.monthrange(now.year, now.month)
-        await render_pass_page(cq, p_type, page, u, now, days_in_month)
-
-    @router.callback_query(F.data.startswith("buy_days_menu:"))
-    async def buy_days_menu(cq: CallbackQuery):
-        _, p_type = cq.data.split(":")
-        uid = cq.from_user.id
-        now = datetime.now()
-
-        claims = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
-                         (uid, now.month, p_type), fetchall=True)
-        claimed_days = [d[0] for d in claims]
-        missed_days = [d for d in range(1, now.day) if d not in claimed_days]
-
-        if not missed_days:
-            return await cq.answer("У вас нет пропущенных дней! 🎉", show_alert=True)
-
-        db_exec(
-            "CREATE TABLE IF NOT EXISTS pass_bought_days (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
-        bought_count = \
-        db_exec("SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
-                (uid, now.month, p_type), fetch=True)[0]
-
-        next_cost = (bought_count + 1) * 20
-
-        txt = (f"💎 Восстановление пропущенных дней\n\n"
-               f"Стоимость каждого дня увеличивается на 20:\n"
-               f"1-й день — 20 💎\n"
-               f"2-й день — 40 💎\n"
-               f"3-й день — 60 💎\n"
-               f"и т.д.\n\n"
-               f"Текущая стоимость восстановления: {next_cost} 💎\n\n"
-               f"Выберите, какие дни хотите купить:")
-
+async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, now: datetime, days_in_month: int):
+    uid = u[0]
+    is_royale = (p_type == "royale")
+    if is_royale and u[16] == 0:
         bld = InlineKeyboardBuilder()
-        day_buttons = []
-        for d in missed_days:
-            day_buttons.append(InlineKeyboardButton(text=f"❌ {d}", callback_data=f"buy_missed_day:{p_type}:{d}"))
-
-        for i in range(0, len(day_buttons), 4):
-            bld.row(*day_buttons[i:i + 4])
-
-        bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"pass:{p_type}:start"))
-
+        bld.button(text="Купить ⭐️", callback_data="buy_royale_pass")
+        bld.button(text="Назад 🔙", callback_data="pass_back")
+        bld.adjust(1)
         try:
-            await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup())
+            await cq.message.edit_media(
+                media=types.InputMediaPhoto(media=PASS_ROYALE_IMG_1,
+                                            caption="🌠 Рояль пасс\n\n⚠️ Данный пасс у вас ещё не приобретен."),
+                reply_markup=bld.as_markup()
+            )
         except:
-            pass
+            await cq.message.answer_photo(photo=PASS_ROYALE_IMG_1,
+                                          caption="🌠 Рояль пасс\n\n⚠️ Данный пасс у вас ещё не приобретен.",
+                                          reply_markup=bld.as_markup())
+        return
+    data = ROYALE_PASS if is_royale else NORMAL_PASS
+    imgs_normal = [PASS_NORMAL_IMG_1, PASS_NORMAL_IMG_2, PASS_NORMAL_IMG_3, PASS_NORMAL_IMG_4, PASS_NORMAL_IMG_5]
+    imgs_royale = [PASS_ROYALE_IMG_1, PASS_ROYALE_IMG_2, PASS_ROYALE_IMG_3, PASS_ROYALE_IMG_4, PASS_ROYALE_IMG_5]
+    img = imgs_royale[page] if is_royale else imgs_normal[page]
+
+    start_d = page * 6 + 1
+    end_d = min(start_d + 5, days_in_month)
+    if page == 4:
+        end_d = days_in_month
+
+    claims = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
+                     (uid, now.month, p_type), fetchall=True)
+    claimed_days = [d[0] for d in claims]
+
+    pass_name = "🌠 Рояль пасс" if is_royale else "🏙️ Обычный пасс"
+    icons = {'krw': '💴', 'atm': '💳', 'bc': '🪙', 'dia': '💎', 'pack': '🗃️'}
+    pack_names = {'epic': 'Эпический пак 🟢', 'leg': 'Легендарный Пак 🔵'}
+
+    rewards_txt = ""
+    for d in range(start_d, end_d + 1):
+        r_type, r_val = data.get(d, ('krw', 10))
+        if r_type == 'pack':
+            r_str = pack_names.get(r_val, 'Пак')
+        else:
+            r_str = f"{r_val} {icons.get(r_type, '')}"
+        rewards_txt += f"{d} день: {r_str}\n"
+
+    txt = (f"{pass_name}\n\n"
+           f"🟢 Заходи в пасс каждый день и получай награды, сегодня {now.day}-й день.\n\n"
+           f"Награды на этой странице:\n{rewards_txt}\n"
+           f"Обозначения:\n"
+           f"❌ - День пропущен\n"
+           f"✅ - Награда получена\n"
+           f"🕓 - Ожидание награды\n\n"
+           f"Получено дней - {len(claimed_days)}/{days_in_month}")
+
+    bld = InlineKeyboardBuilder()
+
+    # Кнопки ячеек
+    cells = []
+    for i in range(5):
+        text = f"[{i + 1}]" if i == page else str(i + 1)
+        cells.append(InlineKeyboardButton(text=text, callback_data=f"pass:{p_type}:{i}"))
+    bld.row(*cells)
+
+    # Кнопки дней
+    day_buttons = []
+    for d in range(start_d, end_d + 1):
+        if d in claimed_days:
+            status = "✅"
+        elif d < now.day:
+            status = "❌"
+        elif d == now.day:
+            status = "🎯"
+        else:
+            status = "🕓"
+        day_buttons.append(InlineKeyboardButton(text=f"{status} {d}", callback_data=f"claim_pass:{p_type}:{d}:{page}"))
+
+    for i in range(0, len(day_buttons), 3):
+        bld.row(*day_buttons[i:i + 3])
+
+    bld.row(InlineKeyboardButton(text="Купить дни 💎", callback_data=f"buy_days_menu:{p_type}"))
+
+    # Главный приз только на последней ячейке
+    if page == 4:
+        bld.row(InlineKeyboardButton(text="Главный приз 🐦‍🔥", callback_data=f"pass_main_prize:{p_type}"))
+
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="pass_back"))
+
+    try:
+        await cq.message.edit_media(media=types.InputMediaPhoto(media=img, caption=txt), reply_markup=bld.as_markup())
+    except Exception as e:
+        if "message is not modified" not in str(e).lower():
+            try:
+                await cq.message.delete()
+                await cq.message.answer_photo(photo=img, caption=txt, reply_markup=bld.as_markup())
+            except:
+                pass
+
+
+@router.callback_query(F.data.startswith("claim_pass:"))
+async def claim_pass(cq: CallbackQuery):
+    _, p_type, day_str, page_str = cq.data.split(":")
+    day = int(day_str)
+    page = int(page_str)
+    uid = cq.from_user.id
+    now = datetime.now(MSK)
+
+    is_claimed = db_exec("SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = ?",
+                         (uid, now.month, day, p_type), fetch=True)
+    if is_claimed:
+        return await cq.answer("Вы уже забрали эту награду! ✅", show_alert=True)
+
+    if day > now.day:
+        return await cq.answer("Этот день еще не наступил! 🕓", show_alert=True)
+    if day < now.day:
+        return await cq.answer("Этот день пропущен! ❌ Используйте «Купить дни 💎»", show_alert=True)
+
+    data = ROYALE_PASS if p_type == "royale" else NORMAL_PASS
+    r_type, r_val = data.get(day, ('krw', 10))
+
+    if r_type == 'krw':
+        db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (r_val, uid))
+    elif r_type == 'atm':
+        db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (r_val, uid))
+    elif r_type == 'bc':
+        db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (r_val, uid))
+    elif r_type == 'dia':
+        db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (r_val, uid))
+    elif r_type == 'pack':
+        card_key = pull_random_card(force_rarity="Легендарная 🔵" if r_val == "leg" else "Эпическая 🟢")
+        if not card_key: card_key = pull_random_card()
+        give_card_to_user(uid, card_key)
+        await cq.message.answer(f"🎁 Из пака выпала карта: {CARDS[card_key]['name']}!")
+
+    db_exec("INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
+            (uid, now.month, day, p_type))
+
+    icon = {'krw': '💴', 'atm': '💳', 'bc': '🪙', 'dia': '💎', 'pack': '🗃️'}.get(r_type, '')
+    await cq.answer(f"✅ Вы забрали награду: {r_val} {icon}!", show_alert=True)
+
+    u = get_user(uid)
+    _, days_in_month = calendar.monthrange(now.year, now.month)
+    await render_pass_page(cq, p_type, page, u, now, days_in_month)
+
+
+@router.callback_query(F.data.startswith("buy_days_menu:"))
+async def buy_days_menu(cq: CallbackQuery):
+    _, p_type = cq.data.split(":")
+    uid = cq.from_user.id
+    now = datetime.now(MSK)
+
+    claims = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
+                     (uid, now.month, p_type), fetchall=True)
+    claimed_days = [d[0] for d in claims]
+    missed_days = [d for d in range(1, now.day) if d not in claimed_days]
+
+    if not missed_days:
+        return await cq.answer("У вас нет пропущенных дней! 🎉", show_alert=True)
+
+    db_exec("CREATE TABLE IF NOT EXISTS pass_bought_days (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
+    bought_count = db_exec("SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
+                           (uid, now.month, p_type), fetch=True)[0]
+
+    next_cost = (bought_count + 1) * 20
+
+    txt = (f"💎 Восстановление пропущенных дней\n\n"
+           f"Стоимость каждого дня увеличивается на 20:\n"
+           f"1-й день — 20 💎\n"
+           f"2-й день — 40 💎\n"
+           f"3-й день — 60 💎\n"
+           f"и т.д.\n\n"
+           f"Текущая стоимость восстановления: {next_cost} 💎\n\n"
+           f"Выберите, какие дни хотите купить:")
+
+    bld = InlineKeyboardBuilder()
+    day_buttons = []
+    for d in missed_days:
+        day_buttons.append(InlineKeyboardButton(text=f"❌ {d}", callback_data=f"buy_missed_day:{p_type}:{d}"))
+
+    for i in range(0, len(day_buttons), 4):
+        bld.row(*day_buttons[i:i + 4])
+
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"pass:{p_type}:start"))
+
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup())
+    except:
+        pass
 
     @router.callback_query(F.data.startswith("buy_missed_day:"))
     async def buy_missed_day(cq: CallbackQuery):
         _, p_type, day_str = cq.data.split(":")
         day = int(day_str)
         uid = cq.from_user.id
-        now = datetime.now()
+        now = datetime.now(MSK)
 
         is_claimed = db_exec("SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = ?",
                              (uid, now.month, day, p_type), fetch=True)
@@ -1257,6 +1266,7 @@ async def buy_bg(cq: CallbackQuery):
             if not card_key: card_key = pull_random_card()
             give_card_to_user(uid, card_key)
             await cq.message.answer(f"🎁 Из пака выпала карта: {CARDS[card_key]['name']}!")
+
         db_exec("INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
                 (uid, now.month, day, p_type))
 
@@ -1269,7 +1279,7 @@ async def buy_bg(cq: CallbackQuery):
     async def pass_main(cq: CallbackQuery):
         p_type = cq.data.split(":")[1]
         uid = cq.from_user.id
-        now = datetime.now()
+        now = datetime.now(MSK)
         _, dim = calendar.monthrange(now.year, now.month)
         claims = db_exec("SELECT COUNT(*) FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
                          (uid, now.month, p_type), fetch=True)
@@ -1297,7 +1307,7 @@ async def buy_bg(cq: CallbackQuery):
         await bot.send_invoice(cq.from_user.id, title="🌠 Рояль Пасс",
                                description="Доступ к эксклюзивным наградам на этот месяц",
                                payload="rp_buy", provider_token="", currency="XTR",
-                               prices=[LabeledPrice(label="Stars", amount=1)])
+                               prices=[LabeledPrice(label="Stars", amount=50)])
 
     @router.pre_checkout_query()
     async def pre_chk(pcq: PreCheckoutQuery, bot: Bot):
