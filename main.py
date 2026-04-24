@@ -166,7 +166,117 @@ CARDS = {
 "kang_jinchan": {"name": "Кан Джинчан", "rarity": "Редкая 🟡", "style": "ММА", "speed": 57, "strength": 56, "intellect": 56, "file_id": "AgACAgIAAxkBAAIHzmnqWAwwsECfiPSmpWTIwO5iRUGsAAKTE2sbwYNYS2_K_qSMSxgiAQADAgADdwADOwQ", "exclusive": False},
 
 "wang_ochun": {"name": "Ван Очун", "rarity": "Редкая 🟡", "style": "Уличный", "speed": 55, "strength": 59, "intellect": 55, "file_id": "AgACAgIAAxkBAAIH0mnqWY2PdEur7Pre3Yu9la7h81taAAKjE2sbwYNYS-hstVwUDoAlAQADAgADdwADOwQ", "exclusive": False},
+"gu_kim": {"name": "Гу Ким", "rarity": "Мифическая 🔴", "style": "Меч", "speed": 100, "strength": 95, "intellect": 91, "file_id": "AgACAgIAAxkBAAIN7mnrJWFY5AkZOlIXt8L96OOg6myFAAIpF2sb6yFQS0JBy_K35Kg5AQADAgADdwADOwQ", "exclusive": False},
 
+"kim_gitae": {"name": "Ким Гитэ", "rarity": "Мифическая 🔴", "style": "Уличный", "speed": 99, "strength": 99, "intellect": 97, "file_id": "AgACAgIAAxkBAAIN8GnrJWeQP_BlVXvNF7-P1lvv9RuGAAIqF2sb6yFQS_tpxwHMDZitAQADAgADdwADOwQ", "exclusive": False},
+
+"park_hyeonsok_vt": {"name": "Пак Хёнсок ВТ", "rarity": "Мифическая 🔴", "style": "Универсал", "speed": 99, "strength": 96, "intellect": 95, "file_id": "AgACAgIAAxkBAAIN8mnrJWoL8CirIegu_jSRdkgwb222AAIrF2sb6yFQS2Jw6w5GKP10AQADAgADdwADOwQ", "exclusive": False},
+
+"kang_dagyeom": {"name": "Кан Дагём", "rarity": "Мифическая 🔴", "style": "Универсал", "speed": 98, "strength": 93, "intellect": 100, "file_id": "AgACAgIAAxkBAAIN9GnrJXK8d7XSpCQeq9QFt5ETGqC6AAIsF2sb6yFQS9QmOleq6OyaAQADAgADdwADOwQ", "exclusive": False},
+
+"shintaro_yamazaki": {"name": "Шинтаро Ямадзаки", "rarity": "Мифическая 🔴", "style": "Каратэ", "speed": 96, "strength": 97, "intellect": 95, "file_id": "AgACAgIAAxkBAAIN9mnrJXeutCWF_VN1Z1AGAuM4q6JwAAItF2sb6yFQS5Fd9R_vX5eQAQADAgADdwADOwQ", "exclusive": False},
+
+"baekcheon": {"name": "Пэчхон", "rarity": "Мифическая 🔴", "style": "Уличный", "speed": 92, "strength": 98, "intellect": 91, "file_id": "AgACAgIAAxkBAAIN-GnrJX25ZhZ4XJHTHdHhK8Pg7d4uAAIuF2sb6yFQSwsdPM0dlLIKAQADAgADdwADOwQ", "exclusive": False},
+
+"choi_dongsu": {"name": "Чхве Донсу", "rarity": "Мифическая 🔴", "style": "Универсал", "speed": 91, "strength": 91, "intellect": 99, "file_id": "AgACAgIAAxkBAAIN-mnrJYJ2OjxdJ-E1ju19RQJ4A-ApAAIvF2sb6yFQS3ymQiovX2vWAQADAgADdwADOwQ", "exclusive": False},
+
+"roy_kwon": {"name": "Рой Квон", "rarity": "Редкая 🟡", "style": "Уличный", "speed": 51, "strength": 53, "intellect": 53, "file_id": "AgACAgIAAxkBAAIN_GnrJYh3zxDkDRZWaGKGWeBU-A37AAJdF2sb6yFQS3U0zt4f4aTFAQADAgADdwADOwQ", "exclusive": False},
+
+"sung_jegal": {"name": "Сун Джегал", "rarity": "Редкая 🟡", "style": "Уличный", "speed": 52, "strength": 52, "intellect": 53, "file_id": "AgACAgIAAxkBAAIN_mnrJY0XC5K0d6Hq-ItbjjS7KoLIAAJeF2sb6yFQS1nWfBJAsCGlAQADAgADdwADOwQ", "exclusive": False},
+
+"yoon_gyeonghon": {"name": "Юн Кёнхон", "rarity": "Редкая 🟡", "style": "Уличный", "speed": 58, "strength": 42, "intellect": 41, "file_id": "AgACAgIAAxkBAAIOAAFp6yWStQABWlDGLxMEXHNpZwPhyt8AAl8XaxvrIVBLXx66FrCUuIABAAMCAAN3AAM7BA", "exclusive": False},
+
+"lee_taeseong": {"name": "Ли Тэсон", "rarity": "Редкая 🟡", "style": "Джиу Джитсу", "speed": 50, "strength": 59, "intellect": 33, "file_id": "AgACAgIAAxkBAAIOAmnrJZjjS5TK8NlaVK6q1rgBUM0-AAJgF2sb6yFQS6KFnCwjwNi1AQADAgADdwADOwQ", "exclusive": False},
+
+"jamal_rahid": {"name": "Джамал Рахид", "rarity": "Редкая 🟡", "style": "Сабля", "speed": 47, "strength": 48, "intellect": 47, "file_id": "AgACAgIAAxkBAAIOBGnrJZ3ywIi4uTiQsI4I1tnDatWaAAJhF2sb6yFQS1Sejou-E4MMAQADAgADdwADOwQ", "exclusive": False},
+
+"woon_giyom": {"name": "Вун Ги Йом", "rarity": "Редкая 🟡", "style": "Комбат Стайл", "speed": 46, "strength": 47, "intellect": 46, "file_id": "AgACAgIAAxkBAAIOBmnrJaIiu5RnbR_or0hHqVzsL0YTAAJiF2sb6yFQS5Xlg6yL5djtAQADAgADdwADOwQ", "exclusive": False},
+
+"jeon_muha": {"name": "Чон Му Ха", "rarity": "Редкая 🟡", "style": "Грубая сила", "speed": 45, "strength": 46, "intellect": 45, "file_id": "AgACAgIAAxkBAAIOCGnrJacmOXDD-OuiZXsNiVeuHQAB_gACYxdrG-shUEv6aoVgFxUY0AEAAwIAA3cAAzsE", "exclusive": False},
+
+"jichan_yeong": {"name": "Джичан Ён", "rarity": "Редкая 🟡", "style": "Отсутствует", "speed": 44, "strength": 44, "intellect": 45, "file_id": "AgACAgIAAxkBAAIOCmnrJasE0Ebslk_wQP-J448Qi1G2AAJkF2sb6yFQSzo3iAABZoY7rwEAAwIAA3cAAzsE", "exclusive": False},
+
+"han_sanhi": {"name": "Хан Сан Хи", "rarity": "Редкая 🟡", "style": "Борьба", "speed": 43, "strength": 44, "intellect": 43, "file_id": "AgACAgIAAxkBAAIODGnrJbD3phiBp7b4RrYXK2V5wsE1AAJlF2sb6yFQS0_RgMJoUOn_AQADAgADdwADOwQ", "exclusive": False},
+"kim_yeongcheol": {"name": "Ким Ён Чуль", "rarity": "Редкая 🟡", "style": "ММА", "speed": 42, "strength": 43, "intellect": 42, "file_id": "AgACAgIAAxkBAAIODmnrJbXwWXEyXAV3Zp_TmaUIAAE7CgACZhdrG-shUEsg_T0gsqy6sgEAAwIAA3cAAzsE", "exclusive": False},
+
+"ha_hu_son": {"name": "Ха Ху Сон", "rarity": "Редкая 🟡", "style": "Бокс", "speed": 41, "strength": 44, "intellect": 39, "file_id": "AgACAgIAAxkBAAIOEGnrJblJPWczO-BCpQqcKgnJa_XcAAJnF2sb6yFQS2OPYSMjpmdMAQADAgADdwADOwQ", "exclusive": False},
+
+"hwang_ho": {"name": "Хван Хо", "rarity": "Редкая 🟡", "style": "Кунг-фу", "speed": 40, "strength": 41, "intellect": 40, "file_id": "AgACAgIAAxkBAAIOEmnrJb1W9Jko-k9Gh8R5JuSPkIE8AAJoF2sb6yFQS0C0yrZHPWJcAQADAgADdwADOwQ", "exclusive": False},
+
+
+"noan": {"name": "Ноан", "rarity": "Редкая 🟡", "style": "Отсутствует", "speed": 38, "strength": 39, "intellect": 38, "file_id": "AgACAgIAAxkBAAIOFmnrJcdkpN6ERYT4Wo1gKf84XpILAAJqF2sb6yFQS0B-Y9v-H7buAQADAgADdwADOwQ", "exclusive": False},
+
+"kang_sebastian": {"name": "Кан Себастьян", "rarity": "Редкая 🟡", "style": "Тхэккён", "speed": 34, "strength": 35, "intellect": 34, "file_id": "AgACAgIAAxkBAAIOGGnrJdCmgS35RjYE8tJAgaWujkbMAAJ4E2sb6yFYS7Urh4SCLriJAQADAgADdwADOwQ", "exclusive": False},
+
+"kim_miru": {"name": "Ким Миру", "rarity": "Редкая 🟡", "style": "Дзюдо", "speed": 36, "strength": 31, "intellect": 33, "file_id": "AgACAgIAAxkBAAIOGmnrJddfjlRghlkQr2iI4RYrDl1dAAJ6E2sb6yFYS7xeURIFAwsVAQADAgADdwADOwQ", "exclusive": False},
+
+"cho_isu": {"name": "Чо Ису", "rarity": "Редкая 🟡", "style": "Отсутствует", "speed": 32, "strength": 33, "intellect": 32, "file_id": "AgACAgIAAxkBAAIOHGnrJdzB_KFkWfe-8mftn6a8kxM2AAJ7E2sb6yFYSxSVBhGFG2AfAQADAgADdwADOwQ", "exclusive": False},
+
+"lee_kun_u": {"name": "Ли Кун У", "rarity": "Редкая 🟡", "style": "Бокс", "speed": 31, "strength": 32, "intellect": 31, "file_id": "AgACAgIAAxkBAAIOIGnrJeDxYRMDsanxMi6W9uCoL1beAAJ8E2sb6yFYSzqVwTikf9SvAQADAgADdwADOwQ", "exclusive": False},
+
+"jeong_eun_gu_kang_taeng_gu": {"name": "Чон Ын Гу и Кан Тэн Гу", "rarity": "Редкая 🟡", "style": "Боевое дуо", "speed": 31, "strength": 31, "intellect": 30, "file_id": "AgACAgIAAxkBAAIOKGnrJedqj_qhdslq8m3A3wY9D_gGAAJ9E2sb6yFYS2quNDYayfttAQADAgADdwADOwQ", "exclusive": False},
+
+"hong_dupyo": {"name": "Хон Дупё", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 28, "strength": 26, "intellect": 27, "file_id": "AgACAgIAAxkBAAIPj2nrgAdNB_PUDtctNefOmUyzruLQAAISFGsb6yFYS8ZhQzhBAvJBAQADAgADeQADOwQ", "exclusive": False},
+
+"lee_dosu": {"name": "Ли Досу", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 27, "strength": 25, "intellect": 26, "file_id": "", "exclusive": False},
+
+"jin_sowol": {"name": "Джин Соволь", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 26, "strength": 24, "intellect": 25, "file_id": "AgACAgIAAxkBAAIPkWnrgAvol7Ux1ZAWRq_eVhqVVs1jAAITFGsb6yFYS9NZmd6Dn8nfAQADAgADeQADOwQ", "exclusive": False},
+
+"zeus_himin": {"name": "Зевс / Химин", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 23, "strength": 21, "intellect": 22, "file_id": "AgACAgIAAxkBAAIPk2nrgBKZoALF27E3NXlgsnHgLSz8AAIUFGsb6yFYS264qsx9AAG94QEAAwIAA3kAAzsE", "exclusive": False},
+
+"choi_sojun_vt": {"name": "Чхве Соджун ВТ", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 22, "strength": 20, "intellect": 21, "file_id": "AgACAgIAAxkBAAIPlWnrgBhXvcSr3HerknrqsqD5tN3nAAIgFGsb6yFYS8Oi8KRUqUSFAQADAgADeQADOwQ", "exclusive": False},
+
+"jang_jin_hyeok": {"name": "Чан Джин Хёк", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 21, "strength": 19, "intellect": 20, "file_id": "AgACAgIAAxkBAAIPl2nrgBzOlO_GLCdzClz1rcE4ivN0AAIWFGsb6yFYSze8RCZvVdoBAQADAgADeQADOwQ", "exclusive": False},
+
+"lee_seunghan": {"name": "Ли Сын Хан", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 19, "strength": 17, "intellect": 18, "file_id": "AgACAgIAAxkBAAIPjWnrgAP67X412PqVjduVzPO2WXDBAAIRFGsb6yFYS6Da--rfRNwNAQADAgADeQADOwQ", "exclusive": False},
+
+"park_himan": {"name": "Пак Химан", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 18, "strength": 16, "intellect": 17, "file_id": "AgACAgIAAxkBAAIPmWnrgCEgb36xbC6qVYi13Q6ZZ8COAAIXFGsb6yFYSzncfxTSwq_FAQADAgADeQADOwQ", "exclusive": False},
+
+"park_soman": {"name": "Пак Соман", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 17, "strength": 15, "intellect": 16, "file_id": "AgACAgIAAxkBAAIPm2nrgCb6y8JOU-3S_Qa_q8_SoLEEAAIYFGsb6yFYS2J0H5GuaKsqAQADAgADeQADOwQ", "exclusive": False},
+
+"kang_mubae": {"name": "Кан Мубэ", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 16, "strength": 14, "intellect": 15, "file_id": "AgACAgIAAxkBAAIPnWnrgCxlodFzBkjvkDvX1oQ0CinPAAIZFGsb6yFYSxLdR8WreTgJAQADAgADeQADOwQ", "exclusive": False},
+"kwon_seungryeon": {"name": "Квон Сынрён", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 15, "strength": 13, "intellect": 14, "file_id": "AgACAgIAAxkBAAIPn2nrgDHW8KMuyKndqP7Z9oFGIITaAAIaFGsb6yFYS-lZyqeNWdplAQADAgADeQADOwQ", "exclusive": False},
+
+"son_non": {"name": "Сон Нон", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 14, "strength": 12, "intellect": 13, "file_id": "AgACAgIAAxkBAAIPi2nrf_JehZ9TFBhmPaX6AAH8dacqSQACBBRrG-shWEt2vZeoT8XSKgEAAwIAA3cAAzsE", "exclusive": False},
+
+"kong_yeonghun": {"name": "Конг Ёнхун", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 13, "strength": 11, "intellect": 12, "file_id": "AgACAgIAAxkBAAIPiWnrf-u_nFyG0z5DENh1hPQStHttAAIDFGsb6yFYSxbuJPgheZu5AQADAgADdwADOwQ", "exclusive": False},
+
+"dominic": {"name": "Доминик", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 12, "strength": 10, "intellect": 11, "file_id": "AgACAgIAAxkBAAIPh2nrf-Mi-Vrdca7hy-LUhzB63AwIAAICFGsb6yFYS9iMtCiyn2e8AQADAgADdwADOwQ", "exclusive": False},
+
+"choi_sojun_pt": {"name": "Чхве Соджун ПТ", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 13, "intellect": 12, "file_id": "AgACAgIAAxkBAAIPhWnrf94T4krNU3OZ_y4m5M_YR1U5AAIBFGsb6yFYS4w9itme-VHuAQADAgADdwADOwQ", "exclusive": False},
+
+"kim_byeong": {"name": "Ким Бён", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 12, "strength": 10, "intellect": 11, "file_id": "AgACAgIAAxkBAAIPg2nrf9ZY0Nb2osT3gTm5cbQcPl4ZAAMUaxvrIVhLiCU6vJHqXlUBAAMCAAN3AAM7BA", "exclusive": False},
+
+"park_somi": {"name": "Пак Соми", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 11, "strength": 13, "intellect": 10, "file_id": "AgACAgIAAxkBAAIONGnrJf3E12u7oGbLSI4fUNvD07zaAAIKGWsbwYNYSzx_jG3br4YJAQADAgADdwADOwQ", "exclusive": False},
+
+"mitsuki": {"name": "Мицуки", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 12, "intellect": 11, "file_id": "AgACAgIAAxkBAAIPgWnrf9LI0JUIZenPDFBwch8Ud6jyAAL_E2sb6yFYS_X15PkQTEfHAQADAgADdwADOwQ", "exclusive": False},
+
+"hun": {"name": "Хун", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 13, "strength": 10, "intellect": 12, "file_id": "AgACAgIAAxkBAAIPf2nrf8zFzvq7EfU1QXbLm2fwVIgZAAL-E2sb6yFYS7miD5if5nyjAQADAgADdwADOwQ", "exclusive": False},
+
+"hwang_jae_won": {"name": "Хван Джэ Вон", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 11, "strength": 10, "intellect": 12, "file_id": "AgACAgIAAxkBAAIOaGnrJjDhv2Mn3Nka89_S2lpM8IF3AAIYGWsbwYNYSyFEm3wjUHIPAQADAgADdwADOwQ", "exclusive": False},
+
+"lee_hyeon_do": {"name": "Ли Хён До", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 12, "intellect": 11, "file_id": "AgACAgIAAxkBAAIOWmnrJiOL16Ry_H_4OJhMGMYBbdYNAAISGWsbwYNYS3wTXxm16LrlAQADAgADdwADOwQ", "exclusive": False},
+
+"lee_leon": {"name": "Ли Леон", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 12, "strength": 11, "intellect": 10, "file_id": "AgACAgIAAxkBAAIOXmnrJieHnlKQ7vzDAYKLGXS-HpwRAAIWGWsbwYNYS_B9xarAmgXRAQADAgADdwADOwQ", "exclusive": False},
+
+"kouji": {"name": "Коуджи", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 11, "strength": 11, "intellect": 20, "file_id": "AgACAgIAAxkBAAIOZGnrJisvgnVkMISMpZFiUIDlb03UAAIXGWsbwYNYS81Lb3x_bQ8TAQADAgADdwADOwQ", "exclusive": False},
+
+"dok_hwa": {"name": "Док Хва", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 13, "intellect": 11, "file_id": "AgACAgIAAxkBAAIOSmnrJhYfuiTC_-5JQDL_bnS9KgfBAAIPGWsbwYNYSxn4nuZILYJIAQADAgADdwADOwQ", "exclusive": False},
+
+"choi_bongpal": {"name": "Чой Бонпаль", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 13, "strength": 11, "intellect": 10, "file_id": "AgACAgIAAxkBAAIOUGnrJhpzkfiSYLqj8nZR4TJGdAgoAAIQGWsbwYNYSx1vEb9B5l0PAQADAgADdwADOwQ", "exclusive": False},
+
+"mi_jin": {"name": "Ми Джин", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 11, "strength": 10, "intellect": 12, "file_id": "AgACAgIAAxkBAAIOVGnrJh8FF9A_rG-QCvZJvAknW_FVAAIRGWsbwYNYS82c-gtgawxoAQADAgADdwADOwQ", "exclusive": False},
+
+"kim_sujin": {"name": "Ким Суджин", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 12, "strength": 11, "intellect": 10, "file_id": "AgACAgIAAxkBAAIOOmnrJgS6KF2J0xVg5lEzk3BDKkyOAAILGWsbwYNYS3Ll9iI0dXWEAQADAgADdwADOwQ", "exclusive": False},
+
+"shin_sera": {"name": "Шин Сэра", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 11, "strength": 10, "intellect": 12, "file_id": "AgACAgIAAxkBAAIOQGnrJgrE0oSQ12xHGVMqEcPWKwsfAAIMGWsbwYNYS1mOHOyEQe9-AQADAgADdwADOwQ", "exclusive": False},
+
+"choi_gangmi": {"name": "Чой Гангми", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 12, "strength": 11, "intellect": 10, "file_id": "AgACAgIAAxkBAAIORGnrJhHziGFgNms290wvj9EgSUNaAAINGWsbwYNYS1_c2WtzvE7mAQADAgADdwADOwQ", "exclusive": False},
+
+"yeon_hui": {"name": "Ён Хуи", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 11, "intellect": 12, "file_id": "AgACAgIAAxkBAAIPoWnrgDYDKkXUL8Stwq5qOLgAAaYRJgACGxRrG-shWEsVnOEJSQddGQEAAwIAA3kAAzsE", "exclusive": False},
+"park_serim": {"name": "Пак Сэрим", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 11, "strength": 12, "intellect": 10, "file_id": "AgACAgIAAxkBAAIOMGnrJfhFy2eAR85xaslA--P4E9ZWAAIJGWsbwYNYS10auRr3QvtUAQADAgADdwADOwQ", "exclusive": False},
+
+"kim_hae_yun": {"name": "Ким Хэ Юн", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 12, "strength": 10, "intellect": 11, "file_id": "AgACAgIAAxkBAAIPo2nrgDtXr2E7rL3GK7L-jGT-dK_WAAIcFGsb6yFY", "exclusive": False},
 
 #====LIMITED CARDS=====
 "exclusive_card_1": {"name": "Юк Сонджи и Джин Хобин", "rarity": "Легендарная 🔵", "style": "Дзюдо", "speed": 90, "strength": 90, "intellect": 85, "file_id": "AgACAgIAAxkBAAIH5GnqYmtCuh1zzWHavH8k5YOtq8S3AALkE2sbwYNYSxwTnoBWq5jFAQADAgADdwADOwQ", "exclusive": True},
