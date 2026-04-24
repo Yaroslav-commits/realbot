@@ -154,7 +154,7 @@ CARDS = {
 
 "park_beomjae": {"name": "Пак Бомджэ", "rarity": "Обычная ⚪️", "style": "Уличный", "speed": 20, "strength": 18, "intellect": 19, "file_id": "AgACAgIAAxkBAAIHtGnqUVAQOnPDhtZBkKQ71zSGtGYOAAJeE2sbwYNYS6tc99OsigJHAQADAgADdwADOwQ", "exclusive": False},
 
-"reporter_kim": {"name": "Репортёр Ким", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 12, "intellect": 11, "file_id": "AgACAgIAAxkBAAIHtmnqUWZoySwz2Z-oLWbw4slpMKkcAAJfE2sbwYNYSyJQ9UpwyFv0AQADAgADdwADOwQ", "exclusive": False},
+"reporter_kim": {"name": "Ким Ён У", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 12, "intellect": 11, "file_id": "AgACAgIAAxkBAAIN7GnrJQJ0hEp9UxhIvKbBCWdy37eDAAIDGWsbwYNYS2OoaljTULFbAQADAgADdwADOwQ", "exclusive": False},
 
 "baek_hanggyeol": {"name": "Пэк Хангёль", "rarity": "Обычная ⚪️", "style": "Отсутствует", "speed": 10, "strength": 11, "intellect": 12, "file_id": "AgACAgIAAxkBAAIHumnqUYMjpXR_S4hi6fZp41tOVyMmAAJhE2sbwYNYSzSN6ZhTCHrqAQADAgADdwADOwQ", "exclusive": False},
 "park_jiho": {"name": "Пак Джихо", "rarity": "Обычная ⚪️", "style": "Уличный (Тюремный)", "speed": 29, "strength": 27, "intellect": 28, "file_id": "AgACAgIAAxkBAAIH0GnqWYiveRllH6IpG-Nptl6HrAHSAAKiE2sbwYNYS63SWHtHj8RvAQADAgADdwADOwQ", "exclusive": False},
