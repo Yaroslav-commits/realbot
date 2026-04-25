@@ -51,7 +51,9 @@ CARDS = {
                   "file_id": "AgACAgIAAxkBAAFHln9p5See1_nNFUB8JgdvnyA8NeiTYwACFxhrG_QMKEs5k39hXX1w1AEAAwIAA3kAAzsE",
                   "exclusive": False},
     "lee_jinson": {"name": "Ли Джинсон", "rarity": "Эпическая 🟢", "style": "Бокс", "series": "Лукизм", "speed": 80, "strength": 80, "intellect": 76, "file_id": "AgACAgIAAxkBAAFHlotp5Se8_QrK1WTF3Q2rGJjK5-ldRgACGBhrG_QMKEuTGUSdJ8GuqAEAAwIAA3kAAzsE", "exclusive": False},
-
+"lee_ji_hoon": {"name": "Ли Джи Хун", "rarity": "Мифическая 🔴", "style": "Универсал", "series": "Лукизм", "speed": 93, "strength": 91, "intellect": 94, "file_id": "AgACAgIAAxkBAAITzmnspYvjQQrOssXqJdMyvulHq4VQAAIXFmsbUZNhSwQ3FGLGfKqnAQADAgADdwADOwQ", "exclusive": False},
+"sofia": {"name": "София", "rarity": "Мифическая 🔴", "style": "Система", "series": "Лукизм", "speed": 91, "strength": 93, "intellect": 92, "file_id": "AgACAgIAAxkBAAIT0GnspZIYJNevxAH5xMx7i8gJTgmHAAIYFmsbUZNhSxKXYZhhdzWVAQADAgADdwADOwQ", "exclusive": False},
+"hyeonseok_pt": {"name": "Хёнсок ПТ", "rarity": "Легендарная 🔵", "style": "Универсал (копирование)", "series": "Лукизм", "speed": 85, "strength": 82, "intellect": 83, "file_id": "AgACAgIAAxkBAAIT0mnspZXBThQiHWoOVuS0AAFpc2YHVQACGhZrG1GTYUuPzqF3OXputwEAAwIAA3cAAzsE", "exclusive": False},
 "wang_mugak": {"name": "Ванг Мугак", "rarity": "Эпическая 🟢", "style": "Уличный", "series": "Лукизм", "speed": 78, "strength": 79, "intellect": 79, "file_id": "AgACAgIAAxkBAAFHlplp5Sgi4Be3J8j4OfVrMow2ok8_7wACHBhrG_QMKEvMpAUngXd2GwEAAwIAA3kAAzsE", "exclusive": False},
 "ryu_jaun": {"name": "Рю Джаун", "rarity": "Эпическая 🟢", "style": "Канабо", "series": "Лукизм", "speed": 78, "strength": 78, "intellect": 79, "file_id": "AgACAgIAAxkBAAFHlqFp5ShF9jAk_1TQA3KusVeD_qhojAACHRhrG_QMKEuufZDtXa7HPgEAAwIAA3kAAzsE", "exclusive": False},
 "odalyan": {"name": "Одалян", "rarity": "Эпическая 🟢", "style": "Уличный (Гапрена)", "series": "Лукизм", "speed": 79, "strength": 79, "intellect": 75, "file_id": "AgACAgIAAxkBAAFHlqlp5Shvqa4Yg5RmB5lqoPdHc1mVmgACHxhrG_QMKEs3gLmREKMYLgEAAwIAA3kAAzsE", "exclusive": False},
