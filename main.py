@@ -179,25 +179,16 @@ CARDS = {
 "yeon_hui": {"name": "Ён Хуи", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Лукизм", "speed": 10, "strength": 11, "intellect": 12, "file_id": "AgACAgIAAxkBAAIPoWnrgDYDKkXUL8Stwq5qOLgAAaYRJgACGxRrG-shWEsVnOEJSQddGQEAAwIAA3kAAzsE", "exclusive": False},
 "park_serim": {"name": "Пак Сэрим", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Лукизм", "speed": 11, "strength": 12, "intellect": 10, "file_id": "AgACAgIAAxkBAAIOMGnrJfhFy2eAR85xaslA--P4E9ZWAAIJGWsbwYNYS10auRr3QvtUAQADAgADdwADOwQ", "exclusive": False},
 "kim_hae_yun": {"name": "Ким Хэ Юн", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Лукизм", "speed": 12, "strength": 10, "intellect": 11, "file_id": "AgACAgIAAxkBAAIPo2nrgDtXr2E7rL3GK7L-jGT-dK_WAAIcFGsb6yFYS3wqawTooO0kAQADAgADeQADOwQ", "exclusive": False},
-# ========== Факультет подземелья ======
+# ========== Факультет подземелья =====
 "choi_diyav": {"name": "Чхве Дияв", "rarity": "Эпическая 🟢", "style": "Магический Мечник", "series": "Факультет зачистки подземелий", "speed": 78, "strength": 77, "intellect": 78, "file_id": "AgACAgIAAxkBAAIXimntC6XM12r-BlRCQGATRCH9-GoHAAIfE2sbUZNpSxWBSeo9_peNAQADAgADdwADOwQ", "exclusive": False},
-
 "im_jae_hwan": {"name": "Им Дже Хван", "rarity": "Мифическая 🔴", "style": "Боевой Маг", "series": "Факультет зачистки подземелий", "speed": 96, "strength": 95, "intellect": 97, "file_id": "AgACAgIAAxkBAAIXjGntC61m2TCGRXxciBV_cJtN2aDFAAIgE2sbUZNpSxKKFvIj1bFmAQADAgADdwADOwQ", "exclusive": False},
-
 "lee_pil_gyu": {"name": "Ли Пиль Гю", "rarity": "Обычная ⚪️", "style": "Танк", "series": "Факультет зачистки подземелий", "speed": 22, "strength": 23, "intellect": 21, "file_id": "AgACAgIAAxkBAAIXjmntC7W4jUPHYFxGEy9Axt2xm-LvAAIhE2sbUZNpS0wsFb7sxsPqAQADAgADdwADOwQ", "exclusive": False},
-
 "yu_son": {"name": "Ю Сон", "rarity": "Легендарная 🔵", "style": "Зыбь", "series": "Факультет зачистки подземелий", "speed": 88, "strength": 89, "intellect": 87, "file_id": "AgACAgIAAxkBAAIXkGntC718T55oKNOt9uV0J1K5aBYNAAIjE2sbUZNpS80y5eybUJ-hAQADAgADdwADOwQ", "exclusive": False},
-
 "jin_se_rom": {"name": "Чин Сэ Ром", "rarity": "Редкая 🟡", "style": "Магический Лучник", "series": "Факультет зачистки подземелий", "speed": 58, "strength": 56, "intellect": 59, "file_id": "AgACAgIAAxkBAAIXkmntC8Tk0k24JG14zx-zkX0GgxL3AAIkE2sbUZNpS_iq6cCPyfbrAQADAgADdwADOwQ", "exclusive": False},
-
 "shadow_monkey": {"name": "Теневая Обезьяна", "rarity": "Обычная ⚪️", "style": "Животный", "series": "Факультет зачистки подземелий", "speed": 24, "strength": 25, "intellect": 23, "file_id": "AgACAgIAAxkBAAIXlGntC8xlIiNtq2KTo0-bKtQsp1O8AAIlE2sbUZNpS1qXp7GxwbtIAQADAgADdwADOwQ", "exclusive": False},
-
 "jin_seung_gyu": {"name": "Чин Сын Гю", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Факультет зачистки подземелий", "speed": 11, "strength": 10, "intellect": 12, "file_id": "AgACAgIAAxkBAAIXlmntC9VwdrbSZpIBMUkNbIMO7ehdAAInE2sbUZNpS7PmNtUycNgeAQADAgADdwADOwQ", "exclusive": False},
-
 "yang_do_gyun": {"name": "Ян До Гюн", "rarity": "Редкая 🟡", "style": "Берсерк", "series": "Факультет зачистки подземелий", "speed": 53, "strength": 54, "intellect": 52, "file_id": "AgACAgIAAxkBAAIXmGntC-DIZu149ZZNyhdjmMUVJHf1AAIoE2sbUZNpSxETxyKt_nuMAQADAgADdwADOwQ", "exclusive": False},
-
 "kang_jeong_guk": {"name": "Кан Чон Гук", "rarity": "Эпическая 🟢", "style": "Ближний Боец", "series": "Факультет зачистки подземелий", "speed": 77, "strength": 78, "intellect": 76, "file_id": "AgACAgIAAxkBAAIXmmntC-Yp8DSFe3BGS3s8CYj_oKglAAIpE2sbUZNpS0IvvhVG-P9NAQADAgADdwADOwQ", "exclusive": False},
-
 "alisha_escerm":{"name":"Алиша Эсцерм","rarity":"Эпическая 🟢","style":"Маг","series":"Факультет зачистки подземелий","speed":76,"strength":74,"intellect":78,"file_id":"AgACAgIAAxkBAAIXnGntC-6dzY27dM2_uujWah0B2HjtAAIrE2sbUZNpS2yRdyvAUJe3AQADAgADdwADOwQ","exclusive": False},
 "eik_escerm":{"name":"Эик Эсцерм","rarity":"Мифическая 🔴","style":"Целитель","series":"Факультет зачистки подземелий","speed":96,"strength":94,"intellect":98,"file_id":"AgACAgIAAxkBAAIXnmntC_bGIqSaqusuyh0g-6enHf4fAAIsE2sbUZNpSypFT7PIy-pbAQADAgADdwADOwQ","exclusive": False},
 "kang_gon_ho":{"name":"Кан Гон Хо","rarity":"Легендарная 🔵","style":"Боец","series":"Факультет зачистки подземелий","speed":84,"strength":85,"intellect":84,"file_id":"AgACAgIAAxkBAAIXoGntC_67tuqTybv8iyo1rjpBhsxdAAIuE2sbUZNpS_kHqG6eDs6eAQADAgADdwADOwQ","exclusive": False},
@@ -208,7 +199,6 @@ CARDS = {
 "oh_seung_a":{"name":"О Сын А","rarity":"Обычная ⚪️","style":"Электрическая стрела","series":"Факультет зачистки подземелий","speed":25,"strength":23,"intellect":24,"file_id":"AgACAgIAAxkBAAIXqmntDBwcDzCmaO83i5INlnF30qPWAAI0E2sbUZNpS1-4815oEY3tAQADAgADdwADOwQ","exclusive": False},
 "kim_yeong_mo":{"name":"Ким Ён Мо","rarity":"Обычная ⚪️","style":"Баффы","series":"Факультет зачистки подземелий","speed":20,"strength":19,"intellect":21,"file_id":"AgACAgIAAxkBAAIXrGntDCEIMpqhPVijh44VAXg6-mHiAAI1E2sbUZNpSyj_dgaI-hEkAQADAgADdwADOwQ","exclusive": False},
 "park_jong_man":{"name":"Пак Чон Ман","rarity":"Обычная ⚪️","style":"Танк","series":"Факультет зачистки подземелий","speed":23,"strength":27,"intellect":26,"file_id":"AgACAgIAAxkBAAIXrmntDCXIfsyOYng5zneLUwYIeBH3AAI3E2sbUZNpS_yZ95XUZDwlAQADAgADdwADOwQ","exclusive": False},
-
 "colossus": {"name": "Колосс", "rarity": "Обычная ⚪️", "style": "Базовый Мечник", "series": "Факультет зачистки подземелий", "speed": 27, "strength": 30, "intellect": 28, "file_id": "AgACAgIAAxkBAAIXsGntDCwINPTbE5PwqSDJ60hJXN58AAI5E2sbUZNpS2_2t0d0Wa5WAQADAgADdwADOwQ", "exclusive": False},
 "cho_se_a": {"name": "Чо Сэ А", "rarity": "Эпическая 🟢", "style": "Маг", "series": "Факультет зачистки подземелий", "speed": 63, "strength": 65, "intellect": 67, "file_id": "AgACAgIAAxkBAAIXsmntDDHRodjpPexTGWdbZZODBEDnAAI6E2sbUZNpS9c87vEJu1BYAQADAgADdwADOwQ", "exclusive": False},
 "sol_cheol_gan": {"name": "Соль Чоль Ган", "rarity": "Эпическая 🟢", "style": "Танк", "series": "Факультет зачистки подземелий", "speed": 75, "strength": 80, "intellect": 76, "file_id": "AgACAgIAAxkBAAIXtGntDDaBZ6XAERhWIYBeOFqMMomHAAI7E2sbUZNpS8M4ETZeKFLtAQADAgADdwADOwQ", "exclusive": False},
@@ -218,7 +208,6 @@ CARDS = {
 "kim_chan_hyuk": {"name": "Ким Чан Хёк", "rarity": "Обычная ⚪️", "style": "Животный", "series": "Факультет зачистки подземелий", "speed": 14, "strength": 12, "intellect": 13, "file_id": "AgACAgIAAxkBAAIXvGntDEoYgP8KV8UBUVNH3fHr7p_DAAJAE2sbUZNpS38TVrOKZRAHAQADAgADdwADOwQ", "exclusive": False},
 "rex": {"name": "Рекс", "rarity": "Эпическая 🟢", "style": "Универсал", "series": "Факультет зачистки подземелий", "speed": 75, "strength": 78, "intellect": 77, "file_id": "AgACAgIAAxkBAAIXvmntDE8cZ9kSRewkKipT65w3abaqAAJBE2sbUZNpSxvgrWYFCjHkAQADAgADdwADOwQ", "exclusive": False},
 "han_son_u": {"name": "Хан Сон У", "rarity": "Легендарная 🔵", "style": "Ближний(Вспышка)", "series": "Факультет зачистки подземелий", "speed": 83, "strength": 81, "intellect": 82, "file_id": "AgACAgIAAxkBAAIXwGntDFa4S2Z2zwn-I-AnVFfxf9MBAAJCE2sbUZNpS6VZVwpdFc_tAQADAgADdwADOwQ", "exclusive": False},
-
 "han_ga_yun": {"name": "Хан Га Юн", "rarity": "Эпическая 🟢", "style": "Ближний(Вспышка)", "series": "Факультет зачистки подземелий", "speed": 80, "strength": 80, "intellect": 78, "file_id": "AgACAgIAAxkBAAIXwmntDFwmcEZubJP8bctfrxN7B37tAAJDE2sbUZNpSw7XJsay3DltAQADAgADdwADOwQ", "exclusive": False},
 "hwaran": {"name": "Хва Ран", "rarity": "Легендарная 🔵", "style": "Магия Крови", "series": "Факультет зачистки подземелий", "speed": 84, "strength": 83, "intellect": 84, "file_id": "AgACAgIAAxkBAAIXxGntDHfUj3FIcaAQTqbNG4UpoOP7AAJGE2sbUZNpSy9ALT5oAgIOAQADAgADdwADOwQ", "exclusive": False},
 "gwe_seok": {"name": "Гве Сок", "rarity": "Легендарная 🔵", "style": "Ближний", "series": "Факультет зачистки подземелий", "speed": 82, "strength": 84, "intellect": 81, "file_id": "AgACAgIAAxkBAAIXxmntDIPHgb9WcipFKUNv_TsVtnWYAAJIE2sbUZNpS8WnS9ujk-ajAQADAgADdwADOwQ", "exclusive": False},
