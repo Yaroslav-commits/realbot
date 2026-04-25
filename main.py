@@ -229,11 +229,15 @@ RARITIES = {
 
 BGS = {
     "default": {"name": "Стандартный", "file_id": "AgACAgIAAxkBAAFHkflp5O8qYvKQnm5R8Nylqe0KM15SLgACoRNrG6trIUsNqPCQiCAlRgEAAwIAA3cAAzsE", "price": 0},
-     
+"zer": {"name": "Нулевое Поколение",
+             "file_id": "BAACAgIAAxkBAANOaez3fDixsllbbPjfC86XbBEdV98AAiiWAAL0DChLEG7IiqbL23w7BA",
+             "price": 2500},
     "lookism_1": {"name": "Лукизм", "file_id": "AgACAgIAAxkBAAFHkldp5PKPLG3TCvsedNSdNZWpAmyi8wACeRZrGz0vIUt6PZ3wUkrtlQEAAwIAA3cAAzsE", "price": 500}
 }
 VIDEO_BGS = {
-
+"zer": {"name": "Нулевое Поколение",
+             "file_id": "BAACAgIAAxkBAANOaez3fDixsllbbPjfC86XbBEdV98AAiiWAAL0DChLEG7IiqbL23w7BA",
+             "price": 2500},
 
 }
 TITLES = {
@@ -1062,7 +1066,7 @@ SHOP_BG_LIST = [
 VIDEO_BGS = {"zero"}
 
 # ====== ЕВЕНТ ======
-EVENT_ENABLED = True  # Поставь False, чтобы скрыть Евент и показывать "нет событий"
+EVENT_ENABLED = False  # Поставь False, чтобы скрыть Евент и показывать "нет событий"
 EVENT_CARDS = {
     1: {"key": "event_card_1", "price": 1000},  # Сон Джин Ву
     2: {"key": "event_card_2", "price": 1000},  # Богиня судьбы
