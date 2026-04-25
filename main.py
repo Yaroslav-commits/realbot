@@ -28,6 +28,7 @@ MAIN_PRIZE_NORMAL_TITLE = "title_pass_hero" # Ключ титула
 MAIN_PRIZE_ROYALE_CARD = "exclusive_card_1" # Ключ эксклюзивной карты
 # ================== БАЗА ДАННЫХ ==================
 CARDS = {
+    # ===== LOOKISM ======
     "daniel_fat": {"name": "Толстый Даниэль", "rarity": "Обычная ⚪️", "style": "Универсал 💠", "series": "Лукизм", "speed": 13, "strength": 30, "intellect": 16, "file_id": "AgACAgIAAxkBAAFHkiRp5PC_zGf8JQKire2HNasTTISaDQAChRZrG_QMKEuNvVy9BpKorwEAAwIAA3kAAzsE", "exclusive": False},
     "gun_park": {"name": "Пак Чонгон", "rarity": "Мифическая 🔴", "style": "Каратэ", "series": "Лукизм", "speed": 97, "strength": 100, "intellect": 97, "file_id": "AgACAgIAAxkBAAIPhmnn449dJIpuvnB_RINQRehRRPV-AAL0H2sbFc5BSxYlHH2qhUy3AQADAgADdwADOwQ", "exclusive": False},
     "ha": {"name": "Ха Ныль", "rarity": "Обычная ⚪️", "style": "Отсутсвует", "series": "Лукизм", "speed": 11, "strength": 11, "intellect": 11, "file_id": "AgACAgIAAxkBAAFHk-Vp5QOMPeGE0TNI3gVAoh3C_X21mAACPBdrG_QMKEuIszmorC592gEAAwIAA3cAAzsE", "exclusive": False},
@@ -178,7 +179,52 @@ CARDS = {
 "yeon_hui": {"name": "Ён Хуи", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Лукизм", "speed": 10, "strength": 11, "intellect": 12, "file_id": "AgACAgIAAxkBAAIPoWnrgDYDKkXUL8Stwq5qOLgAAaYRJgACGxRrG-shWEsVnOEJSQddGQEAAwIAA3kAAzsE", "exclusive": False},
 "park_serim": {"name": "Пак Сэрим", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Лукизм", "speed": 11, "strength": 12, "intellect": 10, "file_id": "AgACAgIAAxkBAAIOMGnrJfhFy2eAR85xaslA--P4E9ZWAAIJGWsbwYNYS10auRr3QvtUAQADAgADdwADOwQ", "exclusive": False},
 "kim_hae_yun": {"name": "Ким Хэ Юн", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Лукизм", "speed": 12, "strength": 10, "intellect": 11, "file_id": "AgACAgIAAxkBAAIPo2nrgDtXr2E7rL3GK7L-jGT-dK_WAAIcFGsb6yFYS3wqawTooO0kAQADAgADeQADOwQ", "exclusive": False},
+# ========== Факультет подземелья ======
+"choi_diyav": {"name": "Чхве Дияв", "rarity": "Эпическая 🟢", "style": "Магический Мечник", "series": "Факультет зачистки подземелий", "speed": 78, "strength": 77, "intellect": 78, "file_id": "AgACAgIAAxkBAAIXimntC6XM12r-BlRCQGATRCH9-GoHAAIfE2sbUZNpSxWBSeo9_peNAQADAgADdwADOwQ", "exclusive": False},
 
+"im_jae_hwan": {"name": "Им Дже Хван", "rarity": "Мифическая 🔴", "style": "Боевой Маг", "series": "Факультет зачистки подземелий", "speed": 96, "strength": 95, "intellect": 97, "file_id": "AgACAgIAAxkBAAIXjGntC61m2TCGRXxciBV_cJtN2aDFAAIgE2sbUZNpSxKKFvIj1bFmAQADAgADdwADOwQ", "exclusive": False},
+
+"lee_pil_gyu": {"name": "Ли Пиль Гю", "rarity": "Обычная ⚪️", "style": "Танк", "series": "Факультет зачистки подземелий", "speed": 22, "strength": 23, "intellect": 21, "file_id": "AgACAgIAAxkBAAIXjmntC7W4jUPHYFxGEy9Axt2xm-LvAAIhE2sbUZNpS0wsFb7sxsPqAQADAgADdwADOwQ", "exclusive": False},
+
+"yu_son": {"name": "Ю Сон", "rarity": "Легендарная 🔵", "style": "Зыбь", "series": "Факультет зачистки подземелий", "speed": 88, "strength": 89, "intellect": 87, "file_id": "AgACAgIAAxkBAAIXkGntC718T55oKNOt9uV0J1K5aBYNAAIjE2sbUZNpS80y5eybUJ-hAQADAgADdwADOwQ", "exclusive": False},
+
+"jin_se_rom": {"name": "Чин Сэ Ром", "rarity": "Редкая 🟡", "style": "Магический Лучник", "series": "Факультет зачистки подземелий", "speed": 58, "strength": 56, "intellect": 59, "file_id": "AgACAgIAAxkBAAIXkmntC8Tk0k24JG14zx-zkX0GgxL3AAIkE2sbUZNpS_iq6cCPyfbrAQADAgADdwADOwQ", "exclusive": False},
+
+"shadow_monkey": {"name": "Теневая Обезьяна", "rarity": "Обычная ⚪️", "style": "Животный", "series": "Факультет зачистки подземелий", "speed": 24, "strength": 25, "intellect": 23, "file_id": "AgACAgIAAxkBAAIXlGntC8xlIiNtq2KTo0-bKtQsp1O8AAIlE2sbUZNpS1qXp7GxwbtIAQADAgADdwADOwQ", "exclusive": False},
+
+"jin_seung_gyu": {"name": "Чин Сын Гю", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Факультет зачистки подземелий", "speed": 11, "strength": 10, "intellect": 12, "file_id": "AgACAgIAAxkBAAIXlmntC9VwdrbSZpIBMUkNbIMO7ehdAAInE2sbUZNpS7PmNtUycNgeAQADAgADdwADOwQ", "exclusive": False},
+
+"yang_do_gyun": {"name": "Ян До Гюн", "rarity": "Редкая 🟡", "style": "Берсерк", "series": "Факультет зачистки подземелий", "speed": 53, "strength": 54, "intellect": 52, "file_id": "AgACAgIAAxkBAAIXmGntC-DIZu149ZZNyhdjmMUVJHf1AAIoE2sbUZNpSxETxyKt_nuMAQADAgADdwADOwQ", "exclusive": False},
+
+"kang_jeong_guk": {"name": "Кан Чон Гук", "rarity": "Эпическая 🟢", "style": "Ближний Боец", "series": "Факультет зачистки подземелий", "speed": 77, "strength": 78, "intellect": 76, "file_id": "AgACAgIAAxkBAAIXmmntC-Yp8DSFe3BGS3s8CYj_oKglAAIpE2sbUZNpS0IvvhVG-P9NAQADAgADdwADOwQ", "exclusive": False},
+
+"alisha_escerm":{"name":"Алиша Эсцерм","rarity":"Эпическая 🟢","style":"Маг","series":"Факультет зачистки подземелий","speed":76,"strength":74,"intellect":78,"file_id":"AgACAgIAAxkBAAIXnGntC-6dzY27dM2_uujWah0B2HjtAAIrE2sbUZNpS2yRdyvAUJe3AQADAgADdwADOwQ","exclusive": False},
+"eik_escerm":{"name":"Эик Эсцерм","rarity":"Мифическая 🔴","style":"Целитель","series":"Факультет зачистки подземелий","speed":96,"strength":94,"intellect":98,"file_id":"AgACAgIAAxkBAAIXnmntC_bGIqSaqusuyh0g-6enHf4fAAIsE2sbUZNpSypFT7PIy-pbAQADAgADdwADOwQ","exclusive": False},
+"kang_gon_ho":{"name":"Кан Гон Хо","rarity":"Легендарная 🔵","style":"Боец","series":"Факультет зачистки подземелий","speed":84,"strength":85,"intellect":84,"file_id":"AgACAgIAAxkBAAIXoGntC_67tuqTybv8iyo1rjpBhsxdAAIuE2sbUZNpS_kHqG6eDs6eAQADAgADdwADOwQ","exclusive": False},
+"arges":{"name":"Аргес","rarity":"Легендарная 🔵","style":"Огненный Мечник","series":"Факультет зачистки подземелий","speed":85,"strength":87,"intellect":86,"file_id":"AgACAgIAAxkBAAIXomntDALgEHH5iS3HdHao4RbCT4QqAAIvE2sbUZNpS0EEWN3eUfMvAQADAgADdwADOwQ","exclusive":False},
+"flying_mantis":{"name":"Летающий Богомол","rarity":"Обычная ⚪️","style":"Отсутствует","series":"Факультет зачистки подземелий","speed":11,"strength":10,"intellect":10,"file_id":"AgACAgIAAxkBAAIXpGntDAfJ-cgc6pv2IVZ4JKZaCpHrAAIwE2sbUZNpS5-CKeuj8PCCAQADAgADdwADOwQ","exclusive": False},
+"crasterraptor":{"name":"Крастерраптор","rarity":"Обычная ⚪️","style":"Отсутствует","series":"Факультет зачистки подземелий","speed":12,"strength":13,"intellect":10,"file_id":"AgACAgIAAxkBAAIXpmntDA3LXtDydQNwr2ARdWsXM__gAAIxE2sbUZNpSyIcFKLgM6IAAQEAAwIAA3cAAzsE","exclusive": False},
+"demokuras":{"name":"Демокурас","rarity":"Обычная ⚪️","style":"Отсутствует","series":"Факультет зачистки подземелий","speed":28,"strength":29,"intellect":27,"file_id":"AgACAgIAAxkBAAIXqGntDBcyUQio4nf0HU7_zT2tjvBdAAIyE2sbUZNpS05IH05dFJeGAQADAgADdwADOwQ","exclusive": False},
+"oh_seung_a":{"name":"О Сын А","rarity":"Обычная ⚪️","style":"Электрическая стрела","series":"Факультет зачистки подземелий","speed":25,"strength":23,"intellect":24,"file_id":"AgACAgIAAxkBAAIXqmntDBwcDzCmaO83i5INlnF30qPWAAI0E2sbUZNpS1-4815oEY3tAQADAgADdwADOwQ","exclusive": False},
+"kim_yeong_mo":{"name":"Ким Ён Мо","rarity":"Обычная ⚪️","style":"Баффы","series":"Факультет зачистки подземелий","speed":20,"strength":19,"intellect":21,"file_id":"AgACAgIAAxkBAAIXrGntDCEIMpqhPVijh44VAXg6-mHiAAI1E2sbUZNpSyj_dgaI-hEkAQADAgADdwADOwQ","exclusive": False},
+"park_jong_man":{"name":"Пак Чон Ман","rarity":"Обычная ⚪️","style":"Танк","series":"Факультет зачистки подземелий","speed":23,"strength":27,"intellect":26,"file_id":"AgACAgIAAxkBAAIXrmntDCXIfsyOYng5zneLUwYIeBH3AAI3E2sbUZNpS_yZ95XUZDwlAQADAgADdwADOwQ","exclusive": False},
+
+"colossus": {"name": "Колосс", "rarity": "Обычная ⚪️", "style": "Базовый Мечник", "series": "Факультет зачистки подземелий", "speed": 27, "strength": 30, "intellect": 28, "file_id": "AgACAgIAAxkBAAIXsGntDCwINPTbE5PwqSDJ60hJXN58AAI5E2sbUZNpS2_2t0d0Wa5WAQADAgADdwADOwQ", "exclusive": False},
+"cho_se_a": {"name": "Чо Сэ А", "rarity": "Эпическая 🟢", "style": "Маг", "series": "Факультет зачистки подземелий", "speed": 63, "strength": 65, "intellect": 67, "file_id": "AgACAgIAAxkBAAIXsmntDDHRodjpPexTGWdbZZODBEDnAAI6E2sbUZNpS9c87vEJu1BYAQADAgADdwADOwQ", "exclusive": False},
+"sol_cheol_gan": {"name": "Соль Чоль Ган", "rarity": "Эпическая 🟢", "style": "Танк", "series": "Факультет зачистки подземелий", "speed": 75, "strength": 80, "intellect": 76, "file_id": "AgACAgIAAxkBAAIXtGntDDaBZ6XAERhWIYBeOFqMMomHAAI7E2sbUZNpS8M4ETZeKFLtAQADAgADdwADOwQ", "exclusive": False},
+"cha_yeon_a": {"name": "Ча Ён А", "rarity": "Редкая 🟡", "style": "Ножевой бой", "series": "Факультет зачистки подземелий", "speed": 48, "strength": 46, "intellect": 57, "file_id": "AgACAgIAAxkBAAIXtmntDDrXbtJ5ymtkbu1NhY34Gb_DAAI8E2sbUZNpS06ZlZfUDKgGAQADAgADdwADOwQ", "exclusive": False},
+"horned_horror": {"name": "Рогатый Ужас", "rarity": "Обычная ⚪️", "style": "Животный", "series": "Факультет зачистки подземелий", "speed": 30, "strength": 25, "intellect": 23, "file_id": "AgACAgIAAxkBAAIXuGntDEA0uvH2mbIkYON8aekSdD0BAAI-E2sbUZNpS4r5YUKnSQMrAQADAgADdwADOwQ", "exclusive": False},
+"cho_don_yun": {"name": "Чо Дон Юн", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Факультет зачистки подземелий", "speed": 13, "strength": 11, "intellect": 14, "file_id": "AgACAgIAAxkBAAIXumntDEUxYBxgO11ldZG5uHfhgd7YAAI_E2sbUZNpS4jsn9AgpeeuAQADAgADdwADOwQ", "exclusive": False},
+"kim_chan_hyuk": {"name": "Ким Чан Хёк", "rarity": "Обычная ⚪️", "style": "Животный", "series": "Факультет зачистки подземелий", "speed": 14, "strength": 12, "intellect": 13, "file_id": "AgACAgIAAxkBAAIXvGntDEoYgP8KV8UBUVNH3fHr7p_DAAJAE2sbUZNpS38TVrOKZRAHAQADAgADdwADOwQ", "exclusive": False},
+"rex": {"name": "Рекс", "rarity": "Эпическая 🟢", "style": "Универсал", "series": "Факультет зачистки подземелий", "speed": 75, "strength": 78, "intellect": 77, "file_id": "AgACAgIAAxkBAAIXvmntDE8cZ9kSRewkKipT65w3abaqAAJBE2sbUZNpSxvgrWYFCjHkAQADAgADdwADOwQ", "exclusive": False},
+"han_son_u": {"name": "Хан Сон У", "rarity": "Легендарная 🔵", "style": "Ближний(Вспышка)", "series": "Факультет зачистки подземелий", "speed": 83, "strength": 81, "intellect": 82, "file_id": "AgACAgIAAxkBAAIXwGntDFa4S2Z2zwn-I-AnVFfxf9MBAAJCE2sbUZNpS6VZVwpdFc_tAQADAgADdwADOwQ", "exclusive": False},
+
+"han_ga_yun": {"name": "Хан Га Юн", "rarity": "Эпическая 🟢", "style": "Ближний(Вспышка)", "series": "Факультет зачистки подземелий", "speed": 80, "strength": 80, "intellect": 78, "file_id": "AgACAgIAAxkBAAIXwmntDFwmcEZubJP8bctfrxN7B37tAAJDE2sbUZNpSw7XJsay3DltAQADAgADdwADOwQ", "exclusive": False},
+"hwaran": {"name": "Хва Ран", "rarity": "Легендарная 🔵", "style": "Магия Крови", "series": "Факультет зачистки подземелий", "speed": 84, "strength": 83, "intellect": 84, "file_id": "AgACAgIAAxkBAAIXxGntDHfUj3FIcaAQTqbNG4UpoOP7AAJGE2sbUZNpSy9ALT5oAgIOAQADAgADdwADOwQ", "exclusive": False},
+"gwe_seok": {"name": "Гве Сок", "rarity": "Легендарная 🔵", "style": "Ближний", "series": "Факультет зачистки подземелий", "speed": 82, "strength": 84, "intellect": 81, "file_id": "AgACAgIAAxkBAAIXxmntDIPHgb9WcipFKUNv_TsVtnWYAAJIE2sbUZNpS8WnS9ujk-ajAQADAgADdwADOwQ", "exclusive": False},
+"eun_gel": {"name": "Ын Гель", "rarity": "Эпическая 🟢", "style": "Универсал", "series": "Факультет зачистки подземелий", "speed": 80, "strength": 79, "intellect": 79, "file_id": "AgACAgIAAxkBAAIXyGntDIv9Xci6SW1rFcZvWUwN1NzKAAJJE2sbUZNpS-_hw7ZaEnWFAQADAgADdwADOwQ", "exclusive": False},
+"jang_san_yeong": {"name": "Чан Сан Ён", "rarity": "Редкая 🟡", "style": "Рукопашный бой", "series": "Факультет зачистки подземелий", "speed": 46, "strength": 48, "intellect": 45, "file_id": "AgACAgIAAxkBAAIXymntDJJzLInG5QaW2Cgk7thmVRUBAAJKE2sbUZNpSw7LwtoP6LTuAQADAgADdwADOwQ", "exclusive": False},
+"yu_cha_ryeon": {"name": "Ю Ча Рён", "rarity": "Легендарная 🔵", "style": "Зыбь", "series": "Факультет зачистки подземелий", "speed": 85, "strength": 85, "intellect": 84, "file_id": "AgACAgIAAxkBAAIXzGntDJsX0BLyOwbUlv35CC4uYxyoAAJLE2sbUZNpSxQhSR_qkcDUAQADAgADdwADOwQ", "exclusive": False},
 #====LIMITED CARDS=====
 "exclusive_card_1": {"name": "Юк Сонджи и Джин Хобин", "rarity": "Легендарная 🔵", "style": "Дзюдо", "series": "Лукизм", "speed": 90, "strength": 90, "intellect": 85, "file_id": "AgACAgIAAxkBAAIH5GnqYmtCuh1zzWHavH8k5YOtq8S3AALkE2sbwYNYSxwTnoBWq5jFAQADAgADdwADOwQ", "exclusive": True},
 }
@@ -194,10 +240,17 @@ RARITIES = {
 
 BGS = {
     "default": {"name": "Стандартный", "file_id": "AgACAgIAAxkBAAFHkflp5O8qYvKQnm5R8Nylqe0KM15SLgACoRNrG6trIUsNqPCQiCAlRgEAAwIAA3cAAzsE", "price": 0},
-    "zero": {"name": "Нулевое Поколение", "file_id": "AAMCAgADGQEAAUeTx2nlAskfpVPNWk6gZFNE-yH3-cMTAAIolgAC9AwoS_gxR6WaCm79AQAHbQADOwQ","price": 3000},
+     "zero": {"name": "Нулевое Поколение",
+             "file_id": "BAACAgIAAxkBAANOaez3fDixsllbbPjfC86XbBEdV98AAiiWAAL0DChLEG7IiqbL23w7BA",
+             "price": 3000},
     "lookism_1": {"name": "Лукизм", "file_id": "AgACAgIAAxkBAAFHkldp5PKPLG3TCvsedNSdNZWpAmyi8wACeRZrGz0vIUt6PZ3wUkrtlQEAAwIAA3cAAzsE", "price": 500}
 }
+VIDEO_BGS = {
+    "zero": {"name": "Нулевое Поколение",
+             "file_id": "BAACAgIAAxkBAANOaez3fDixsllbbPjfC86XbBEdV98AAiiWAAL0DChLEG7IiqbL23w7BA",
+             "price": 3000},
 
+}
 TITLES = {
     "title_pass_hero": "Герой Месяца 🏆",
     "title_dev": "Создатель ⚜️"
@@ -301,6 +354,10 @@ async def start_cmd(msg: types.Message):
     add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name)
     await msg.answer("Добро пожаловать в Lookism Card! \nКанал бота: https://t.me/bradkofflood\nНаш чат:https://t.me/+as-Ypv7Kfjg3YTMy\n\nВыбирай действие и начни игру:", reply_markup=kb_main())
 
+@router.message(F.video)
+async def get_video_id(msg: types.Message):
+    await msg.answer(f"ID видео:\n<code>{msg.video.file_id}</code>")
+
 @router.message(F.photo)
 async def get_photo_id(msg: types.Message):
     # Эта функция будет присылать тебе ID любой картинки, которую ты скинешь боту
@@ -362,15 +419,11 @@ async def get_card_cmd(msg: types.Message):
 async def profile(msg: types.Message):
     uid = msg.from_user.id
     u = get_user(uid)
-
-    # Если юзера нет в базе, добавляем его:
     if not u:
         add_user(uid, msg.from_user.username, msg.from_user.first_name)
         u = get_user(uid)
 
     pts = u[7]
-
-    # Формирование строки с титулом
     if u[14] and u[14] in TITLES:
         title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n"
     else:
@@ -393,19 +446,23 @@ async def profile(msg: types.Message):
 
     bld = InlineKeyboardBuilder()
     bld.button(text="🔱 Мои титулы", callback_data="my_titles")
-    bld.button(text="🌄 Мои фоны", callback_data="my_bgs")
-    bld.button(text="⚙️ Настройка", callback_data="settings")
+    bld.button(text="🌄 Мои фоны",   callback_data="my_bgs")
+    bld.button(text="⚙️ Настройка",  callback_data="settings")
     bld.adjust(1)
 
-    # Получаем file_id фона (если нет, берем дефолтный из ТЗ)
-    bg_id = BGS.get(u[13], BGS['default'])['file_id']
-    if not bg_id or u[13] in [None, 'default']:
-        bg_id = "AgACAgIAAxkBAAFHkflp5O8qYvKQnm5R8Nylqe0KM15SLgACoRNrG6trIUsNqPCQiCAlRgEAAwIAA3cAAzsE"
-
+    bg_key = u[13] or 'default'
+    bg_data = BGS.get(bg_key, BGS['default'])
+    bg_file = bg_data.get('file_id')
     try:
-        await msg.answer_photo(photo=bg_id, caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        if bg_key in VIDEO_BGS:
+            await msg.answer_video(video=bg_file, caption=txt,
+                                   reply_markup=bld.as_markup(), parse_mode="HTML")
+        else:
+            await msg.answer_photo(photo=bg_file, caption=txt,
+                                   reply_markup=bld.as_markup(), parse_mode="HTML")
     except Exception:
-        await msg.answer(f"{txt}\n\n[Картинка не загрузилась.]", reply_markup=bld.as_markup(), parse_mode="HTML")
+        await msg.answer(f"{txt}\n\n[Фон не загрузился.]",
+                         reply_markup=bld.as_markup(), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "settings")
@@ -457,16 +514,17 @@ async def bgs_titles_cq(cq: CallbackQuery):
     await cq.answer()
 
 
+# ============ Предпросмотр фона/титула ============
 @router.callback_query(F.data.startswith("preview_"))
 async def preview_cq(cq: CallbackQuery):
     parts = cq.data.split(":")
-    if len(parts) != 2: return
+    if len(parts) != 2:
+        return
     type_str, itm = parts[0].replace("preview_", ""), parts[1]
 
     u = get_user(cq.from_user.id)
     current_active = u[13] if type_str == "bg" else u[14]
 
-    # Проверяем, установлен ли сейчас этот предмет
     is_active = (current_active == itm)
     if type_str == "bg" and itm == "default" and current_active in [None, 'default']:
         is_active = True
@@ -477,11 +535,13 @@ async def preview_cq(cq: CallbackQuery):
 
     if type_str == "bg":
         bg_data = BGS.get(itm, BGS['default'])
-        photo_id = bg_data.get('file_id',
-                               "AgACAgIAAxkBAAFHkflp5O8qYvKQnm5R8Nylqe0KM15SLgACoRNrG6trIUsNqPCQiCAlRgEAAwIAA3cAAzsE")
+        file_id = bg_data.get('file_id')
         name = bg_data.get('name', 'Фон')
-        await cq.message.answer_photo(photo=photo_id, caption=f"🌄 Предпросмотр фона: {name}",
-                                      reply_markup=bld.as_markup())
+        caption = f"🌄 Предпросмотр фона: {name}"
+        if itm in VIDEO_BGS:
+            await cq.message.answer_video(video=file_id, caption=caption, reply_markup=bld.as_markup())
+        else:
+            await cq.message.answer_photo(photo=file_id, caption=caption, reply_markup=bld.as_markup())
     else:
         name = TITLES.get(itm, 'Титул')
         await cq.message.answer(f"🔱 Предпросмотр титула: {name}", reply_markup=bld.as_markup())
@@ -980,68 +1040,437 @@ async def ignore_cb(cq: CallbackQuery):
 
 
 # ============ МАГАЗИН ============
+# Картинка магазина
+SHOP_IMG = "AgACAgIAAxkBAAIUM2nstgoTQDqJbUmaeCLLFoxMZnLiAAKJFmsbUZNhS6EpHcRVEBvhAQADAgADdwADOwQ"
+
+# Картинки паков
+PACK_LEG_IMG = "AgACAgIAAxkBAAIWNGns2vzsRcry-V3oMtLB4Mx0RHQzAAJsF2sbUZNhSzGI1hmg5w5wAQADAgADeQADOwQ"
+PACK_EPIC_IMG = "AgACAgIAAxkBAAIWTWns252cq-njUfttMiBMRHJgtzwyAAJuF2sbUZNhS-d0UGlsfWWIAQADAgADeAADOwQ"
+
+# Картинка Евента
+EVENT_IMG = "AgACAgIAAxkBAAIWi2ns3TnmIMe_lIjVKcVkgKF-LwiAAAKGF2sbUZNhS5heUt8GN34fAQADAgADeAADOwQ"
+
+# Наборы алмазов: (звёзды, алмазы)
+DIAMOND_PACKS = [
+    (25, 75),
+    (75, 250),
+    (150, 600),
+    (500, 2000),
+    (1000, 5000),
+]
+
+# Крутки: (алмазы, попытки)
+SPIN_PACKS = [
+    (50, 10),
+    (100, 22),
+    (250, 60),
+    (500, 140),
+]
+
+# Фоны в магазине: ключ, цена, валюта: bc = BattleCoin, krw = KRW, dia = Diamond
+SHOP_BG_LIST = [
+    {"id": "lookism_1", "price": 500,  "currency": "bc",  "icon": "🪙"},
+    {"id": "zero",      "price": 2500, "currency": "krw", "icon": "💴"},
+]
+
+# ВИДЕО-ФОНЫ. Сюда кидаешь ключи тех фонов, которые у тебя загружены как видео.
+VIDEO_BGS = {"zero"}
+
+# ====== ЕВЕНТ ======
+EVENT_ENABLED = True  # Поставь False, чтобы скрыть Евент и показывать "нет событий"
+EVENT_CARDS = {
+    1: {"key": "event_card_1", "price": 1000},  # Сон Джин Ву
+    2: {"key": "event_card_2", "price": 1000},  # Богиня судьбы
+    3: {"key": "event_card_3", "price": 1000},  # Санта Клаус
+}
+# Если ключа ещё нет в CARDS — возьмётся имя отсюда
+EVENT_FALLBACK_NAMES = {
+    1: "Сон Джин Ву",
+    2: "Богиня судьбы",
+    3: "Санта Клаус",
+}
+
+def _event_card_name(idx):
+    info = EVENT_CARDS.get(idx)
+    if info:
+        c = CARDS.get(info["key"])
+        if c:
+            return c["name"]
+    return EVENT_FALLBACK_NAMES.get(idx, f"Карта {idx}")
+
+def _shop_main_kb():
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Купить алмазы 💎", callback_data="shop:dia")
+    bld.button(text="Premium 🎫",       callback_data="shop:premium")
+    bld.button(text="Крутки 🎴",        callback_data="shop:spins")
+    bld.button(text="Фоны 🌄",          callback_data="shop:bgs:0")
+    bld.button(text="Паки 🗃️",          callback_data="shop:packs")
+    bld.button(text="Евент 🤩",         callback_data="shop:event")
+    bld.adjust(2)
+    return bld.as_markup()
+
 @router.message(F.text == "🛍 Магазин")
 async def shop(msg: types.Message):
+    await msg.answer_photo(
+        photo=SHOP_IMG,
+        caption="🛍 Добро пожаловать в Магазин!",
+        reply_markup=_shop_main_kb()
+    )
+
+async def _back_to_shop_main(cq: CallbackQuery):
+    try:
+        await cq.message.edit_media(
+            media=types.InputMediaPhoto(media=SHOP_IMG, caption="🛍 Добро пожаловать в Магазин!"),
+            reply_markup=_shop_main_kb()
+        )
+    except Exception:
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+        await cq.message.answer_photo(
+            photo=SHOP_IMG, caption="🛍 Добро пожаловать в Магазин!",
+            reply_markup=_shop_main_kb()
+        )
+
+@router.callback_query(F.data == "shop:main")
+async def shop_main_cb(cq: CallbackQuery):
+    await _back_to_shop_main(cq)
+    await cq.answer()
+
+# ===== Купить алмазы =====
+def _dia_kb():
     bld = InlineKeyboardBuilder()
-    bld.button(text="🗃️ Паки", callback_data="shop_packs")
-    bld.button(text="🌄 Фоны", callback_data="shop_bgs")
-    await msg.answer("🛍 Добро пожаловать в Магазин!", reply_markup=bld.as_markup())
+    for stars, dia in DIAMOND_PACKS:
+        bld.button(text=f"{stars} ⭐️ = {dia} 💎", callback_data=f"shop:dia_buy:{stars}:{dia}")
+    bld.button(text="Назад 🔙", callback_data="shop:main")
+    bld.adjust(1)
+    return bld.as_markup()
 
 
-@router.callback_query(F.data == "shop_packs")
-async def shop_packs(cq: CallbackQuery):
-    kb = [
-        [KeyboardButton(text="🗃️ Купить Легендарный пак"), KeyboardButton(text="🗃️ Купить Эпический пак")],
+@router.callback_query(F.data == "shop:dia")
+async def shop_dia_cb(cq: CallbackQuery):
+    try:
+        await cq.message.edit_reply_markup(reply_markup=_dia_kb())
+    except Exception as e:
+        print(e)  # ← добавь для отладки
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("shop:dia_buy:"))
+async def shop_dia_buy_cb(cq: CallbackQuery, bot: Bot):
+    _, _, stars, dia = cq.data.split(":")
+    stars = int(stars); dia = int(dia)
+    await bot.send_invoice(
+        chat_id=cq.from_user.id,
+        title=f"{dia} 💎",
+        description=f"Пополнение баланса на {dia} алмазов",
+        payload=f"dia_buy:{stars}:{dia}",
+        provider_token="",
+        currency="XTR",
+        prices=[LabeledPrice(label=f"{dia} 💎", amount=stars)]
+    )
+    await cq.answer()
+
+# ===== Premium =====
+@router.callback_query(F.data == "shop:premium")
+async def shop_premium_cb(cq: CallbackQuery):
+    await cq.answer("🎫 Premium пока недоступен.", show_alert=True)
+
+# ===== Крутки =====
+def _spin_kb():
+    bld = InlineKeyboardBuilder()
+    for dia, att in SPIN_PACKS:
+        bld.button(text=f"{dia}💎 = {att}💳", callback_data=f"shop:spin_buy:{dia}:{att}")
+    bld.button(text="Назад 🔙", callback_data="shop:main")
+    bld.adjust(1)
+    return bld.as_markup()
+
+@router.callback_query(F.data == "shop:spins")
+async def shop_spins_cb(cq: CallbackQuery):
+    try:
+        await cq.message.edit_reply_markup(reply_markup=_spin_kb())
+    except Exception:
+        pass
+    await cq.answer()
+
+@router.callback_query(F.data.startswith("shop:spin_buy:"))
+async def shop_spin_buy_cb(cq: CallbackQuery):
+    _, _, dia, att = cq.data.split(":")
+    dia = int(dia); att = int(att)
+    u = get_user(cq.from_user.id)
+    if u[3] < dia:
+        return await cq.answer(f"❌ Недостаточно алмазов! Нужно: {dia} 💎", show_alert=True)
+    db_exec("UPDATE users SET diamond = diamond - ?, attempts = attempts + ? WHERE id = ?",
+            (dia, att, cq.from_user.id))
+    await cq.answer(f"✅ Куплено {att} попыток!", show_alert=True)
+
+# ===== Фоны (с листалкой) =====
+@router.callback_query(F.data.startswith("shop:bgs:"))
+async def shop_bgs_cb(cq: CallbackQuery):
+    idx = int(cq.data.split(":")[2]) % len(SHOP_BG_LIST)
+    item = SHOP_BG_LIST[idx]
+    bg = BGS.get(item["id"])
+    if not bg:
+        return await cq.answer("Фон не найден", show_alert=True)
+
+    caption = f"🌄 Фон: {bg['name']}\n💰 Цена: {item['price']}{item['icon']}"
+
+    left_idx  = (idx - 1) % len(SHOP_BG_LIST)
+    right_idx = (idx + 1) % len(SHOP_BG_LIST)
+
+    bld = InlineKeyboardBuilder()
+    if idx == 0:
+        bld.row(
+            InlineKeyboardButton(text="🛍️ Купить", callback_data=f"shop:bg_buy:{item['id']}"),
+            InlineKeyboardButton(text="——>",       callback_data=f"shop:bgs:{right_idx}")
+        )
+    elif idx == len(SHOP_BG_LIST) - 1:
+        bld.row(
+            InlineKeyboardButton(text="<——",       callback_data=f"shop:bgs:{left_idx}"),
+            InlineKeyboardButton(text="🛍️ Купить", callback_data=f"shop:bg_buy:{item['id']}")
+        )
+    else:
+        bld.row(
+            InlineKeyboardButton(text="<——",       callback_data=f"shop:bgs:{left_idx}"),
+            InlineKeyboardButton(text="🛍️ Купить", callback_data=f"shop:bg_buy:{item['id']}"),
+            InlineKeyboardButton(text="——>",       callback_data=f"shop:bgs:{right_idx}")
+        )
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="shop:main"))
+    is_video = item["id"] in VIDEO_BGS
+    try:
+        if is_video:
+            await cq.message.edit_media(
+                media=types.InputMediaVideo(media=bg['file_id'], caption=caption),
+                reply_markup=bld.as_markup()
+            )
+        else:
+            await cq.message.edit_media(
+                media=types.InputMediaPhoto(media=bg['file_id'], caption=caption),
+                reply_markup=bld.as_markup()
+            )
+    except Exception:
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+        if is_video:
+            await cq.message.answer_video(video=bg['file_id'], caption=caption, reply_markup=bld.as_markup())
+        else:
+            await cq.message.answer_photo(photo=bg['file_id'], caption=caption, reply_markup=bld.as_markup())
+    await cq.answer()
+
+@router.callback_query(F.data.startswith("shop:bg_buy:"))
+async def shop_bg_buy_cb(cq: CallbackQuery):
+    bg_id = cq.data.split(":")[2]
+    item = next((b for b in SHOP_BG_LIST if b["id"] == bg_id), None)
+    if not item:
+        return await cq.answer("Фон не найден", show_alert=True)
+
+    u = get_user(cq.from_user.id)
+    col_map = {"bc": (5, "battlecoin"), "krw": (4, "krw"), "dia": (3, "diamond")}
+    col_idx, col_name = col_map[item["currency"]]
+    if u[col_idx] < item["price"]:
+        return await cq.answer(f"❌ Недостаточно средств! Нужно: {item['price']}{item['icon']}", show_alert=True)
+
+    has_bg = db_exec("SELECT 1 FROM bgs_inv WHERE user_id = ? AND bg_id = ?",
+                     (cq.from_user.id, bg_id), fetch=True)
+    if has_bg:
+        return await cq.answer("У вас уже есть этот фон!", show_alert=True)
+
+    db_exec(f"UPDATE users SET {col_name} = {col_name} - ? WHERE id = ?", (item['price'], cq.from_user.id))
+    db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (cq.from_user.id, bg_id))
+    await cq.answer("✅ Фон куплен и добавлен в «🌄 Мои фоны»!", show_alert=True)
+
+# ===== Паки =====
+def _packs_kb():
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Легендарный пак 🔵", callback_data="shop:pack:leg")
+    bld.button(text="Эпический пак 🟢",  callback_data="shop:pack:epic")
+    bld.button(text="Назад 🔙",           callback_data="shop:main")
+    bld.adjust(1)
+    return bld.as_markup()
+
+@router.callback_query(F.data == "shop:packs")
+async def shop_packs_cb(cq: CallbackQuery):
+    try:
+        await cq.message.edit_reply_markup(reply_markup=_packs_kb())
+    except Exception:
+        pass
+    await cq.answer()
+
+@router.callback_query(F.data.startswith("shop:pack:"))
+async def shop_pack_select_cb(cq: CallbackQuery):
+    kind = cq.data.split(":")[2]
+    is_leg = (kind == "leg")
+    if is_leg:
+        img = PACK_LEG_IMG
+        caption = ("🗃️ Легендарный Пак\n\n"
+                   "🔵 Легендарная: 100%\n\n"
+                   "Стоимость: 450 💴")
+        buy_btn = "🗃️ Купить легендарный пак"
+    else:
+        img = PACK_EPIC_IMG
+        caption = ("🗃️ Эпический Пак\n\n"
+                   "🟢 Эпическая: 100%\n\n"
+                   "Стоимость: 150 💴")
+        buy_btn = "🗃️ Купить эпический пак"
+
+    kb = ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text=buy_btn)],
         [KeyboardButton(text="🔙 Назад к пакам")]
-    ]
-    await cq.message.answer("Выберите пак для покупки:", reply_markup=ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True))
+    ], resize_keyboard=True)
 
-@router.message(F.text == "🔙 Назад к пакам")
-async def back_to_menu(msg: types.Message):
-    await msg.answer("Возвращаемся...", reply_markup=kb_main())
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+    await cq.message.answer_photo(photo=img, caption=caption)
+    await cq.message.answer("Выбери действие:", reply_markup=kb)
+    await cq.answer()
 
-
-@router.message(F.text.in_(["🗃️ Купить Легендарный пак", "🗃️ Купить Эпический пак"]))
+@router.message(F.text.in_(["🗃️ Купить легендарный пак", "🗃️ Купить эпический пак"]))
 async def buy_pack(msg: types.Message):
-    u = get_user(msg.from_user.id)
-    is_leg = "Легендарный" in msg.text
+    is_leg = "легендарный" in msg.text.lower()
     cost = 450 if is_leg else 150
     rarity = "Легендарная 🔵" if is_leg else "Эпическая 🟢"
 
+    u = get_user(msg.from_user.id)
     if u[4] < cost:
         return await msg.answer(f"❌ Недостаточно KRW. Нужно: {cost} 💴")
-
     db_exec("UPDATE users SET krw = krw - ? WHERE id = ?", (cost, msg.from_user.id))
-    card_key = pull_random_card(force_rarity=rarity)
-    if not card_key: card_key = pull_random_card()  # Фолбэк
+    card_key = pull_random_card(force_rarity=rarity) or pull_random_card()
+    is_new, krw_earn, c = give_card_to_user(msg.from_user.id, card_key)
 
-    is_new, krw, c = give_card_to_user(msg.from_user.id, card_key)
-    txt = f"📦 Вы открыли пак!\n\n🎴 {c['name']}\n🔮 {c['rarity']}\n" + (
-        "(Повторка, конвертировано в KRW)" if not is_new else "(Новая карта!)")
-    await msg.answer_photo(photo=c['file_id'], caption=txt, reply_markup=kb_main())
+    if is_new:
+        txt = (f"🃏 Получена новая боевая карта!\n\n"
+               f"🎴 Персонаж: {c['name']}\n"
+               f"🔮 Редкость: {c['rarity']}\n"
+               f"👊 Стиль боя: {c['style']}\n"
+               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+               f"⚡️ Скорость: {c['speed']}\n"
+               f"💪 Сила: {c['strength']}\n"
+               f"🧠 Интеллект: {c['intellect']}")
+    else:
+        txt = (f"🛑 Вам попалась повторная карта! Вы получаете {krw_earn} 💴 KRW\n\n"
+               f"🎴 Персонаж: {c['name']}\n"
+               f"🔮 Редкость: {c['rarity']}\n"
+               f"👊 Стиль боя: {c['style']}\n"
+               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+               f"⚡️ Скорость: {c['speed']}\n"
+               f"💪 Сила: {c['strength']}\n"
+               f"🧠 Интеллект: {c['intellect']}")
 
+    await msg.answer_photo(photo=c['file_id'], caption=txt, has_spoiler=True)
 
-@router.callback_query(F.data == "shop_bgs")
-async def shop_bgs(cq: CallbackQuery):
+@router.message(F.text == "🔙 Назад к пакам")
+async def back_to_packs(msg: types.Message):
+    await msg.answer("Возвращаемся в магазин...", reply_markup=kb_main())
+    await msg.answer_photo(
+        photo=SHOP_IMG,
+        caption="🛍 Магазин — 🗃️ Паки",
+        reply_markup=_packs_kb()
+    )
+
+# ===== Евент =====
+@router.callback_query(F.data == "shop:event")
+async def shop_event_cb(cq: CallbackQuery):
+    if not EVENT_ENABLED:
+        return await cq.answer("В данный момент нету никаких событий", show_alert=True)
+
+    n1, n2, n3 = _event_card_name(1), _event_card_name(2), _event_card_name(3)
+
+    caption = (
+        f"🌅 Карточки текущего События.\n\n"
+        f"<blockquote>Карта 1: {n1}\n"
+        f"Карта 2: {n2}\n"
+        f"Карта 3: {n3}</blockquote>\n\n"
+        f"Здесь можно приобрести новые карточки"
+    )
+
     bld = InlineKeyboardBuilder()
-    bld.button(text="🛍️ Купить", callback_data="buy_bg:lookism_1")
-    txt = f"🌄 Фон: {BGS['lookism_1']['name']}\n💰 Цена: {BGS['lookism_1']['price']}🪙"
-    await cq.message.answer_photo(photo=BGS['lookism_1']['file_id'], caption=txt, reply_markup=bld.as_markup())
+    bld.button(text="🎴 Купить Карту 1", callback_data="shop:event_buy:1")
+    bld.button(text="🎴 Купить Карту 2", callback_data="shop:event_buy:2")
+    bld.button(text="🎴 Купить Карту 3", callback_data="shop:event_buy:3")
+    bld.button(text="Назад 🔙",           callback_data="shop:main")
+    bld.adjust(1)
 
+    try:
+        await cq.message.edit_media(
+            media=types.InputMediaPhoto(media=EVENT_IMG, caption=caption, parse_mode="HTML"),
+            reply_markup=bld.as_markup()
+        )
+    except Exception:
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+        await cq.message.answer_photo(
+            photo=EVENT_IMG, caption=caption, reply_markup=bld.as_markup(), parse_mode="HTML"
+        )
+    await cq.answer()
 
-@router.callback_query(F.data.startswith("buy_bg:"))
-async def buy_bg(cq: CallbackQuery):
-    bg_id = cq.data.split(":")[1]
-    cost = BGS[bg_id]['price']
+@router.callback_query(F.data.startswith("shop:event_buy:"))
+async def shop_event_buy_cb(cq: CallbackQuery):
+    if not EVENT_ENABLED:
+        return await cq.answer("В данный момент нету никаких событий", show_alert=True)
+
+    idx = int(cq.data.split(":")[2])
+    info = EVENT_CARDS.get(idx)
+    if not info:
+        return await cq.answer("Карта не найдена", show_alert=True)
+
+    card_key = info["key"]
+    price = info["price"]
+    if card_key not in CARDS:
+        return await cq.answer("❌ Карта ещё не добавлена в CARDS. Пропиши ключ в EVENT_CARDS.", show_alert=True)
+
     u = get_user(cq.from_user.id)
-    if u[5] < cost: return await cq.answer(f"❌ Нужно {cost} BattleCoin", show_alert=True)
+    if u[3] < price:
+        return await cq.answer(f"❌ Недостаточно алмазов! Нужно: {price} 💎", show_alert=True)
 
-    has_bg = db_exec("SELECT 1 FROM bgs_inv WHERE user_id = ? AND bg_id = ?", (cq.from_user.id, bg_id), fetch=True)
-    if has_bg: return await cq.answer("Уже куплено!", show_alert=True)
+    db_exec("UPDATE users SET diamond = diamond - ? WHERE id = ?", (price, cq.from_user.id))
+    is_new, krw_earn, c = give_card_to_user(cq.from_user.id, card_key)
+    if is_new:
+        txt = (f"🃏 Получена новая боевая карта!\n\n"
+               f"🎴 Персонаж: {c['name']}\n"
+               f"🔮 Редкость: {c['rarity']}\n"
+               f"👊 Стиль боя: {c['style']}\n"
+               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+               f"⚡️ Скорость: {c['speed']}\n"
+               f"💪 Сила: {c['strength']}\n"
+               f"🧠 Интеллект: {c['intellect']}")
+    else:
+        txt = (f"🛑 Вам попалась повторная карта! Вы получаете {krw_earn} 💴 KRW\n\n"
+               f"🎴 Персонаж: {c['name']}\n"
+               f"🔮 Редкость: {c['rarity']}\n"
+               f"👊 Стиль боя: {c['style']}\n"
+               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+               f"⚡️ Скорость: {c['speed']}\n"
+               f"💪 Сила: {c['strength']}\n"
+               f"🧠 Интеллект: {c['intellect']}")
 
-    db_exec("UPDATE users SET battlecoin = battlecoin - ? WHERE id = ?", (cost, cq.from_user.id))
-    db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (cq.from_user.id, bg_id))
-    await cq.message.answer("✅ Фон успешно куплен и добавлен в «🌄 Мои фоны»!")
+    await cq.message.answer_photo(photo=c['file_id'], caption=txt, has_spoiler=True)
+    await cq.answer()
+
+# ===== Единая обработка оплат (алмазы через звёзды + Рояль пасс) =====
+@router.pre_checkout_query()
+async def universal_pre_checkout(pcq: PreCheckoutQuery, bot: Bot):
+    await bot.answer_pre_checkout_query(pcq.id, ok=True)
+
+@router.message(F.successful_payment)
+async def universal_success_payment(msg: types.Message):
+    payload = (msg.successful_payment.invoice_payload or "")
+    if payload.startswith("dia_buy"):
+        parts = payload.split(":")
+        dia = int(parts[2])
+        db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (dia, msg.from_user.id))
+        await msg.answer(f"✅ Оплата принята! На баланс зачислено {dia} 💎")
+    elif payload == "rp_buy":
+        db_exec("UPDATE users SET royale_pass = 1 WHERE id = ?", (msg.from_user.id,))
+        await msg.answer("✅ Вы успешно приобрели Рояль Пасс!")
+    else:
+        await msg.answer("✅ Оплата принята!")
 
 
 # ============ ПАСС ============
@@ -1379,14 +1808,6 @@ async def buy_days_menu(cq: CallbackQuery):
                                payload="rp_buy", provider_token="", currency="XTR",
                                prices=[LabeledPrice(label="Stars", amount=50)])
 
-    @router.pre_checkout_query()
-    async def pre_chk(pcq: PreCheckoutQuery, bot: Bot):
-        await bot.answer_pre_checkout_query(pcq.id, ok=True)
-
-    @router.message(F.successful_payment)
-    async def success_pay(msg: types.Message):
-        db_exec("UPDATE users SET royale_pass = 1 WHERE id = ?", (msg.from_user.id,))
-        await msg.answer("✅ Вы успешно приобрели Рояль Пасс!")
 
     # ============ БОЕВКА ============
 from aiogram.fsm.state import State, StatesGroup
