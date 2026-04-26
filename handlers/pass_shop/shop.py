@@ -664,50 +664,51 @@ async def claim_pass(cq: CallbackQuery):
     _, days_in_month = calendar.monthrange(now.year, now.month)
     await render_pass_page(cq, p_type, page, u, now, days_in_month)
 
+    @router.callback_query(F.data.startswith("buy_days_menu:"))
+    async def buy_days_menu(cq: CallbackQuery):
+        _, p_type = cq.data.split(":")
+        uid = cq.from_user.id
+        now = datetime.now(MSK)
 
-@router.callback_query(F.data.startswith("buy_days_menu:"))
-async def buy_days_menu(cq: CallbackQuery):
-    _, p_type = cq.data.split(":")
-    uid = cq.from_user.id
-    now = datetime.now(MSK)
+        claims = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
+                         (uid, now.month, p_type), fetchall=True)
+        claimed_days = [d[0] for d in claims]
+        missed_days = [d for d in range(1, now.day) if d not in claimed_days]
 
-    claims = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
-                     (uid, now.month, p_type), fetchall=True)
-    claimed_days = [d[0] for d in claims]
-    missed_days = [d for d in range(1, now.day) if d not in claimed_days]
+        if not missed_days:
+            return await cq.answer("У вас нет пропущенных дней! 🎉", show_alert=True)
 
-    if not missed_days:
-        return await cq.answer("У вас нет пропущенных дней! 🎉", show_alert=True)
+        db_exec(
+            "CREATE TABLE IF NOT EXISTS pass_bought_days (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
+        bought_count = \
+        db_exec("SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
+                (uid, now.month, p_type), fetch=True)[0]
 
-    db_exec("CREATE TABLE IF NOT EXISTS pass_bought_days (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
-    bought_count = db_exec("SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
-                           (uid, now.month, p_type), fetch=True)[0]
+        next_cost = (bought_count + 1) * 20
 
-    next_cost = (bought_count + 1) * 20
+        txt = (f"💎 Восстановление пропущенных дней\n\n"
+               f"Стоимость каждого дня увеличивается на 20:\n"
+               f"1-й день — 20 💎\n"
+               f"2-й день — 40 💎\n"
+               f"3-й день — 60 💎\n"
+               f"и т.д.\n\n"
+               f"Текущая стоимость восстановления: {next_cost} 💎\n\n"
+               f"Выберите, какие дни хотите купить:")
 
-    txt = (f"💎 Восстановление пропущенных дней\n\n"
-           f"Стоимость каждого дня увеличивается на 20:\n"
-           f"1-й день — 20 💎\n"
-           f"2-й день — 40 💎\n"
-           f"3-й день — 60 💎\n"
-           f"и т.д.\n\n"
-           f"Текущая стоимость восстановления: {next_cost} 💎\n\n"
-           f"Выберите, какие дни хотите купить:")
+        bld = InlineKeyboardBuilder()
+        day_buttons = []
+        for d in missed_days:
+            day_buttons.append(InlineKeyboardButton(text=f"❌ {d}", callback_data=f"buy_missed_day:{p_type}:{d}"))
 
-    bld = InlineKeyboardBuilder()
-    day_buttons = []
-    for d in missed_days:
-        day_buttons.append(InlineKeyboardButton(text=f"❌ {d}", callback_data=f"buy_missed_day:{p_type}:{d}"))
+        for i in range(0, len(day_buttons), 4):
+            bld.row(*day_buttons[i:i + 4])
+        bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"pass:{p_type}:start"))
 
-    for i in range(0, len(day_buttons), 4):
-        bld.row(*day_buttons[i:i + 4])
-
-    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"pass:{p_type}:start"))
-
-    try:
-        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup())
-    except:
-        pass
+        try:
+            await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup())
+        except:
+            pass
+        await cq.answer()
 
     @router.callback_query(F.data.startswith("buy_missed_day:"))
     async def buy_missed_day(cq: CallbackQuery):
@@ -715,7 +716,6 @@ async def buy_days_menu(cq: CallbackQuery):
         day = int(day_str)
         uid = cq.from_user.id
         now = datetime.now(MSK)
-
         is_claimed = db_exec("SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = ?",
                              (uid, now.month, day, p_type), fetch=True)
         if is_claimed:
@@ -729,7 +729,7 @@ async def buy_days_menu(cq: CallbackQuery):
         cost = (bought_count + 1) * 20
 
         u = get_user(uid)
-        if u[3] < cost:  # u[3] - это алмазы
+        if u[3] < cost:
             return await cq.answer(f"❌ Недостаточно алмазов! Нужно: {cost} 💎", show_alert=True)
 
         db_exec("UPDATE users SET diamond = diamond - ? WHERE id = ?", (cost, uid))
@@ -757,8 +757,6 @@ async def buy_days_menu(cq: CallbackQuery):
                 (uid, now.month, day, p_type))
 
         await cq.answer(f"✅ День {day} восстановлен!", show_alert=True)
-
-        # Обновляем меню покупки
         await buy_days_menu(cq)
 
     @router.callback_query(F.data.startswith("pass_main_prize:"))
@@ -786,7 +784,7 @@ async def buy_days_menu(cq: CallbackQuery):
             if has_card:
                 return await cq.answer("✅ Главный приз уже в инвентаре!", show_alert=True)
             give_card_to_user(uid, MAIN_PRIZE_ROYALE_CARD)
-            await cq.answer("✅ Получен эксклюзивный персонаж Рояль Пасса!", show_alert=True)
+        await cq.answer("✅ Получен эксклюзивный персонаж Рояль Пасса!", show_alert=True)
 
     @router.callback_query(F.data == "buy_royale_pass")
     async def buy_rp(cq: CallbackQuery, bot: Bot):
@@ -794,7 +792,7 @@ async def buy_days_menu(cq: CallbackQuery):
                                description="Доступ к эксклюзивным наградам на этот месяц",
                                payload="rp_buy", provider_token="", currency="XTR",
                                prices=[LabeledPrice(label="Stars", amount=50)])
-
+        await cq.answer()
 
     # ============ БОЕВКА ============
 from aiogram.fsm.state import State, StatesGroup

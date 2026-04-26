@@ -46,20 +46,29 @@ async def get_card_cmd(msg: types.Message):
     if not u: return
 
     attempts = u[6]
-    last_get = datetime.strptime(u[11], "%Y-%m-%d %H:%M:%S")
     now = datetime.now()
 
+    # Сначала проверяем кулдаун (если попыток нет)
+    if attempts <= 0:
+        try:
+            last_get = datetime.strptime(u[11], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            last_get = datetime.min
+        if (now - last_get).total_seconds() < GET_COOLDOWN_HOURS * 3600:
+            rem = int(GET_COOLDOWN_HOURS * 3600 - (now - last_get).total_seconds())
+            return await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
+    # Получаем карту ДО списания попытки
+    card_key = pull_random_card()
+    if not card_key:
+        return await msg.answer("❌ Ошибка: пул карт пуст.")
+
+    is_new, krw, c = give_card_to_user(uid, card_key)
+
+    # Только теперь списываем попытку / обновляем кулдаун
     if attempts > 0:
         db_exec("UPDATE users SET attempts = attempts - 1 WHERE id = ?", (uid,))
     else:
-        if (now - last_get).total_seconds() < GET_COOLDOWN_HOURS * 3600:
-            rem = int(GET_COOLDOWN_HOURS * 3600 - (now - last_get).total_seconds())
-            await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
-            return
         db_exec("UPDATE users SET last_get = ? WHERE id = ?", (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
-
-    card_key = pull_random_card()
-    is_new, krw, c = give_card_to_user(uid, card_key)
 
     if is_new:
         txt = (f"🃏 Получена новая боевая карта!\n\n"

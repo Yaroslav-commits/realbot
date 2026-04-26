@@ -161,7 +161,7 @@ async def accept_f(cq: CallbackQuery):
             pass
         return
 
-    await start_battle(sender_id, target_id, friendly=True)
+    await start_battle(sender_id, target_id, cq.bot, friendly=True)
 
 
 @router.callback_query(F.data == "my_deck")
@@ -197,11 +197,14 @@ async def view_deck(cq: CallbackQuery):
 @router.callback_query(F.data == "auto_deck")
 async def auto_deck(cq: CallbackQuery):
     cards = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
-    if len(cards) < 6: return await cq.answer("Для колоды нужно минимум 6 карт!", show_alert=True)
+    if len(cards) < 6:
+        return await cq.answer("Для колоды нужно минимум 6 карт!", show_alert=True)
 
     c_objs = []
     for (cid,) in cards:
-        c = CARDS[cid]
+        c = CARDS.get(cid)
+        if not c:
+            continue
         c_objs.append({'id': cid, 't': c['speed'] + c['strength'] + c['intellect'], 'r': c['rarity']})
     c_objs.sort(key=lambda x: x['t'], reverse=True)
 
@@ -225,11 +228,14 @@ async def auto_deck(cq: CallbackQuery):
         db_exec("INSERT INTO decks (user_id, card_id, slot_index) VALUES (?, ?, ?)", (cq.from_user.id, cid, i))
     await cq.answer("✅ Колода автоматически собрана лучшими картами!", show_alert=True)
 
+
 @router.callback_query(F.data == "manual_deck_start")
 async def manual_deck_start(cq: CallbackQuery):
     db_exec("DELETE FROM decks WHERE user_id = ?", (cq.from_user.id,))
+    await cq.answer()
     await cq.message.answer("🆕 Сборка колоды начата. Выберите 6 карт по очереди.")
     await show_deck_builder(cq.message, cq.from_user.id, 1)
+
 
 async def show_deck_builder(msg, uid, slot):
     if slot > 6:
@@ -272,6 +278,7 @@ async def bdeck_select(cq: CallbackQuery):
     _, slot, cid = cq.data.split(":")
     slot = int(slot)
     db_exec("INSERT INTO decks (user_id, card_id, slot_index) VALUES (?, ?, ?)", (cq.from_user.id, cid, slot - 1))
+    await cq.answer()
     await cq.message.delete()
     await show_deck_builder(cq.message, cq.from_user.id, slot + 1)
 @router.callback_query(F.data == "find_match")
@@ -289,7 +296,7 @@ async def find_match(cq: CallbackQuery):
     if MATCH_QUEUE and MATCH_QUEUE[0] != uid:
         p2 = MATCH_QUEUE.pop(0)
         await cq.message.delete()
-        await start_battle(p2, uid)
+        await start_battle(p2, uid, cq.bot)
     else:
         if uid not in MATCH_QUEUE:
             MATCH_QUEUE.append(uid)
@@ -320,15 +327,15 @@ async def wait_match(uid, bot, msg_to_edit):
         MATCH_QUEUE.remove(uid)
         try: await msg_to_edit.delete()
         except: pass
-        await start_battle(uid, -1)
+        await start_battle(uid, -1, bot)
 
-async def start_battle(p1, p2, friendly=False):
+async def start_battle(p1, p2, bot: Bot, friendly=False):
     gid = f"g_{random.randint(10000, 99999)}"
     deck1 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p1,), fetchall=True)]
 
     if p2 == -1:
         deck2 = random.choices(list(CARDS.keys()), k=6)
-        name2 = random.choice(["Важни Гий", "Ли Джи Хуй", "Йена пик форма", "Злодей Васко", "Жирдяй Хён Сок", "Джей Хон", "Срасул", "Клон Хикса", "Король Бибизян"])
+        name2 = random.choice(["Важни Гий", "Ли Джи Ху..", "Йена пик форма", "Злодей Васко", "Великий Мага", "Босс Табаско", "Срасул", "Брад", "Клон Хикса", "Король Бибизян"])
         rank2 = "Бот"
     else:
         deck2 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p2,), fetchall=True)]
@@ -343,7 +350,7 @@ async def start_battle(p1, p2, friendly=False):
     db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
             (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
 
-    bot = Dispatcher.get_current().bot if hasattr(Dispatcher, "get_current") else Bot(token=BOT_TOKEN)
+
 
     txt1 = f"Противник найден!\n\n· Имя: {name2} 🧩\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
     await bot.send_message(p1, txt1)
