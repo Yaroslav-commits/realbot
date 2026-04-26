@@ -260,8 +260,8 @@ async def equip_cq(cq: CallbackQuery):
 
 # ============ АДМИН И ПРОМО ============
 @router.message(
-    Command(commands=["give_attempts", "give_card", "give_money", "give_title", "give_background", "create_promo"]))
-async def admin_cmds(msg: types.Message, state: FSMContext):
+    Command(commands=["give_attempts", "give_card", "give_money", "give_title", "give_background", "give_diamond", "give_pass", "create_promo"]))
+async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if msg.from_user.id not in ADMIN_IDS: return
     args = msg.text.split()
     cmd = args[0]
@@ -269,50 +269,156 @@ async def admin_cmds(msg: types.Message, state: FSMContext):
     if cmd == "/create_promo":
         await state.set_state(PromoState.waiting_for_promo_data)
         await msg.answer(
-            "Отправь данные промокода в формате:\n[КОД] [ТИП: krw/atm/card] [ЗНАЧЕНИЕ] [КОЛ-ВО ИСПОЛЬЗОВАНИЙ]\nПример: LOOKISM krw 500 10")
+            "Отправь данные промокода в формате:\n[КОД] [ТИП: krw/atm/card/dia/pass] [ЗНАЧЕНИЕ] [КОЛ-ВО ИСПОЛЬЗОВАНИЙ]\n"
+            "Пример: LOOKISM krw 500 10\n\n"
+            "Типы:\n"
+            "• krw — KRW 💴\n"
+            "• atm — попытки 💳\n"
+            "• card — карта (ключ)\n"
+            "• dia — алмазы 💎\n"
+            "• pass — Рояль Пасс (значение любое, например 1)")
         return
 
-    if len(args) < 3: return await msg.answer("Ошибка аргументов.")
+    # /give_pass — только 2 аргумента
+    if cmd == "/give_pass":
+        if len(args) < 2:
+            return await msg.answer("Использование: /give_pass [ID пользователя]")
+        uid = int(args[1])
+        db_exec("UPDATE users SET royale_pass = 1 WHERE id = ?", (uid,))
+        try:
+            await bot.send_message(uid, "🌠 Получен Рояль Пасс от администратора ✅")
+        except Exception:
+            pass
+        return await msg.answer(f"✅ Рояль Пасс выдан пользователю {uid}!")
+
+    if len(args) < 3:
+        return await msg.answer("Ошибка аргументов. Формат: /команда [ID] [значение]")
+
     uid, val = int(args[1]), args[2]
 
     if cmd == "/give_attempts":
         db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (int(val), uid))
+        try:
+            await bot.send_message(uid, f"Получено {val}💳 попыток от администратора ✅")
+        except Exception:
+            pass
+        await msg.answer(f"✅ Выдано пользователю {uid}!")
+
     elif cmd == "/give_money":
         db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (int(val), uid))
-    elif cmd == "/give_card":
-        db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (uid, val))
-    elif cmd == "/give_title":
-        db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, val))
-    elif cmd == "/give_background":
-        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, val))
-    await msg.answer(f"✅ Выдано пользователю {uid}!")
+        try:
+            await bot.send_message(uid, f"Получено {val}💴 от администратора ✅")
+        except Exception:
+            pass
+        await msg.answer(f"✅ Выдано пользователю {uid}!")
 
+    elif cmd == "/give_diamond":
+        db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (int(val), uid))
+        try:
+            await bot.send_message(uid, f"Получено {val}💎 Алмазов от администратора ✅")
+        except Exception:
+            pass
+        await msg.answer(f"✅ Выдано пользователю {uid}!")
+
+    elif cmd == "/give_card":
+        c = CARDS.get(val)
+        if not c:
+            return await msg.answer(f"❌ Карта с ключом «{val}» не найдена!")
+        # Прямая выдача (даже если дубликат)
+        db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (uid, val))
+        txt = (f"🃏 Получена новая боевая карта от администратора ✅\n\n"
+               f"🎴 Персонаж: «{c['name']}»\n"
+               f"🔮 Редкость: «{c['rarity']}»\n"
+               f"👊 Стиль боя: «{c['style']}»\n"
+               f"🪐 Вселенная: «{c.get('series', 'Неизвестно')}»\n\n"
+               f"⚡️ Скорость: «{c['speed']}»\n"
+               f"💪 Сила: «{c['strength']}»\n"
+               f"🧠 Интеллект: «{c['intellect']}»")
+        try:
+            await bot.send_photo(uid, photo=c['file_id'], caption=txt)
+        except Exception:
+            pass
+        await msg.answer(f"✅ Карта «{c['name']}» выдана пользователю {uid}!")
+    elif cmd == "/give_title":
+        title_name = TITLES.get(val, val)
+        db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, val))
+        try:
+            await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅")
+        except Exception:
+            pass
+        await msg.answer(f"✅ Титул выдан пользователю {uid}!")
+
+    elif cmd == "/give_background":
+        bg_data = BGS.get(val)
+        if not bg_data:
+            return await msg.answer(f"❌ Фон с ключом «{val}» не найден!")
+        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, val))
+        is_video = val in VIDEO_BGS
+        try:
+            if is_video:
+                await bot.send_video(uid, video=bg_data['file_id'],
+                                     caption="Получен фон от администратора ✅")
+            else:
+                await bot.send_photo(uid, photo=bg_data['file_id'],
+                                     caption="Получен фон от администратора ✅")
+        except Exception:
+            pass
+        await msg.answer(f"✅ Фон «{bg_data.get('name', val)}» выдан пользователю {uid}!")
 
 @router.message(PromoState.waiting_for_promo_data)
 async def create_promo(msg: types.Message, state: FSMContext):
     args = msg.text.split()
-    if len(args) != 4: return await msg.answer("Неверный формат.")
+    if len(args) != 4:
+        return await msg.answer("Неверный формат. Нужно: [КОД] [ТИП] [ЗНАЧЕНИЕ] [ИСПОЛЬЗОВАНИЙ]")
+    p_type = args[1]
+    if p_type not in ('krw', 'atm', 'card', 'dia', 'pass'):
+        return await msg.answer("Неверный тип. Допустимые: krw, atm, card, dia, pass")
     db_exec("INSERT INTO promos (code, p_type, val, uses) VALUES (?, ?, ?, ?)",
             (args[0], args[1], args[2], int(args[3])))
     await state.clear()
-    await msg.answer(f"✅ Промокод {args[0]} создан!")
-
+    await msg.answer(f"✅ Промокод «{args[0]}» создан!")
 
 @router.message(Command("promo"))
 async def use_promo(msg: types.Message):
     args = msg.text.split()
-    if len(args) < 2: return await msg.answer("Введи промокод: /promo КОД")
+    if len(args) < 2:
+        return await msg.answer("Введи промокод: /promo КОД")
     code = args[1]
 
     p = db_exec("SELECT p_type, val, uses FROM promos WHERE code = ?", (code,), fetch=True)
-    if not p or p[2] <= 0: return await msg.answer("Промокод недействителен.")
+    if not p or p[2] <= 0:
+        return await msg.answer("Промокод недействителен.")
 
     db_exec("UPDATE promos SET uses = uses - 1 WHERE code = ?", (code,))
+    uid = msg.from_user.id
 
     if p[0] == 'krw':
-        db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (int(p[1]), msg.from_user.id))
+        db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (int(p[1]), uid))
+        await msg.answer(f"Промокод успешно активирован, вы получаете {p[1]}💴 KRW")
     elif p[0] == 'atm':
-        db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (int(p[1]), msg.from_user.id))
+        db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (int(p[1]), uid))
+        await msg.answer(f"Промокод успешно активирован, вы получаете {p[1]} попыток 💳")
+    elif p[0] == 'dia':
+        db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (int(p[1]), uid))
+        await msg.answer(f"Промокод успешно активирован, вы получаете {p[1]}💎 Алмазов")
+    elif p[0] == 'pass':
+        db_exec("UPDATE users SET royale_pass = 1 WHERE id = ?", (uid,))
+        await msg.answer("Промокод успешно активирован, вы получаете Рояль Пасс 🌠")
     elif p[0] == 'card':
-        give_card_to_user(msg.from_user.id, p[1])
-    await msg.answer("✅ Промокод активирован!")
+        c = CARDS.get(p[1])
+        if not c:
+            return await msg.answer("Промокод успешно активирован, но карта не найдена!")
+        is_new, krw_earned, card_data = give_card_to_user(uid, p[1])
+        txt = (f"Промокод успешно активирован!\n\n"
+               f"🃏 Получена новая боевая карта!\n\n"
+               f"🎴 Персонаж: «{c['name']}»\n"
+               f"🔮 Редкость: «{c['rarity']}»\n"
+               f"👊 Стиль боя: «{c['style']}»\n"
+               f"🪐 Вселенная: «{c.get('series', 'Неизвестно')}»\n\n"
+               f"⚡️ Скорость: «{c['speed']}»\n"
+               f"💪 Сила: «{c['strength']}»\n"
+               f"🧠 Интеллект: «{c['intellect']}»")
+        try:
+            await msg.answer_photo(photo=c['file_id'], caption=txt)
+        except Exception:
+            await msg.answer(txt)
