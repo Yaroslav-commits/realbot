@@ -21,8 +21,12 @@ async def main():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
+
+    # Удаляем зависшие вебхуки и старые апдейты
+    await bot.delete_webhook(drop_pending_updates=True)
+
     print("Бот успешно запущен!")
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
 if __name__ == "__main__":
