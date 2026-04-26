@@ -32,15 +32,6 @@ async def start_cmd(msg: types.Message):
     add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name)
     await msg.answer("Добро пожаловать в Lookism Card! \nКанал бота: https://t.me/bradkofflood\nНаш чат:https://t.me/+as-Ypv7Kfjg3YTMy\n\nВыбирай действие и начни игру:", reply_markup=kb_main())
 
-@router.message(F.video)
-async def get_video_id(msg: types.Message):
-    await msg.answer(f"ID видео:\n<code>{msg.video.file_id}</code>")
-
-@router.message(F.photo)
-async def get_photo_id(msg: types.Message):
-    # Эта функция будет присылать тебе ID любой картинки, которую ты скинешь боту
-    file_id = msg.photo[-1].file_id
-    await msg.answer(f"Вот ID этой картинки:\n<code>{file_id}</code>")
 
 @router.message(F.text == "⛩️ Банды")
 async def gangs(msg: types.Message):
