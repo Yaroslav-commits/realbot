@@ -340,7 +340,7 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
     else:
         deck2 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p2,), fetchall=True)]
         u2 = get_user(p2)
-        name2, rank2 = u2[2], get_rank(u2[7])
+        name2, rank2 = f"<a href='tg://user?id={p2}'>{u2[2]}</a>", get_rank(u2[7])
 
     GAMES[gid] = {'p1': p1, 'p2': p2, 'd1': deck1.copy(), 'd2': deck2.copy(), 'n2': name2, 'r2': rank2,
                   'p1_c': None, 'p2_c': None, 'p1_s': None, 'p2_s': None, 'score1': 0, 'score2': 0, 'round': 1,
@@ -350,19 +350,37 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
     db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
             (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
 
-
-
     txt1 = f"Противник найден!\n\n· Имя: {name2} 🧩\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
-    await bot.send_message(p1, txt1)
-
     if p2 != -1:
-        txt2 = f"Противник найден!\n\n· Имя: {u1[2]} 🧩\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
-        await bot.send_message(p2, txt2)
+        bg_key2 = u2[13] or 'default'
+        bg_data2 = BGS.get(bg_key2, BGS['default'])
+        bg_file2 = bg_data2.get('file_id')
+        try:
+            if bg_key2 in VIDEO_BGS:
+                await bot.send_video(p1, video=bg_file2, caption=txt1, parse_mode="HTML")
+            else:
+                await bot.send_photo(p1, photo=bg_file2, caption=txt1, parse_mode="HTML")
+        except:
+            await bot.send_message(p1, txt1, parse_mode="HTML")
+    else:
+        await bot.send_message(p1, txt1, parse_mode="HTML")
+        if p2 != -1:
+            txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+            bg_key1 = u1[13] or 'default'
+            bg_data1 = BGS.get(bg_key1, BGS['default'])
+            bg_file1 = bg_data1.get('file_id')
+            try:
+                if bg_key1 in VIDEO_BGS:
+                    await bot.send_video(p2, video=bg_file1, caption=txt2, parse_mode="HTML")
+                else:
+                    await bot.send_photo(p2, photo=bg_file1, caption=txt2, parse_mode="HTML")
+            except:
+                await bot.send_message(p2, txt2, parse_mode="HTML")
 
-    await asyncio.sleep(1)
-    await send_card_choice(p1, GAMES[gid]['d1'], gid, bot)
-    if p2 != -1:
-        await send_card_choice(p2, GAMES[gid]['d2'], gid, bot)
+        await asyncio.sleep(1)
+        await send_card_choice(p1, GAMES[gid]['d1'], gid, bot)
+        if p2 != -1:
+            await send_card_choice(p2, GAMES[gid]['d2'], gid, bot)
 
 
 async def auto_card_choice(gid, uid, round_num, msg_id, bot):
@@ -452,13 +470,14 @@ async def process_style_choice(gid, uid, style, bot):
         if g['p2_s'] is not None: return
         g['p2_s'] = style
 
-    msg = await bot.send_message(uid, "Ожидание противника...")
-
-    if is_p1:
-        g['p1_wait_msg'] = msg.message_id
-    else:
-        g['p2_wait_msg'] = msg.message_id
-
+    try:
+        msg = await bot.send_message(uid, "Ожидание противника...")
+        if is_p1:
+            g['p1_wait_msg'] = msg.message_id
+        else:
+            g['p2_wait_msg'] = msg.message_id
+    except:
+        pass
     if g['p1_s'] and g['p2_s']:
         g['resolving'] = True
         try:
@@ -466,17 +485,67 @@ async def process_style_choice(gid, uid, style, bot):
             if g.get('p2_wait_msg') and g['p2'] != -1: await bot.delete_message(g['p2'], g['p2_wait_msg'])
         except:
             pass
-        await resolve_round(gid, bot)
+
+        try:
+            await resolve_round(gid, bot)
+        except Exception as e:
+            logging.error(f"Critical error in resolve_round: {e}")
+            # Fallback - если произошел сбой, просто переводим игру в следующий раунд, чтобы не зависла
+            if gid in GAMES:
+                GAMES[gid]['round'] += 1
+                GAMES[gid]['p1_c'] = GAMES[gid]['p2_c'] = GAMES[gid]['p1_s'] = GAMES[gid]['p2_s'] = None
+                try:
+                    await bot.send_message(GAMES[gid]['p1'],
+                                           "⚠️ Возникла сетевая ошибка в прошлом раунде, раунд пропущен.")
+                    if GAMES[gid]['p2'] != -1:
+                        await bot.send_message(GAMES[gid]['p2'],
+                                               "⚠️ Возникла сетевая ошибка в прошлом раунде, раунд пропущен.")
+                except:
+                    pass
+
+                if GAMES[gid]['round'] > 5:
+                    await finish_game(gid, bot)
+                else:
+                    await send_card_choice(GAMES[gid]['p1'], GAMES[gid]['d1'], gid, bot)
+                    if GAMES[gid]['p2'] != -1:
+                        await send_card_choice(GAMES[gid]['p2'], GAMES[gid]['d2'], gid, bot)
+
         if gid in GAMES: GAMES[gid]['resolving'] = False
 
+
 async def send_card_choice(uid, deck_left, gid, bot):
+    g = GAMES.get(gid)
+    if not g: return
+
+    # Сортируем карты по редкости для отображения от сильнейшей
+    c_objs = [(cid, CARDS[cid]) for cid in set(deck_left)]
+    rarity_order = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2,
+                    "Обычная ⚪️": 1}
+    c_objs.sort(key=lambda x: rarity_order.get(x[1]['rarity'], 0), reverse=True)
+
+    # Формируем медиагруппу (сверху изображения карт)
+    media = []
+    for i, (cid, c) in enumerate(c_objs):
+        txt_card = f"{i + 1}. {c['name']} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
+        media.append(types.InputMediaPhoto(media=c['file_id'], caption=txt_card))
+
+    try:
+        await bot.send_media_group(uid, media=media)
+    except Exception as e:
+        logging.error(f"Failed to send visual deck to {uid}: {e}")
+
+    # Кнопки выбора (снизу, в порядке силы)
     bld = InlineKeyboardBuilder()
-    for c in set(deck_left):
-        bld.button(text=CARDS[c]['name'], callback_data=f"b_card:{gid}:{c}")
+    for cid, c in c_objs:
+        bld.button(text=c['name'], callback_data=f"b_card:{gid}:{cid}")
     bld.adjust(2)
-    txt = f"—————————————————\n\nРаунд {GAMES[gid]['round']}.\nВыберите 🎴 Карту для атаки\n\nНа выбор дается 30 секунд"
-    msg = await bot.send_message(uid, txt, reply_markup=bld.as_markup())
-    asyncio.create_task(auto_card_choice(gid, uid, GAMES[gid]['round'], msg.message_id, bot))
+
+    txt = f"—————————————————\n\nРаунд {g['round']}.\nВыберите 🎴 карту для атаки\n\n⏳ На выбор дается 30 секунд"
+    try:
+        msg = await bot.send_message(uid, txt, reply_markup=bld.as_markup())
+        asyncio.create_task(auto_card_choice(gid, uid, g['round'], msg.message_id, bot))
+    except Exception as e:
+        logging.error(f"Failed to send card choice keyboard: {e}")
 
 
 @router.callback_query(F.data.startswith("b_card:"))
@@ -514,9 +583,14 @@ async def resolve_round(gid, bot):
              'str': ('💪 Сила', '💪 Силовую', 'strength'),
              'int': ('🧠 Интеллект', '🧠 Интеллектуальную', 'intellect')}
 
-    n1 = "Вы"
-    n2 = g['n2'] if g['p2'] == -1 else get_user(g['p2'])[2]
     my_name = get_user(g['p1'])[2]
+    n1 = f"<a href='tg://user?id={g['p1']}'>{my_name}</a>"
+    if g['p2'] == -1:
+        n2 = g['n2']
+        n2_link = g['n2']
+    else:
+        n2 = get_user(g['p2'])[2]
+        n2_link = f"<a href='tg://user?id={g['p2']}'>{n2}</a>"
 
     val1, val2 = c1[s_map[g['p1_s']][2]], c2[s_map[g['p2_s']][2]]
 
@@ -538,10 +612,10 @@ async def resolve_round(gid, bot):
 
     if f1 > f2:
         g['score1'] += 1
-        winner_name = my_name
+        winner_name = n1
     elif f2 > f1:
         g['score2'] += 1
-        winner_name = n2
+        winner_name = n2_link
     else:
         winner_name = "Ничья"
 
@@ -556,13 +630,23 @@ async def resolve_round(gid, bot):
         t += f"Раунд завершился в ничью!" if winner_name == "Ничья" else f"Раунд выиграл {winner_name}🧩"
         return t
 
-    txt1 = format_text(my_name, n2, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1, val2, f1, f2, bonus_txt_1)
-    media1 = [types.InputMediaPhoto(media=c1['file_id'], caption=txt1), types.InputMediaPhoto(media=c2['file_id'])]
-    await bot.send_media_group(g['p1'], media=media1)
+    try:
+        txt1 = format_text(n1, n2_link, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1, val2, f1, f2, bonus_txt_1)
+        media1 = [types.InputMediaPhoto(media=c1['file_id'], caption=txt1, parse_mode="HTML"),
+                  types.InputMediaPhoto(media=c2['file_id'])]
+        await bot.send_media_group(g['p1'], media=media1)
+    except Exception as e:
+        logging.error(f"Error sending round result to p1: {e}")
+
     if g['p2'] != -1:
-        txt2 = format_text(n2, my_name, g['score2'], g['score1'], g['p2_s'], g['p1_s'], val2, val1, f2, f1, bonus_txt_2)
-        media2 = [types.InputMediaPhoto(media=c2['file_id'], caption=txt2), types.InputMediaPhoto(media=c1['file_id'])]
-        await bot.send_media_group(g['p2'], media=media2)
+        try:
+            txt2 = format_text(n2_link, n1, g['score2'], g['score1'], g['p2_s'], g['p1_s'], val2, val1, f2, f1,
+                               bonus_txt_2)
+            media2 = [types.InputMediaPhoto(media=c2['file_id'], caption=txt2, parse_mode="HTML"),
+                      types.InputMediaPhoto(media=c1['file_id'])]
+            await bot.send_media_group(g['p2'], media=media2)
+        except Exception as e:
+            logging.error(f"Error sending round result to p2: {e}")
 
     g['round'] += 1
     g['p1_c'] = g['p2_c'] = g['p1_s'] = g['p2_s'] = None
@@ -571,8 +655,16 @@ async def resolve_round(gid, bot):
         await finish_game(gid, bot)
     else:
         await asyncio.sleep(2)
-        await send_card_choice(g['p1'], g['d1'], gid, bot)
-        if g['p2'] != -1: await send_card_choice(g['p2'], g['d2'], gid, bot)
+        try:
+            await send_card_choice(g['p1'], g['d1'], gid, bot)
+        except Exception as e:
+            logging.error(f"Error sending card choice to p1: {e}")
+
+        if g['p2'] != -1:
+            try:
+                await send_card_choice(g['p2'], g['d2'], gid, bot)
+            except Exception as e:
+                logging.error(f"Error sending card choice to p2: {e}")
 
 
 async def finish_game(gid, bot):
@@ -605,3 +697,64 @@ async def finish_game(gid, bot):
     if p2 != -1:
         await bot.send_message(p2, f"Игра окончена!\nСчет: {n2} {s2} - {s1} {my_name}\nНаграда: {r2[0]}🏅, {r2[1]}🪙")
 
+
+# ============ ЗАЩИТА И БЛОКИРОВКА ВО ВРЕМЯ БОЯ ============
+from aiogram import BaseMiddleware
+
+
+class BattleLockMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event, data):
+        if isinstance(event, types.CallbackQuery):
+            uid = event.from_user.id
+            in_battle = any(g['p1'] == uid or g['p2'] == uid for g in GAMES.values())
+
+            allowed = ('b_card:', 'b_style:', 'surrender:')
+            if in_battle and not event.data.startswith(allowed):
+                gid = next((k for k, v in GAMES.items() if v['p1'] == uid or v['p2'] == uid), None)
+                if gid:
+                    bld = InlineKeyboardBuilder()
+                    bld.button(text="Сдаться 🏳️", callback_data=f"surrender:{gid}")
+                    try:
+                        await event.message.answer("Вы совершили недопустимое действие во время боя. Сдаться?",
+                                                   reply_markup=bld.as_markup())
+                        await event.answer()
+                    except:
+                        pass
+                    return
+        return await handler(event, data)
+
+
+router.callback_query.middleware(BattleLockMiddleware())
+
+
+@router.callback_query(F.data.startswith("surrender:"))
+async def surrender_battle(cq: CallbackQuery):
+    _, gid = cq.data.split(":")
+    g = GAMES.get(gid)
+    if not g:
+        return await cq.answer("Бой уже завершен.", show_alert=True)
+
+    uid = cq.from_user.id
+    is_p1 = (uid == g['p1'])
+    if is_p1:
+        g['score1'] = -1
+        g['score2'] = 99
+    else:
+        g['score2'] = -1
+        g['score1'] = 99
+
+    try:
+        await cq.message.answer("Вы сдались! Поражение.")
+        await cq.message.delete()
+    except:
+        pass
+
+    if g['p2'] != -1:
+        other_id = g['p2'] if is_p1 else g['p1']
+        try:
+            await cq.bot.send_message(other_id, "Противник сдался! Вы победили.")
+        except:
+            pass
+
+    await finish_game(gid, cq.bot)
+    await cq.answer()
