@@ -6,16 +6,18 @@ from datetime import datetime, timedelta
 from config import DB_PATH
 from data.cards import CARDS, RARITIES
 
-
 # ================== ФУНКЦИИ БД ==================
 def db_exec(query, params=(), fetch=False, fetchall=False):
     os.makedirs("data", exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute(query, params)
-        if fetchall: return c.fetchall()
-        if fetch: return c.fetchone()
+        if fetchall:
+            return c.fetchall()
+        if fetch:
+            return c.fetchone()
         conn.commit()
+
 def init_db():
     db_exec('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY, username TEXT, nickname TEXT,
@@ -45,32 +47,48 @@ def get_rank(pts):
     ranks = [(3000, "Безупречная мощь 😈"), (2000, "Сильнейший ☄️"), (1600, "Уровень нулевого 🧬"), (1000, "Уровень короля города 👑"),
              (600, "Уровень 1-го поколения 👾"), (300, "Уровень 2-го поколения 🪬"), (100, "Боец 🦸‍♂️"), (0, "Новичок 💩")]
     for p, n in ranks:
-        if pts >= p: return n
-
+        if pts >= p:
+            return n
 def pull_random_card(force_rarity=None):
-    if force_rarity:
-        pool = [k for k, v in CARDS.items() if v['rarity'] == force_rarity and not v['exclusive']]
-    else:
-        roll = random.uniform(0, 100)
-        cum = 0
-        rolled_r = "Обычная ⚪️"
-        for r, d in RARITIES.items():
-            cum += d['chance']
-            if roll <= cum:
-                rolled_r = r
-                break
-        pool = [k for k, v in CARDS.items() if v['rarity'] == rolled_r and not v['exclusive']]
-        if not pool: pool = [k for k, v in CARDS.items() if not v['exclusive']]
-    return random.choice(pool) if pool else None
+    """Возвращает ключ случайной карты или None, если пул пуст."""
+    try:
+        if force_rarity:
+            pool = [k for k, v in CARDS.items() if v.get('rarity') == force_rarity and not v.get('exclusive')]
+        else:
+            roll = random.uniform(0, 100)
+            cum = 0
+            rolled_r = "Обычная ⚪️"
+            for r, d in RARITIES.items():
+                cum += d.get('chance', 0)
+                if roll <= cum:
+                    rolled_r = r
+                    break
+            pool = [k for k, v in CARDS.items() if v.get('rarity') == rolled_r and not v.get('exclusive')]
+            if not pool:
+                pool = [k for k, v in CARDS.items() if not v.get('exclusive')]
+        return random.choice(pool) if pool else None
+    except Exception:
+        return None
 
 def give_card_to_user(uid, card_key):
-    c = CARDS[card_key]
-    has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, card_key), fetch=True)
-    if has_card:
-        dup_val = RARITIES[c['rarity']]['dup']
-        krw_earned = random.randint(dup_val[0], dup_val[1]) if isinstance(dup_val, tuple) else dup_val
-        db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (krw_earned, uid))
-        return False, krw_earned, c
-    else:
-        db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (uid, card_key))
-        return True, 0, c
+    """Выдаёт карту игроку. Возвращает (is_new, krw, card_data) или (False, 0, None) при ошибке."""
+    try:
+        c = CARDS.get(card_key)
+        if not c:
+            return False, 0, None
+
+        has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, card_key), fetch=True)
+
+        if has_card:
+            rarity_data = RARITIES.get(c.get('rarity'))
+            if not rarity_data:
+                return False, 0, None
+            dup_val = rarity_data.get('dup', (1, 10))
+            krw_earned = random.randint(dup_val[0], dup_val[1]) if isinstance(dup_val, tuple) else dup_val
+            db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (krw_earned, uid))
+            return False, krw_earned, c
+        else:
+            db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (uid, card_key))
+            return True, 0, c
+    except Exception:
+        return False, 0, None

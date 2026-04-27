@@ -43,7 +43,8 @@ async def gangs(msg: types.Message):
 async def get_card_cmd(msg: types.Message):
     uid = msg.from_user.id
     u = get_user(uid)
-    if not u: return
+    if not u:
+        return
 
     attempts = u[6]
     now = datetime.now()
@@ -57,19 +58,18 @@ async def get_card_cmd(msg: types.Message):
         if (now - last_get).total_seconds() < GET_COOLDOWN_HOURS * 3600:
             rem = int(GET_COOLDOWN_HOURS * 3600 - (now - last_get).total_seconds())
             return await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
-    # Получаем карту ДО списания попытки
+
+    # Получаем карту
     card_key = pull_random_card()
     if not card_key:
-        return await msg.answer("❌ Ошибка: пул карт пуст.")
+        return await msg.answer("❌ Ошибка: пул карт пуст или произошла ошибка.")
 
     is_new, krw, c = give_card_to_user(uid, card_key)
 
-    # Только теперь списываем попытку / обновляем кулдаун
-    if attempts > 0:
-        db_exec("UPDATE users SET attempts = attempts - 1 WHERE id = ?", (uid,))
-    else:
-        db_exec("UPDATE users SET last_get = ? WHERE id = ?", (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
-
+    # Если карта или данные повреждены — не списываем попытку
+    if c is None:
+        return await msg.answer("❌ Ошибка при получении карты. Попробуйте снова.")
+    # Формируем текст
     if is_new:
         txt = (f"🃏 Получена новая боевая карта!\n\n"
                f"🎴 Персонаж: {c['name']}\n"
@@ -89,7 +89,20 @@ async def get_card_cmd(msg: types.Message):
                f"💪 Сила: {c['strength']}\n"
                f"🧠 Интеллект: {c['intellect']}")
 
-    await msg.answer_photo(photo=c['file_id'], caption=txt, has_spoiler=True)
+    # Пытаемся отправить фото. Если не вышло — шлём текст.
+    try:
+        await msg.answer_photo(photo=c['file_id'], caption=txt, has_spoiler=True)
+    except Exception:
+        try:
+            await msg.answer(txt)
+        except Exception:
+            return await msg.answer("❌ Не удалось открутить. Попробуйте снова.")
+
+    # Списываем попытку ТОЛЬКО после успешной отправки
+    if attempts > 0:
+        db_exec("UPDATE users SET attempts = attempts - 1 WHERE id = ?", (uid,))
+    else:
+        db_exec("UPDATE users SET last_get = ? WHERE id = ?", (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
 
 
 # ============ ПРОФИЛЬ ============
