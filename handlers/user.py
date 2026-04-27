@@ -120,8 +120,9 @@ async def profile(msg: types.Message):
     else:
         title_str = "\n"
 
+    user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
     txt = (
-        f"👤 Профиль {u[2]} 🧩\n"
+        f"👤 Профиль {user_link} 🧩\n"
         f"🆔 Id: <code>{u[0]}</code>\n"
         f"{title_str}"
         f"Баланс:\n"
