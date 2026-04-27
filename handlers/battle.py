@@ -364,18 +364,19 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
             await bot.send_message(p1, txt1, parse_mode="HTML")
     else:
         await bot.send_message(p1, txt1, parse_mode="HTML")
-        if p2 != -1:
-            txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
-            bg_key1 = u1[13] or 'default'
-            bg_data1 = BGS.get(bg_key1, BGS['default'])
-            bg_file1 = bg_data1.get('file_id')
-            try:
-                if bg_key1 in VIDEO_BGS:
-                    await bot.send_video(p2, video=bg_file1, caption=txt2, parse_mode="HTML")
-                else:
-                    await bot.send_photo(p2, photo=bg_file1, caption=txt2, parse_mode="HTML")
-            except:
-                await bot.send_message(p2, txt2, parse_mode="HTML")
+
+    if p2 != -1:
+        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+        bg_key1 = u1[13] or 'default'
+        bg_data1 = BGS.get(bg_key1, BGS['default'])
+        bg_file1 = bg_data1.get('file_id')
+        try:
+            if bg_key1 in VIDEO_BGS:
+                await bot.send_video(p2, video=bg_file1, caption=txt2, parse_mode="HTML")
+            else:
+                await bot.send_photo(p2, photo=bg_file1, caption=txt2, parse_mode="HTML")
+        except:
+            await bot.send_message(p2, txt2, parse_mode="HTML")
 
         await asyncio.sleep(1)
         await send_card_choice(p1, GAMES[gid]['d1'], gid, bot)
