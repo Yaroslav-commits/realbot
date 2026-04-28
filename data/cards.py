@@ -207,13 +207,13 @@ BGS = {
              "file_id": "BAACAgIAAxkBAANOaez3fDixsllbbPjfC86XbBEdV98AAiiWAAL0DChLEG7IiqbL23w7BA",
              "price": 2500},
     "lookism_1": {"name": "Лукизм", "file_id": "AgACAgIAAxkBAAFHkldp5PKPLG3TCvsedNSdNZWpAmyi8wACeRZrGz0vIUt6PZ3wUkrtlQEAAwIAA3cAAzsE", "price": 500},
-    "adminn": {"name": "Ю Джунхёк и Ким Докча", "file_id": "BAACAgIAAxkBAAFIP91p8AWO_gi2SlJTvUbgTZ-JmXUb2AAC7aMAAvtjgUts1d73j7Hh9jsE", "price": 99999},
+    "adminn": {"name": "Ю Джунхёк и Ким Докча", "file_id": "BAACAgIAAxkBAAI5eGnwCissFrWkA2_PXlhqZjmCLTmuAALtowAC-2OBS5Xx8f0_f5esOwQ", "price": 99999},
 }
 VIDEO_BGS = {
 "zer": {"name": "Нулевое Поколение",
              "file_id": "BAACAgIAAxkBAANOaez3fDixsllbbPjfC86XbBEdV98AAiiWAAL0DChLEG7IiqbL23w7BA",
              "price": 2500},
-"adminn": {"name": "Ю Джунхёк и Ким Докча", "file_id": "BAACAgIAAxkBAAFIP91p8AWO_gi2SlJTvUbgTZ-JmXUb2AAC7aMAAvtjgUts1d73j7Hh9jsE", "price": 99999}
+"adminn": {"name": "Ю Джунхёк и Ким Докча", "file_id": "BAACAgIAAxkBAAI5eGnwCissFrWkA2_PXlhqZjmCLTmuAALtowAC-2OBS5Xx8f0_f5esOwQ", "price": 99999}
 }
 TITLES = {
     "title_pass_hero": "Герой Месяца 🏆",
