@@ -682,8 +682,8 @@ async def claim_pass(cq: CallbackQuery):
         db_exec(
             "CREATE TABLE IF NOT EXISTS pass_bought_days (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
         bought_count = \
-        db_exec("SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
-                (uid, now.month, p_type), fetch=True)[0]
+            db_exec("SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
+                    (uid, now.month, p_type), fetch=True)[0]
 
         next_cost = (bought_count + 1) * 20
 
@@ -725,8 +725,8 @@ async def claim_pass(cq: CallbackQuery):
         db_exec(
             "CREATE TABLE IF NOT EXISTS pass_bought_days (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
         bought_count = \
-        db_exec("SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
-                (uid, now.month, p_type), fetch=True)[0]
+            db_exec("SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
+                    (uid, now.month, p_type), fetch=True)[0]
         cost = (bought_count + 1) * 20
 
         u = get_user(uid)
@@ -756,46 +756,46 @@ async def claim_pass(cq: CallbackQuery):
 
         db_exec("INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
                 (uid, now.month, day, p_type))
+    await cq.answer(f"✅ День {day} восстановлен!", show_alert=True)
+    await buy_days_menu(cq)
 
-        await cq.answer(f"✅ День {day} восстановлен!", show_alert=True)
-        await buy_days_menu(cq)
+@router.callback_query(F.data.startswith("pass_main_prize:"))
+async def pass_main(cq: CallbackQuery):
+    p_type = cq.data.split(":")[1]
+    uid = cq.from_user.id
+    now = datetime.now(MSK)
+    _, dim = calendar.monthrange(now.year, now.month)
+    claims = db_exec("SELECT COUNT(*) FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
+                     (uid, now.month, p_type), fetch=True)
 
-    @router.callback_query(F.data.startswith("pass_main_prize:"))
-    async def pass_main(cq: CallbackQuery):
-        p_type = cq.data.split(":")[1]
-        uid = cq.from_user.id
-        now = datetime.now(MSK)
-        _, dim = calendar.monthrange(now.year, now.month)
-        claims = db_exec("SELECT COUNT(*) FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
-                         (uid, now.month, p_type), fetch=True)
+    if claims[0] < dim:
+        return await cq.answer("❌ Соберите награды за все дни месяца!", show_alert=True)
 
-        if claims[0] < dim:
-            return await cq.answer("❌ Соберите награды за все дни месяца!", show_alert=True)
-
-        if p_type == "normal":
-            has_title = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?",
-                                (uid, MAIN_PRIZE_NORMAL_TITLE), fetch=True)
-            if has_title:
-                return await cq.answer("✅ Главный приз уже в инвентаре!", show_alert=True)
-            db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, MAIN_PRIZE_NORMAL_TITLE))
-            await cq.answer("✅ Получен главный приз: Титул!", show_alert=True)
-        else:
-            has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
-                               (uid, MAIN_PRIZE_ROYALE_CARD), fetch=True)
-            if has_card:
-                return await cq.answer("✅ Главный приз уже в инвентаре!", show_alert=True)
-            give_card_to_user(uid, MAIN_PRIZE_ROYALE_CARD)
+    if p_type == "normal":
+        has_title = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?",
+                            (uid, MAIN_PRIZE_NORMAL_TITLE), fetch=True)
+        if has_title:
+            return await cq.answer("✅ Главный приз уже в инвентаре!", show_alert=True)
+        db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, MAIN_PRIZE_NORMAL_TITLE))
+        await cq.answer("✅ Получен главный приз: Титул!", show_alert=True)
+    else:
+        has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
+                           (uid, MAIN_PRIZE_ROYALE_CARD), fetch=True)
+        if has_card:
+            return await cq.answer("✅ Главный приз уже в инвентаре!", show_alert=True)
+        give_card_to_user(uid, MAIN_PRIZE_ROYALE_CARD)
         await cq.answer("✅ Получен эксклюзивный персонаж Рояль Пасса!", show_alert=True)
 
-    @router.callback_query(F.data == "buy_royale_pass")
-    async def buy_rp(cq: CallbackQuery, bot: Bot):
-        await bot.send_invoice(cq.from_user.id, title="🌠 Рояль Пасс",
-                               description="Доступ к эксклюзивным наградам на этот месяц",
-                               payload="rp_buy", provider_token="", currency="XTR",
-                               prices=[LabeledPrice(label="Stars", amount=50)])
-        await cq.answer()
+@router.callback_query(F.data == "buy_royale_pass")
+async def buy_rp(cq: CallbackQuery, bot: Bot):
+    await bot.send_invoice(cq.from_user.id, title="🌠 Рояль Пасс",
+                           description="Доступ к эксклюзивным наградам на этот месяц",
+                           payload="rp_buy", provider_token="", currency="XTR",
+                           prices=[LabeledPrice(label="Stars", amount=50)])
+    await cq.answer()
 
-    # ============ БОЕВКА ============
+
+# ============ БОЕВКА ============
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 import asyncio

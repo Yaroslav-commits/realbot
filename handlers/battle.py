@@ -347,8 +347,12 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
                   'friendly': friendly, 'resolving': False}
 
     u1 = get_user(p1)
-    db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
-            (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
+    if p2 == -1:
+        db_exec("UPDATE users SET last_battle = ? WHERE id = ?",
+                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1))
+    else:
+        db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
+                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
 
     txt1 = f"Противник найден!\n\n· Имя: {name2} 🧩\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
 
@@ -379,10 +383,11 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         except:
             await bot.send_message(p2, txt2, parse_mode="HTML")
 
-        await asyncio.sleep(1)
-        await send_card_choice(p1, GAMES[gid]['d1'], gid, bot)
-        if p2 != -1:
-            await send_card_choice(p2, GAMES[gid]['d2'], gid, bot)
+    await asyncio.sleep(1)
+    await send_card_choice(p1, GAMES[gid]['d1'], gid, bot)
+    if p2 != -1:
+        await send_card_choice(p2, GAMES[gid]['d2'], gid, bot)
+
 
 
 async def auto_card_choice(gid, uid, round_num, msg_id, bot):
