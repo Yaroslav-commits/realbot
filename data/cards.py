@@ -213,7 +213,7 @@ VIDEO_BGS = {
 "zer": {"name": "Нулевое Поколение",
              "file_id": "BAACAgIAAxkBAANOaez3fDixsllbbPjfC86XbBEdV98AAiiWAAL0DChLEG7IiqbL23w7BA",
              "price": 2500},
-"adminn": {"name": "Ю Джунхёк и Ким Докча", "file_id": "BAACAgIAAxkBAAI5eGnwCissFrWkA2_PXlhqZjmCLTmuAALtowAC-2OBS5Xx8f0_f5esOwQ", "price": 99999}
+        "adminn": {"name": "Ю Джунхёк и Ким Докча", "file_id": "BAACAgIAAxkBAAI5eGnwCissFrWkA2_PXlhqZjmCLTmuAALtowAC-2OBS5Xx8f0_f5esOwQ", "price": 99999}
 }
 TITLES = {
     "title_pass_hero": "Герой Месяца 🏆",

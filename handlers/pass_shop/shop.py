@@ -57,11 +57,12 @@ SPIN_PACKS = [
 # Фоны в магазине: ключ, цена, валюта: bc = BattleCoin, krw = KRW, dia = Diamond
 SHOP_BG_LIST = [
     {"id": "lookism_1", "price": 500,  "currency": "bc",  "icon": "🪙"},
+    {"id": "adminn",      "price": 99999, "currency": "krw", "icon": "💴"},
     {"id": "zero",      "price": 2500, "currency": "krw", "icon": "💴"},
 ]
 
 # ВИДЕО-ФОНЫ. Сюда кидаешь ключи тех фонов, которые у тебя загружены как видео.
-VIDEO_BGS = {"zero", "adminn"}
+VIDEO_BGS = {"zero"}, {"adminn"}
 
 # ====== ЕВЕНТ ======
 EVENT_ENABLED = False  # Поставь False, чтобы скрыть Евент и показывать "нет событий"
