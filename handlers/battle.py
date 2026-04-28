@@ -351,6 +351,7 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
             (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
 
     txt1 = f"Противник найден!\n\n· Имя: {name2} 🧩\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+
     if p2 != -1:
         bg_key2 = u2[13] or 'default'
         bg_data2 = BGS.get(bg_key2, BGS['default'])
