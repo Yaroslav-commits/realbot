@@ -203,10 +203,11 @@ RARITIES = {
 
 BGS = {
     "default": {"name": "Стандартный", "file_id": "AgACAgIAAxkBAAFHkflp5O8qYvKQnm5R8Nylqe0KM15SLgACoRNrG6trIUsNqPCQiCAlRgEAAwIAA3cAAzsE", "price": 0},
-"zer": {"name": "Нулевое Поколение",
+    "zer": {"name": "Нулевое Поколение",
              "file_id": "BAACAgIAAxkBAANOaez3fDixsllbbPjfC86XbBEdV98AAiiWAAL0DChLEG7IiqbL23w7BA",
              "price": 2500},
-    "lookism_1": {"name": "Лукизм", "file_id": "AgACAgIAAxkBAAFHkldp5PKPLG3TCvsedNSdNZWpAmyi8wACeRZrGz0vIUt6PZ3wUkrtlQEAAwIAA3cAAzsE", "price": 500}
+    "lookism_1": {"name": "Лукизм", "file_id": "AgACAgIAAxkBAAFHkldp5PKPLG3TCvsedNSdNZWpAmyi8wACeRZrGz0vIUt6PZ3wUkrtlQEAAwIAA3cAAzsE", "price": 500},
+    "admin": {"name": "Ю Джунхёк и Ким Докча", "file_id": "BAACAgIAAxkBAAFIP91p8AWO_gi2SlJTvUbgTZ-JmXUb2AAC7aMAAvtjgUts1d73j7Hh9jsE", "price": 99999},
 }
 VIDEO_BGS = {
 "zer": {"name": "Нулевое Поколение",
