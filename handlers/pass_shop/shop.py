@@ -215,11 +215,11 @@ async def shop_premium_buy_cb(cq: CallbackQuery):
         (new_until_str, uid))
 
     # Выдаём карту (она не дублируется в БД, функция give_card_to_user всё делает сама)
-    is_new, krw_earn, c = give_card_to_user(uid, "premium_card_1")
+    is_new, krw_earn, c = give_card_to_user(uid, "premium1")
 
     if not c:
         await cq.message.answer(
-            "✅ Подписка Premium куплена!\nВам начислено: 10 💳, 500 💴.\n(Карты 'premium_card_1' пока нет в базе CARDS. Добавьте её ключ!)")
+            "✅ Подписка Premium куплена!\nВам начислено: 10 💳, 500 💴.\n(Карты 'premium' пока нет в базе CARDS. Добавьте её ключ!)")
     else:
         if is_new:
             txt = (f"🃏 Получена новая премиум карта!\n\n"
