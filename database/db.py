@@ -26,12 +26,48 @@ def init_db():
         last_get TEXT DEFAULT '2000-01-01 00:00:00', last_battle TEXT DEFAULT '2000-01-01 00:00:00',
         active_bg TEXT DEFAULT 'default', active_title TEXT, join_date TEXT, royale_pass INTEGER DEFAULT 0
     )''')
+    # Добавляем колонку для Premium автоматически (если её нет)
+    try:
+        db_exec("ALTER TABLE users ADD COLUMN premium_until TEXT DEFAULT '2000-01-01 00:00:00'")
+    except sqlite3.OperationalError:
+        pass
+
     db_exec("CREATE TABLE IF NOT EXISTS cards_inv (user_id INTEGER, card_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS decks (user_id INTEGER, card_id TEXT, slot_index INTEGER)")
     db_exec("CREATE TABLE IF NOT EXISTS bgs_inv (user_id INTEGER, bg_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS titles_inv (user_id INTEGER, title_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS pass_claims (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS promos (code TEXT PRIMARY KEY, p_type TEXT, val TEXT, uses INTEGER)")
+
+def pull_random_card(force_rarity=None, uid=None):
+    """Возвращает ключ случайной карты или None, если пул пуст."""
+    try:
+        from data.cards import PREMIUM_RARITIES, RARITIES
+        rates = RARITIES
+        # Если передан ID игрока, проверяем, есть ли у него Премиум
+        if uid:
+            u = get_user(uid)
+            if u and len(u) > 17 and u[17] and u[17] > datetime.now().strftime("%Y-%m-%d %H:%M:%S"):
+                rates = PREMIUM_RARITIES
+
+        if force_rarity:
+            pool = [k for k, v in CARDS.items() if v.get('rarity') == force_rarity and not v.get('exclusive')]
+        else:
+            roll = random.uniform(0, 100)
+            cum = 0
+            rolled_r = "Обычная ⚪️"
+            for r, d in rates.items():
+                cum += d.get('chance', 0)
+                if roll <= cum:
+                    rolled_r = r
+                    break
+            pool = [k for k, v in CARDS.items() if v.get('rarity') == rolled_r and not v.get('exclusive')]
+            if not pool:
+                pool = [k for k, v in CARDS.items() if not v.get('exclusive')]
+        return random.choice(pool) if pool else None
+    except Exception:
+        return None
+
 
 def get_user(uid):
     return db_exec("SELECT * FROM users WHERE id = ?", (uid,), fetch=True)
@@ -49,26 +85,7 @@ def get_rank(pts):
     for p, n in ranks:
         if pts >= p:
             return n
-def pull_random_card(force_rarity=None):
-    """Возвращает ключ случайной карты или None, если пул пуст."""
-    try:
-        if force_rarity:
-            pool = [k for k, v in CARDS.items() if v.get('rarity') == force_rarity and not v.get('exclusive')]
-        else:
-            roll = random.uniform(0, 100)
-            cum = 0
-            rolled_r = "Обычная ⚪️"
-            for r, d in RARITIES.items():
-                cum += d.get('chance', 0)
-                if roll <= cum:
-                    rolled_r = r
-                    break
-            pool = [k for k, v in CARDS.items() if v.get('rarity') == rolled_r and not v.get('exclusive')]
-            if not pool:
-                pool = [k for k, v in CARDS.items() if not v.get('exclusive')]
-        return random.choice(pool) if pool else None
-    except Exception:
-        return None
+
 
 def give_card_to_user(uid, card_key):
     """Выдаёт карту игроку. Возвращает (is_new, krw, card_data) или (False, 0, None) при ошибке."""

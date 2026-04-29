@@ -189,6 +189,7 @@ CARDS = {
 "jang_san_yeong": {"name": "Чан Сан Ён", "rarity": "Редкая 🟡", "style": "Рукопашный бой", "series": "Факультет зачистки подземелий", "speed": 46, "strength": 48, "intellect": 45, "file_id": "AgACAgIAAxkBAAIXymntDJJzLInG5QaW2Cgk7thmVRUBAAJKE2sbUZNpSw7LwtoP6LTuAQADAgADdwADOwQ", "exclusive": False},
 "yu_cha_ryeon": {"name": "Ю Ча Рён", "rarity": "Легендарная 🔵", "style": "Зыбь", "series": "Факультет зачистки подземелий", "speed": 85, "strength": 85, "intellect": 84, "file_id": "AgACAgIAAxkBAAIXzGntDJsX0BLyOwbUlv35CC4uYxyoAAJLE2sbUZNpSxQhSR_qkcDUAQADAgADdwADOwQ", "exclusive": False},
 #====LIMITED CARDS=====
+"premium_card_1": {"name": "Лу Шень", "rarity": "Эпическая 🟢", "style": "Гибрид", "series": "Я прокачиваюсь во сне, убивая монстров", "speed": 80, "strength": 80, "intellect": 80, "file_id": "AgACAgIAAxkBAAFIXEhp8fFCYvJ5YP594yun9mDunHyq6QAChhhrG7WxkUuHLPDIGM6-mgEAAwIAA3cAAzsE", "exclusive": True},
 "exclusive_card_1": {"name": "Юк Сонджи и Джин Хобин", "rarity": "Легендарная 🔵", "style": "Дзюдо", "series": "Лукизм", "speed": 90, "strength": 90, "intellect": 85, "file_id": "AgACAgIAAxkBAAIH5GnqYmtCuh1zzWHavH8k5YOtq8S3AALkE2sbwYNYSxwTnoBWq5jFAQADAgADdwADOwQ", "exclusive": True},
 }
 
@@ -200,6 +201,15 @@ RARITIES = {
     "Мифическая 🔴": {"chance": 0.2, "dup": (15, 20)},
     "Божественная ⚫️": {"chance": 0.03, "dup": (50, 100)}
 }
+PREMIUM_RARITIES = {
+    "Обычная ⚪️": {"chance": 55.0, "dup": 1},
+    "Редкая 🟡": {"chance": 30.5, "dup": 2},
+    "Эпическая 🟢": {"chance": 14.45, "dup": (4, 5)},
+    "Легендарная 🔵": {"chance": 1, "dup": (8, 11)},
+    "Мифическая 🔴": {"chance": 0.4, "dup": (15, 20)},
+    "Божественная ⚫️": {"chance": 0.05, "dup": (50, 100)}
+}
+
 
 BGS = {
     "default": {"name": "Стандартный", "file_id": "AgACAgIAAxkBAAFHkflp5O8qYvKQnm5R8Nylqe0KM15SLgACoRNrG6trIUsNqPCQiCAlRgEAAwIAA3cAAzsE", "price": 0},

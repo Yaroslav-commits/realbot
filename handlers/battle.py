@@ -26,6 +26,13 @@ from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 
 
+async def notify_cooldown(bot: Bot, uid: int, delay: int, text: str):
+    await asyncio.sleep(delay)
+    try:
+        await bot.send_message(uid, text)
+    except Exception:
+        pass
+
 # ============ БОЕВКА ============
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
@@ -329,46 +336,40 @@ async def wait_match(uid, bot, msg_to_edit):
         except: pass
         await start_battle(uid, -1, bot)
 
+# ===== финальны показатель =====
 async def start_battle(p1, p2, bot: Bot, friendly=False):
     gid = f"g_{random.randint(10000, 99999)}"
     deck1 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p1,), fetchall=True)]
-
-    if p2 == -1:
-        deck2 = random.choices(list(CARDS.keys()), k=6)
-        name2 = random.choice(["Важни Гий", "Ли Джи Ху..", "Йена пик форма", "Злодей Васко", "Великий Мага", "Босс Табаско", "Срасул", "Брад", "Клон Хикса", "Король Бибизян"])
-        rank2 = "Бот"
-    else:
-        deck2 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p2,), fetchall=True)]
-        u2 = get_user(p2)
-        name2, rank2 = f"<a href='tg://user?id={p2}'>{u2[2]}</a>", get_rank(u2[7])
-
-    GAMES[gid] = {'p1': p1, 'p2': p2, 'd1': deck1.copy(), 'd2': deck2.copy(), 'n2': name2, 'r2': rank2,
-                  'p1_c': None, 'p2_c': None, 'p1_s': None, 'p2_s': None, 'score1': 0, 'score2': 0, 'round': 1,
-                  'friendly': friendly, 'resolving': False}
+    deck2 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p2,), fetchall=True)] if p2 != -1 else [pull_random_card() for _ in range(5)]
 
     u1 = get_user(p1)
-    if p2 == -1:
-        db_exec("UPDATE users SET last_battle = ? WHERE id = ?",
-                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1))
-    else:
-        db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
-                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
+    u2 = None if p2 == -1 else get_user(p2)
 
-    txt1 = f"Противник найден!\n\n· Имя: {name2} 🧩\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+    # Проверка на Premium
+    p1_prem = len(u1) > 17 and u1[17] and u1[17] > datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    p2_prem = u2 and len(u2) > 17 and u2[17] and u2[17] > datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    name2 = "Неизвестный противник (Бот)" if p2 == -1 else f"<a href='tg://user?id={p2}'>{u2[2]}</a>"
+    rank2 = "Новичок 💩" if p2 == -1 else get_rank(u2[7])
+
+    GAMES[gid] = {
+            'p1': p1, 'p2': p2, 'd1': deck1, 'd2': deck2,
+            'score1': 0, 'score2': 0, 'round': 1,
+            'p1_c': None, 'p2_c': None, 'p1_s': None, 'p2_s': None,
+            'friendly': friendly, 'n2': "Неизвестный противник (Бот)" if p2 == -1 else u2[2]
+        }
+
+    if not friendly:
+        db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
+               (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
+
+    p1_pts = '0 очков' if friendly else ('4 очка' if p1_prem else '3 очка')
+    p1_bc = ('6' if p1_prem else '3') if not friendly else ('6' if p1_prem else '3')
+    txt1 = f"Противник найден!\n\n· Имя: {name2} {'👑' if p2_prem else '🧩'}\n· Ранг: {rank2}\n· Награда за победу: {p1_pts}🏅, {p1_bc} BattleCoin 🪙\n\nБитва начинается!"
 
     if p2 != -1:
-        bg_key2 = u2[13] or 'default'
-        bg_data2 = BGS.get(bg_key2, BGS['default'])
-        bg_file2 = bg_data2.get('file_id')
-        try:
-            if bg_key2 in VIDEO_BGS:
-                await bot.send_video(p1, video=bg_file2, caption=txt1, parse_mode="HTML")
-            else:
-                await bot.send_photo(p1, photo=bg_file2, caption=txt1, parse_mode="HTML")
-        except:
-            await bot.send_message(p1, txt1, parse_mode="HTML")
-    else:
-        await bot.send_message(p1, txt1, parse_mode="HTML")
+        p2_pts = '0 очков' if friendly else ('4 очка' if p2_prem else '3 очка')
+        p2_bc = ('6' if p2_prem else '3') if not friendly else ('6' if p2_prem else '3')
 
     if p2 != -1:
         txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
@@ -628,7 +629,7 @@ async def resolve_round(gid, bot):
 
     def format_text(p_name, e_name, score_p, score_e, p_s, e_s, p_val, e_val, p_final, e_final, b_txt):
         t = (f"⬆️ Ваша карта | Карта врага ⬆️\nРаунд - {g['round']}\n\n"
-             f"Счет:\n{p_name} (я)🧩 - {score_p}\n{e_name} (противник)🧩 - {score_e}\n\n"
+             f"Счет:\n{p_name} 🧩 - {score_p}\n{e_name} 🧩 - {score_e}\n\n"
              f"⚔️ Вы совершаете {s_map[p_s][1]} атаку\nУровень атаки: {p_val}\n\n"
              f"🛡️ Противник ставит {s_map[e_s][1]} защиту\nУровень защиты: {e_val}\n\n")
         if adv != 0: t += f"Бонус\n{b_txt}\n\n"
@@ -681,16 +682,28 @@ async def finish_game(gid, bot):
 
     def apply_res(uid, is_win, is_draw, friendly):
         if uid == -1: return 0, 0
+        u = get_user(uid)
+        is_premium = len(u) > 17 and u[17] and u[17] > datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         if friendly:
             pts = 0
-            bc = 3 if is_win else 1
+            bc = (3 if is_win else 1) + (3 if is_premium else 0)
         else:
-            pts = 3 if is_win else (1 if is_draw else -2)
-            bc = 3 if is_win else 1
-
+            if is_draw:
+                pts = 2 if is_premium else 1
+                bc = 4 if is_premium else 1
+            else:
+                pts = (4 if is_premium else 3) if is_win else -2
+                bc = (6 if is_premium else 3) if is_win else (4 if is_premium else 1)
         db_exec(f"UPDATE users SET rank_points = MAX(0, rank_points + {pts}), battlecoin = battlecoin + {bc}, " +
                 ("wins = wins + 1" if is_win else ("draws = draws + 1" if is_draw else "losses = losses + 1")) +
                 " WHERE id = ?", (uid,))
+
+        # Запускаем уведомление о том, что игрок снова может сражаться
+        delay = (30 * 60) if is_premium else (BATTLE_COOLDOWN_HOURS * 3600)
+        asyncio.create_task(
+            notify_cooldown(bot, uid, delay, "🔔 ⚔️ Поле Битвы: ваш кулдаун сброшен, вы можете снова сражаться!"))
+
         return pts, bc
 
     draw = (s1 == s2)

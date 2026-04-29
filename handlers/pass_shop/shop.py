@@ -160,10 +160,92 @@ async def shop_dia_buy_cb(cq: CallbackQuery, bot: Bot):
     )
     await cq.answer()
 
+
 # ===== Premium =====
 @router.callback_query(F.data == "shop:premium")
 async def shop_premium_cb(cq: CallbackQuery):
-    await cq.answer("🎫 Premium пока недоступен.", show_alert=True)
+    text = (
+        "Список бонусов на месяц, что вы получите при покупке Premium 👑 \n\n"
+        "👑 Вы будете отображаться как премиум пользователь;\n"
+        "📞 Уведомление о сбросе кулдауна в ⚔️ Поле Битвы;\n"
+        "⌛️ Возможность получать карточки каждый 1 час вместо 3;\n"
+        "⚔️ Возможность сражаться в поле битвы каждые пол часа (30м) вместо 1.5;\n"
+        "🃏 Повышенная вероятность выпадения Легендарных, Мифических и Божественных карт;\n"
+        "👤 Возможность изменять никнейм и добавлять в него эмодзи;\n"
+        "🪙 Получение большего количества BATTLECOIN;\n"
+        "🏅 Увеличение количества очков ранга за победу и ничью в PVP +1;\n\n"
+        "При покупке Premuim подписки на 1 месяц вы получаете сразу:\n"
+        "10 круток 💳\n"
+        "500 KRW 💴\n"
+        "Лимитированная премиум карточка 🎴👑"
+    )
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Купить 250 💎", callback_data="shop:premium_buy")
+    bld.button(text="Назад 🔙", callback_data="shop:main")
+    bld.adjust(1)
+
+    try:
+        await cq.message.edit_caption(caption=text, reply_markup=bld.as_markup())
+    except Exception:
+        pass
+    await cq.answer()
+
+
+@router.callback_query(F.data == "shop:premium_buy")
+async def shop_premium_buy_cb(cq: CallbackQuery):
+    uid = cq.from_user.id
+    u = get_user(uid)
+    if u[3] < 250:
+        return await cq.answer("❌ Недостаточно алмазов! Нужно: 250 💎", show_alert=True)
+
+    now = datetime.now()
+    current_prem = u[17] if len(u) > 17 and u[17] else "2000-01-01 00:00:00"
+
+    # Суммируем месяцы, если покупает несколько раз подряд
+    if current_prem > now.strftime("%Y-%m-%d %H:%M:%S"):
+        new_until = datetime.strptime(current_prem, "%Y-%m-%d %H:%M:%S") + timedelta(days=30)
+    else:
+        new_until = now + timedelta(days=30)
+
+    new_until_str = new_until.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Молча выдаём валюту, крутки и обновляем дату премиума
+    db_exec(
+        "UPDATE users SET diamond = diamond - 250, attempts = attempts + 10, krw = krw + 500, premium_until = ? WHERE id = ?",
+        (new_until_str, uid))
+
+    # Выдаём карту (она не дублируется в БД, функция give_card_to_user всё делает сама)
+    is_new, krw_earn, c = give_card_to_user(uid, "premium_card_1")
+
+    if not c:
+        await cq.message.answer(
+            "✅ Подписка Premium куплена!\nВам начислено: 10 💳, 500 💴.\n(Карты 'premium_card_1' пока нет в базе CARDS. Добавьте её ключ!)")
+    else:
+        if is_new:
+            txt = (f"🃏 Получена новая премиум карта!\n\n"
+                   f"🎴 Персонаж: {c['name']}\n"
+                   f"🔮 Редкость: {c['rarity']}\n"
+                   f"👊 Стиль боя: {c['style']}\n"
+                   f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+                   f"⚡️ Скорость: {c['speed']}\n"
+                   f"💪 Сила: {c['strength']}\n"
+                   f"🧠 Интеллект: {c['intellect']}")
+        else:
+            txt = (f"🛑 Вам попалась повторная карта! Вы получаете {krw_earn} 💴 KRW\n\n"
+                   f"🎴 Персонаж: {c['name']}\n"
+                   f"🔮 Редкость: {c['rarity']}\n"
+                   f"👊 Стиль боя: {c['style']}\n"
+                   f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+                   f"⚡️ Скорость: {c['speed']}\n"
+                   f"💪 Сила: {c['strength']}\n"
+                   f"🧠 Интеллект: {c['intellect']}")
+
+        await cq.message.answer_photo(
+            photo=c['file_id'],
+            caption=f"✅ Подписка Premium куплена!\nВам молча начислено: 10 круток 💳 и 500 KRW 💴.\n\n{txt}"
+        )
+    await cq.answer("Успешная покупка Premium! 🎉", show_alert=True)
+
 
 # ===== Крутки =====
 def _spin_kb():
