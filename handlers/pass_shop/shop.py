@@ -219,7 +219,7 @@ async def shop_premium_buy_cb(cq: CallbackQuery):
 
     if not c:
         await cq.message.answer(
-            "✅ Подписка Premium куплена!\nВам начислено: 10 💳, 500 💴.\n(Карты 'premium' пока нет в базе CARDS. Добавьте её ключ!)")
+            "✅ Подписка Premium куплена!\nВам начислено: 10 💳, 500 💴.\n(Карты 'premium1' пока нет в базе CARDS. Добавьте её ключ!)")
     else:
         if is_new:
             txt = (f"🃏 Получена новая премиум карта!\n\n"
