@@ -534,12 +534,12 @@ async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, 
         try:
             await cq.message.edit_media(
                 media=types.InputMediaPhoto(media=PASS_ROYALE_IMG_1,
-                                            caption="🌠 Рояль пасс\n\n⚠️ Данный пасс у вас ещё не приобретен."),
+                                            caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\nЛимитированная карта 🃏\n⚠️ Данный пасс у вас ещё не приобретен."),
                 reply_markup=bld.as_markup()
             )
         except:
             await cq.message.answer_photo(photo=PASS_ROYALE_IMG_1,
-                                          caption="🌠 Рояль пасс\n\n⚠️ Данный пасс у вас ещё не приобретен.",
+                                          caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\nЛимитированная карта 🃏\n⚠️ Данный пасс у вас ещё не приобретен.",
                                           reply_markup=bld.as_markup())
         return
     data = ROYALE_PASS if is_royale else NORMAL_PASS
@@ -793,7 +793,7 @@ async def buy_rp(cq: CallbackQuery, bot: Bot):
     await bot.send_invoice(cq.from_user.id, title="🌠 Рояль Пасс",
                            description="Доступ к эксклюзивным наградам на этот месяц",
                            payload="rp_buy", provider_token="", currency="XTR",
-                           prices=[LabeledPrice(label="Stars", amount=50)])
+                           prices=[LabeledPrice(label="Stars", amount=99)])
     await cq.answer()
 
 
