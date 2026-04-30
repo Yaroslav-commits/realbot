@@ -21,7 +21,7 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         NORMAL_PASS, ROYALE_PASS)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
-                         pull_random_card, give_card_to_user)
+                         pull_random_card, give_card_to_user, grant_retroactive_royale_pass)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 
@@ -455,8 +455,9 @@ async def universal_success_payment(msg: types.Message):
         db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (dia, msg.from_user.id))
         await msg.answer(f"✅ Оплата принята! На баланс зачислено {dia} 💎")
     elif payload == "rp_buy":
-        db_exec("UPDATE users SET royale_pass = 1 WHERE id = ?", (msg.from_user.id,))
-        await msg.answer("✅ Вы успешно приобрели Рояль Пасс!")
+        uid = msg.from_user.id
+        summary = grant_retroactive_royale_pass(uid)
+        await msg.answer(f"✅ Вы успешно приобрели Рояль Пасс на этот месяц!{summary}")
     else:
         await msg.answer("✅ Оплата принята!")
 
@@ -524,7 +525,8 @@ async def show_pass(cq: CallbackQuery):
 async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, now: datetime, days_in_month: int):
     uid = u[0]
     is_royale = (p_type == "royale")
-    if is_royale and u[16] == 0:
+    current_ym = int(now.strftime("%Y%m"))
+    if is_royale and u[16] != current_ym:
         bld = InlineKeyboardBuilder()
         bld.button(text="Купить ⭐️", callback_data="buy_royale_pass")
         bld.button(text="Назад 🔙", callback_data="pass_back")

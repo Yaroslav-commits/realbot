@@ -21,7 +21,7 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         NORMAL_PASS, ROYALE_PASS)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
-                         pull_random_card, give_card_to_user, try_use_promo)
+                         pull_random_card, give_card_to_user, try_use_promo, grant_retroactive_royale_pass)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 
@@ -30,7 +30,15 @@ from handlers import (router, TradeState, SettingsState, PromoState,
 @router.message(Command("start"))
 async def start_cmd(msg: types.Message):
     add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name)
-    await msg.answer("Добро пожаловать в Lookism Card! \nКанал бота: https://t.me/bradkofflood\nНаш чат:https://t.me/+as-Ypv7Kfjg3YTMy\n\nВыбирай действие и начни игру:", reply_markup=kb_main())
+    await msg.answer(
+        "🎴 Добро пожаловать в *ManhwCard*! 🎴\n\n"
+        "Здесь ты сможешь собирать карты любимых персонажей, сражаться с другими игроками и обмениваться редкими картами 💥\n\n"
+        "📢 [Канал](https://t.me/manhwcard)\n"
+        "💬 [Чат](https://t.me/manhwcardchat)\n\n"
+        "Выбирай действие ниже и начинай своё приключение 👇",
+        reply_markup=kb_main(),
+        parse_mode="Markdown"
+    )
 
 
 
@@ -308,9 +316,9 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         if len(args) < 2:
             return await msg.answer("Использование: /give_pass [ID пользователя]")
         uid = int(args[1])
-        db_exec("UPDATE users SET royale_pass = 1 WHERE id = ?", (uid,))
+        summary = grant_retroactive_royale_pass(uid)
         try:
-            await bot.send_message(uid, "🌠 Получен Рояль Пасс от администратора ✅")
+            await bot.send_message(uid, f"🌠 Получен Рояль Пасс на этот месяц от администратора ✅{summary}")
         except Exception:
             pass
         return await msg.answer(f"✅ Рояль Пасс выдан пользователю {uid}!")
@@ -433,8 +441,8 @@ async def use_promo(msg: types.Message):
         db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (int(p[1]), uid))
         await msg.answer(f"✅ Промокод активирован! Вы получаете {p[1]}💎 Алмазов")
     elif p[0] == 'pass':
-        db_exec("UPDATE users SET royale_pass = 1 WHERE id = ?", (uid,))
-        await msg.answer("✅ Промокод активирован! Вы получаете Рояль Пасс 🌠")
+        summary = grant_retroactive_royale_pass(uid)
+        await msg.answer(f"✅ Промокод активирован! Вы получаете Рояль Пасс на этот месяц 🌠{summary}")
     elif p[0] == 'card':
         c = CARDS.get(p[1])
         if not c:

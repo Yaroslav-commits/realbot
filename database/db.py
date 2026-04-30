@@ -1,10 +1,10 @@
 import os
 import sqlite3
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from config import DB_PATH
-from data.cards import CARDS, RARITIES
+from data.cards import CARDS, RARITIES, ROYALE_PASS
 
 # ================== ФУНКЦИИ БД ==================
 def db_exec(query, params=(), fetch=False, fetchall=False):
@@ -109,3 +109,62 @@ def try_use_promo(uid, code):
         return True
     except sqlite3.IntegrityError:
         return False
+
+
+def grant_retroactive_royale_pass(uid):
+    """
+    Выдает Рояль Пасс на текущий месяц (формат YYYYMM).
+    Начисляет награды за те дни, которые уже пройдены в обычном пассе.
+    Возвращает строку с описанием выданных наград (или пустую строку).
+    """
+    now = datetime.now(timezone(timedelta(hours=3)))
+    current_ym = int(now.strftime("%Y%m"))
+
+    db_exec("UPDATE users SET royale_pass = ? WHERE id = ?", (current_ym, uid))
+
+    claims = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = 'normal'", 
+                     (uid, now.month), fetchall=True)
+    claimed_normal = [d[0] for d in claims] if claims else []
+
+    claims_rp = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = 'royale'", 
+                        (uid, now.month), fetchall=True)
+    claimed_rp = [d[0] for d in claims_rp] if claims_rp else []
+
+    days_to_grant = [d for d in claimed_normal if d not in claimed_rp]
+
+    if not days_to_grant:
+        return ""
+
+    rewards_summary = {'krw': 0, 'atm': 0, 'bc': 0, 'dia': 0, 'packs': 0}
+    for d in days_to_grant:
+        r_type, r_val = ROYALE_PASS.get(d, ('krw', 10))
+        if r_type == 'krw':
+            db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (r_val, uid))
+            rewards_summary['krw'] += r_val
+        elif r_type == 'atm':
+            db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (r_val, uid))
+            rewards_summary['atm'] += r_val
+        elif r_type == 'bc':
+            db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (r_val, uid))
+            rewards_summary['bc'] += r_val
+        elif r_type == 'dia':
+            db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (r_val, uid))
+            rewards_summary['dia'] += r_val
+        elif r_type == 'pack':
+            card_key = pull_random_card(force_rarity="Легендарная 🔵" if r_val == "leg" else "Эпическая 🟢")
+            if not card_key: card_key = pull_random_card()
+            give_card_to_user(uid, card_key)
+            rewards_summary['packs'] += 1
+
+        db_exec("INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, 'royale')", 
+                (uid, now.month, d))
+
+    lines = []
+    if rewards_summary['krw']: lines.append(f"• {rewards_summary['krw']} 💴")
+    if rewards_summary['atm']: lines.append(f"• {rewards_summary['atm']} 💳")
+    if rewards_summary['bc']: lines.append(f"• {rewards_summary['bc']} 🪙")
+    if rewards_summary['dia']: lines.append(f"• {rewards_summary['dia']} 💎")
+    if rewards_summary['packs']: lines.append(f"• {rewards_summary['packs']} 🗃️ Паков (карты добавлены в инвентарь)")
+
+    return "\n\n🎁 Автоматически начислены награды за " + str(len(days_to_grant)) + " дн. (из обычного пасса):\n" + "\n".join(lines)
+
