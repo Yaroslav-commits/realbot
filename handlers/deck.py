@@ -174,6 +174,23 @@ async def inv_collection_cb(cq: CallbackQuery):
 
         lines.append(f"{disp_name}: {o_t}/{t_r} ({pct}%)")
 
+    # ---- Вселенные ----
+    lines.append("\n🪐 Собранные вселленные:")
+
+    series_map = {}
+    for cid, c in CARDS.items():
+        s = c.get('series', 'Неизвестно')
+        if s not in series_map:
+            series_map[s] = {'total': 0, 'owned': 0}
+        series_map[s]['total'] += 1
+        if cid in user_owned:
+            series_map[s]['owned'] += 1
+
+    sorted_series = sorted(series_map.items(), key=lambda x: x[1]['total'])
+
+    for s_name, s_data in sorted_series:
+        lines.append(f"{s_name}: {s_data['owned']}/{s_data['total']}")
+
     txt = "\n".join(lines)
 
     bld = InlineKeyboardBuilder()
@@ -475,4 +492,3 @@ async def trade_decline(cq: CallbackQuery):
 @router.callback_query(F.data == "ignore")
 async def ignore_cb(cq: CallbackQuery):
     await cq.answer()
-

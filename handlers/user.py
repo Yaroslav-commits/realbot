@@ -21,7 +21,9 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         NORMAL_PASS, ROYALE_PASS)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
-                         pull_random_card, give_card_to_user, try_use_promo, grant_retroactive_royale_pass)
+                         pull_random_card, give_card_to_user, try_use_promo, grant_retroactive_royale_pass,
+                         get_user_by_ref_code, get_referral_count, get_users_for_cooldown_notify,
+                         mark_cooldown_notified, reset_cooldown_notified, toggle_notifications)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 
@@ -29,7 +31,16 @@ from handlers import (router, TradeState, SettingsState, PromoState,
 # ================== HANDLERS ==================
 @router.message(Command("start"))
 async def start_cmd(msg: types.Message):
-    add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name)
+    # Парсим реферальный параметр (глубокая ссылка: /start ref_XXXX)
+    args = msg.text.split()
+    referred_by = None
+    if len(args) > 1 and args[1].startswith('ref_'):
+        ref_code = args[1][4:]  # убираем префикс 'ref_'
+        referrer = get_user_by_ref_code(ref_code)
+        if referrer:
+            referred_by = referrer[0]  # ID пригласившего
+
+    add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name, referred_by)
     await msg.answer(
         "🎴 Добро пожаловать в *ManhwCard*! 🎴\n\n"
         "Здесь ты сможешь собирать карты любимых персонажей, сражаться с другими игроками и обмениваться редкими картами 💥\n\n"
@@ -109,9 +120,16 @@ async def get_card_cmd(msg: types.Message):
 
     # Списываем попытку ТОЛЬКО после успешной отправки
     if attempts > 0:
-        db_exec("UPDATE users SET attempts = attempts - 1 WHERE id = ?", (uid,))
+        new_attempts = attempts - 1
+        db_exec("UPDATE users SET attempts = ? WHERE id = ?", (new_attempts, uid))
+        if new_attempts == 0:
+            # Последняя попытка использована — запускаем кулдаун и сбрасываем флаг уведомления
+            db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
+                    (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
     else:
-        db_exec("UPDATE users SET last_get = ? WHERE id = ?", (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
+        # Попыток 0 — кулдаун уже идёт, обновляем last_get и сбрасываем флаг
+        db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
+                (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
 
 
 # ============ ПРОФИЛЬ ============
@@ -166,12 +184,35 @@ async def profile(msg: types.Message):
                          reply_markup=bld.as_markup(), parse_mode="HTML")
 
 
+# ============ НАСТРОЙКИ ============
 @router.callback_query(F.data == "settings")
 async def settings_cq(cq: CallbackQuery):
     u = get_user(cq.from_user.id)
-    await cq.message.answer(
-        f"⚙️ Настройки\nДата регистрации: {u[15]}\nДля смены ника отправьте команду /nick [новый ник]"
+    if not u:
+        await cq.answer("Пользователь не найден", show_alert=True)
+        return
+
+    notif_on = bool(u[17])  # notifications (индекс 17)
+    notif_emoji = "✅" if notif_on else "☑️"
+    notif_text = "Включить уведомления" if notif_on else "Выключить уведомления"
+
+    txt = (
+        f"⚙️ Настройки\n"
+        f"Дата регистрации: {u[15]}\n"
+        f"Для смены ника отправьте команду /nick [новый ник]\n"
+        f"{notif_text} > {notif_emoji}"
     )
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="👥 Реферальная система", callback_data="referral_system")
+    bld.button(text=f"Вкл/выкл уведомления {notif_emoji}", callback_data="toggle_notifications")
+    bld.adjust(1)
+
+    try:
+        await cq.message.edit_text(txt, reply_markup=bld.as_markup())
+    except Exception:
+        await cq.message.answer(txt, reply_markup=bld.as_markup())
+
     await cq.answer()
 
 
@@ -182,6 +223,65 @@ async def change_nick(msg: types.Message):
         return await msg.answer("Использование: /nick НовыйНик")
     db_exec("UPDATE users SET nickname = ? WHERE id = ?", (new_nick, msg.from_user.id))
     await msg.answer(f"✅ Ник изменен на {new_nick}")
+
+
+# ============ РЕФЕРАЛЬНАЯ СИСТЕМА ============
+@router.callback_query(F.data == "referral_system")
+async def referral_system_cq(cq: CallbackQuery):
+    u = get_user(cq.from_user.id)
+    if not u:
+        await cq.answer("Пользователь не найден", show_alert=True)
+        return
+
+    ref_count = get_referral_count(cq.from_user.id)
+    ref_code = u[18]  # referral_code (индекс 18)
+    ref_link = f"https://t.me/ManhwCardBot?start=ref_{ref_code}"
+
+    txt = (
+        f"👥 Всего приглашенных: {ref_count}\n\n"
+        f"Приглашай друзей и получай вознаграждение от 500💴 до 1000💴 и 5💳 попыток за каждого реферала\n\n"
+        f"⛓️‍💥 Твоя уникальная реферальная ссылка: {ref_link}"
+    )
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="🔙 Назад", callback_data="settings")
+
+    await cq.message.edit_text(txt, reply_markup=bld.as_markup())
+    await cq.answer()
+
+
+# ============ ПЕРЕКЛЮЧЕНИЕ УВЕДОМЛЕНИЙ ============
+@router.callback_query(F.data == "toggle_notifications")
+async def toggle_notifications_cq(cq: CallbackQuery):
+    new_state = toggle_notifications(cq.from_user.id)
+
+    # Обновляем данные пользователя
+    u = get_user(cq.from_user.id)
+    if not u:
+        await cq.answer("Пользователь не найден", show_alert=True)
+        return
+
+    notif_emoji = "✅" if new_state else "☑️"
+    notif_text = "Включить уведомления" if new_state else "Выключить уведомления"
+
+    txt = (
+        f"⚙️ Настройки\n"
+        f"Дата регистрации: {u[15]}\n"
+        f"Для смены ника отправьте команду /nick [новый ник]\n"
+        f"{notif_text} > {notif_emoji}"
+    )
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="👥 Реферальная система", callback_data="referral_system")
+    bld.button(text=f"Вкл/выкл уведомления {notif_emoji}", callback_data="toggle_notifications")
+    bld.adjust(1)
+
+    try:
+        await cq.message.edit_text(txt, reply_markup=bld.as_markup())
+    except Exception:
+        pass
+
+    await cq.answer(f"Уведомления {'включены' if new_state else 'выключены'}")
 
 
 @router.callback_query(F.data.in_(["my_bgs", "my_titles"]))
@@ -461,3 +561,24 @@ async def use_promo(msg: types.Message):
             await msg.answer_photo(photo=c['file_id'], caption=txt)
         except Exception:
             await msg.answer(txt)
+
+
+# ================== ПЛАНИРОВЩИК УВЕДОМЛЕНИЙ О КУЛДАУНЕ ==================
+async def cooldown_notification_scheduler(bot: Bot):
+    """Фоновый task: проверяет истёкшие кулдауны и шлёт уведомления в ЛС."""
+    while True:
+        try:
+            users = get_users_for_cooldown_notify(GET_COOLDOWN_HOURS * 3600)
+            for (uid,) in users:
+                try:
+                    await bot.send_message(
+                        uid,
+                        "🎴 Крутка восстановлена! Ты можешь получить новую карту.\n"
+                        "Используй кнопку «Получить карту» в главном меню."
+                    )
+                    mark_cooldown_notified(uid)
+                except Exception:
+                    pass  # Пользователь мог заблокировать бота
+        except Exception as e:
+            logging.error(f"Cooldown scheduler error: {e}")
+        await asyncio.sleep(60)  # Проверка раз в минуту

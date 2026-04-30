@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import random
+import string
 from datetime import datetime, timedelta, timezone
 
 from config import DB_PATH
@@ -24,7 +25,8 @@ def init_db():
         diamond INTEGER DEFAULT 0, krw INTEGER DEFAULT 0, battlecoin INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0,
         rank_points INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, draws INTEGER DEFAULT 0, losses INTEGER DEFAULT 0,
         last_get TEXT DEFAULT '2000-01-01 00:00:00', last_battle TEXT DEFAULT '2000-01-01 00:00:00',
-        active_bg TEXT DEFAULT 'default', active_title TEXT, join_date TEXT, royale_pass INTEGER DEFAULT 0
+        active_bg TEXT DEFAULT 'default', active_title TEXT, join_date TEXT, royale_pass INTEGER DEFAULT 0,
+        notifications INTEGER DEFAULT 1, referral_code TEXT, referred_by INTEGER, cooldown_notified INTEGER DEFAULT 1
     )''')
     db_exec("CREATE TABLE IF NOT EXISTS cards_inv (user_id INTEGER, card_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS decks (user_id INTEGER, card_id TEXT, slot_index INTEGER)")
@@ -38,15 +40,104 @@ def init_db():
         used_at TEXT DEFAULT (datetime('now')),
         UNIQUE(user_id, promo_code)
     )''')
+    db_exec('''CREATE TABLE IF NOT EXISTS referrals (
+        referrer_id INTEGER,
+        referred_id INTEGER PRIMARY KEY,
+        rewarded INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+    )''')
+
+    # Миграция: добавляем новые колонки, если их ещё нет (для существующих БД)
+    for col, col_def in [
+        ('notifications', 'INTEGER DEFAULT 1'),
+        ('referral_code', 'TEXT'),
+        ('referred_by', 'INTEGER'),
+        ('cooldown_notified', 'INTEGER DEFAULT 1'),
+    ]:
+        try:
+            db_exec(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass  # колонка уже существует
+
+    # Генерируем реферальные коды для существующих пользователей, у которых их нет
+    users_no_code = db_exec("SELECT id FROM users WHERE referral_code IS NULL", fetchall=True)
+    if users_no_code:
+        for (uid,) in users_no_code:
+            code = generate_unique_ref_code()
+            db_exec("UPDATE users SET referral_code = ? WHERE id = ?", (code, uid))
 
 def get_user(uid):
     return db_exec("SELECT * FROM users WHERE id = ?", (uid,), fetch=True)
 
-def add_user(uid, uname, fname):
+def add_user(uid, uname, fname, referred_by=None):
     if not get_user(uid):
-        db_exec("INSERT INTO users (id, username, nickname, join_date, active_bg) VALUES (?, ?, ?, ?, 'default')",
-                (uid, uname, fname, datetime.now().strftime("%Y-%m-%d")))
+        ref_code = generate_unique_ref_code()
+        db_exec("INSERT INTO users (id, username, nickname, join_date, active_bg, referral_code, referred_by) VALUES (?, ?, ?, ?, 'default', ?, ?)",
+                (uid, uname, fname, datetime.now().strftime("%Y-%m-%d"), ref_code, referred_by))
         db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, 'default'))
+
+        # Обрабатываем реферала, если есть
+        if referred_by and referred_by != uid:
+            process_referral(referred_by, uid)
+
+# ================== РЕФЕРАЛЬНАЯ СИСТЕМА ==================
+def generate_unique_ref_code():
+    """Генерирует уникальный 8-символьный реферальный код."""
+    while True:
+        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        if not db_exec("SELECT 1 FROM users WHERE referral_code = ?", (code,), fetch=True):
+            return code
+
+def get_user_by_ref_code(code):
+    """Находит пользователя по реферальному коду."""
+    return db_exec("SELECT * FROM users WHERE referral_code = ?", (code,), fetch=True)
+
+def get_referral_count(uid):
+    """Возвращает количество приглашённых пользователем."""
+    result = db_exec("SELECT COUNT(*) FROM referrals WHERE referrer_id = ?", (uid,), fetch=True)
+    return result[0] if result else 0
+
+def process_referral(referrer_id, referred_id):
+    """Записывает реферала и выдаёт награду пригласившему."""
+    existing = db_exec("SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,), fetch=True)
+    if existing:
+        return  # уже был приглашён кем-то
+
+    try:
+        db_exec("INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)", (referrer_id, referred_id))
+        krw_reward = random.randint(500, 1000)
+        db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referrer_id))
+    except sqlite3.IntegrityError:
+        pass
+
+# ================== УВЕДОМЛЕНИЯ ==================
+def get_users_for_cooldown_notify(cooldown_seconds):
+    """Возвращает пользователей, у которых истёк кулдаун и ещё не было уведомления."""
+    threshold = (datetime.now() - timedelta(seconds=cooldown_seconds)).strftime("%Y-%m-%d %H:%M:%S")
+    return db_exec("""
+        SELECT id FROM users
+        WHERE attempts = 0
+        AND notifications = 1
+        AND cooldown_notified = 0
+        AND last_get <= ?
+    """, (threshold,), fetchall=True)
+
+def mark_cooldown_notified(uid):
+    """Отмечает, что уведомление о кулдауне отправлено."""
+    db_exec("UPDATE users SET cooldown_notified = 1 WHERE id = ?", (uid,))
+
+def reset_cooldown_notified(uid):
+    """Сбрасывает флаг уведомления (при старте нового кулдауна)."""
+    db_exec("UPDATE users SET cooldown_notified = 0 WHERE id = ?", (uid,))
+
+def toggle_notifications(uid):
+    """Переключает уведомления и возвращает новое состояние (True = вкл)."""
+    current = db_exec("SELECT notifications FROM users WHERE id = ?", (uid,), fetch=True)
+    if current:
+        new_val = 0 if current[0] else 1
+        db_exec("UPDATE users SET notifications = ? WHERE id = ?", (new_val, uid))
+        return bool(new_val)
+    return True
 
 # ================== ЛОГИКА ==================
 def get_rank(pts):
@@ -167,4 +258,3 @@ def grant_retroactive_royale_pass(uid):
     if rewards_summary['packs']: lines.append(f"• {rewards_summary['packs']} 🗃️ Паков (карты добавлены в инвентарь)")
 
     return "\n\n🎁 Автоматически начислены награды за " + str(len(days_to_grant)) + " дн. (из обычного пасса):\n" + "\n".join(lines)
-

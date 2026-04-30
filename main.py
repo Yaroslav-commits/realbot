@@ -14,6 +14,7 @@ from handlers import user as _user        # noqa: F401
 from handlers import deck as _deck        # noqa: F401
 from handlers import battle as _battle    # noqa: F401
 from handlers.pass_shop import shop as _shop  # noqa: F401
+from handlers.user import cooldown_notification_scheduler
 
 
 async def main():
@@ -24,6 +25,9 @@ async def main():
 
     # Удаляем зависшие вебхуки и старые апдейты
     await bot.delete_webhook(drop_pending_updates=True)
+
+    # Запускаем фоновый планировщик уведомлений
+    asyncio.create_task(cooldown_notification_scheduler(bot))
 
     print("Бот успешно запущен!")
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
