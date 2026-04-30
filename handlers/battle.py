@@ -26,13 +26,6 @@ from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 
 
-async def notify_cooldown(bot: Bot, uid: int, delay: int, text: str):
-    await asyncio.sleep(delay)
-    try:
-        await bot.send_message(uid, text)
-    except Exception:
-        pass
-
 # ============ БОЕВКА ============
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
@@ -288,6 +281,8 @@ async def bdeck_select(cq: CallbackQuery):
     await cq.answer()
     await cq.message.delete()
     await show_deck_builder(cq.message, cq.from_user.id, slot + 1)
+
+
 @router.callback_query(F.data == "find_match")
 async def find_match(cq: CallbackQuery):
     uid = cq.from_user.id
@@ -336,43 +331,91 @@ async def wait_match(uid, bot, msg_to_edit):
         except: pass
         await start_battle(uid, -1, bot)
 
-# ===== финальны показатель =====
+
 async def start_battle(p1, p2, bot: Bot, friendly=False):
     gid = f"g_{random.randint(10000, 99999)}"
+
     deck1 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p1,), fetchall=True)]
-    deck2 = [c[0] for c in
-             db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p2,), fetchall=True)] if p2 != -1 else [
-        pull_random_card() for _ in range(5)]
-
     u1 = get_user(p1)
-    u2 = None if p2 == -1 else get_user(p2)
 
-    # Проверка на Premium
-    p1_prem = len(u1) > 17 and u1[17] and u1[17] > datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    p2_prem = u2 and len(u2) > 17 and u2[17] and u2[17] > datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    name2 = "Неизвестный противник (Бот)" if p2 == -1 else f"<a href='tg://user?id={p2}'>{u2[2]}</a>"
-    rank2 = "Новичок 💩" if p2 == -1 else get_rank(u2[7])
+    # --- ФИКС 1: u2 и name2/rank2 объявляются ДО любого использования ---
+    if p2 == -1:
+        all_card_keys = list(CARDS.keys())
+        # --- ФИКС 2: random.sample вместо random.choices — без повторов в колоде бота ---
+        deck2 = random.sample(all_card_keys, min(6, len(all_card_keys)))
+        u2 = None
+        name2 = random.choice(["Важни Гий", "Ли Джи Ху..", "Йена пик форма", "Злодей Васко",
+                               "Великий Мага", "Босс Табаско", "Срасул", "Брад",
+                               "Клон Хикса", "Король Бибизян"])
+        rank2 = "Бот"
+    else:
+        deck2 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p2,), fetchall=True)]
+        u2 = get_user(p2)
+        name2 = f"<a href='tg://user?id={p2}'>{u2[2]}</a>"
+        rank2 = get_rank(u2[7])
 
     GAMES[gid] = {
-        'p1': p1, 'p2': p2, 'd1': deck1, 'd2': deck2,
-        'score1': 0, 'score2': 0, 'round': 1,
-        'p1_c': None, 'p2_c': None, 'p1_s': None, 'p2_s': None,
-        'friendly': friendly, 'n2': "Неизвестный противник (Бот)" if p2 == -1 else u2[2]
+        'p1': p1, 'p2': p2,
+        'd1': deck1.copy(), 'd2': deck2.copy(),
+        'n2': name2, 'r2': rank2,
+        'p1_c': None, 'p2_c': None,
+        'p1_s': None, 'p2_s': None,
+        'score1': 0, 'score2': 0,
+        'round': 1,
+        'friendly': friendly,
+        'resolving': False
     }
 
     if not friendly:
-        db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
-                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
+        if p2 == -1:
+            db_exec("UPDATE users SET last_battle = ? WHERE id = ?",
+                    (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1))
+        else:
+            db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
+                    (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
 
-    p1_pts = '0 очков' if friendly else ('4 очка' if p1_prem else '3 очка')
-    p1_bc = ('6' if p1_prem else '3') if not friendly else ('6' if p1_prem else '3')
-    txt1 = f"Противник найден!\n\n· Имя: {name2} {'👑' if p2_prem else '🧩'}\n· Ранг: {rank2}\n· Награда за победу: {p1_pts}🏅, {p1_bc} BattleCoin 🪙\n\nБитва начинается!"
+    # --- ФИКС 3: отправка уведомления p1 — больше не обращаемся к u2 в ветке p2==-1 ---
+    txt1 = (f"Противник найден!\n\n"
+            f"· Имя: {name2} 🧩\n"
+            f"· Ранг: {rank2}\n"
+            f"· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\n"
+            f"Битва начинается!")
 
+    if p2 != -1 and u2 is not None:
+        bg_key2 = u2[13] or 'default'
+        bg_data2 = BGS.get(bg_key2, BGS['default'])
+        bg_file2 = bg_data2.get('file_id')
+        try:
+            if bg_key2 in VIDEO_BGS:
+                await bot.send_video(p1, video=bg_file2, caption=txt1, parse_mode="HTML")
+            else:
+                await bot.send_photo(p1, photo=bg_file2, caption=txt1, parse_mode="HTML")
+        except:
+            await bot.send_message(p1, txt1, parse_mode="HTML")
+    else:
+        await bot.send_message(p1, txt1, parse_mode="HTML")
+
+    if p2 != -1 and u2 is not None:
+        txt2 = (f"Противник найден!\n\n"
+                f"· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n"
+                f"· Ранг: {get_rank(u1[7])}\n"
+                f"· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\n"
+                f"Битва начинается!")
+        bg_key1 = u1[13] or 'default'
+        bg_data1 = BGS.get(bg_key1, BGS['default'])
+        bg_file1 = bg_data1.get('file_id')
+        try:
+            if bg_key1 in VIDEO_BGS:
+                await bot.send_video(p2, video=bg_file1, caption=txt2, parse_mode="HTML")
+            else:
+                await bot.send_photo(p2, photo=bg_file1, caption=txt2, parse_mode="HTML")
+        except:
+            await bot.send_message(p2, txt2, parse_mode="HTML")
+
+    await asyncio.sleep(1)
+    await send_card_choice(p1, GAMES[gid]['d1'], gid, bot)
     if p2 != -1:
-        p2_pts = '0 очков' if friendly else ('4 очка' if p2_prem else '3 очка')
-        p2_bc = ('6' if p2_prem else '3') if not friendly else ('6' if p2_prem else '3')
-        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> {'👑' if p1_prem else '🧩'}\n· Ранг: {get_rank(u1[7])}\n· Награда за победу: {p2_pts}🏅, {p2_bc} BattleCoin 🪙\n\nБитва начинается!"
+        await send_card_choice(p2, GAMES[gid]['d2'], gid, bot)
 
 
 async def auto_card_choice(gid, uid, round_num, msg_id, bot):
@@ -470,6 +513,7 @@ async def process_style_choice(gid, uid, style, bot):
             g['p2_wait_msg'] = msg.message_id
     except:
         pass
+
     if g['p1_s'] and g['p2_s']:
         g['resolving'] = True
         try:
@@ -482,7 +526,6 @@ async def process_style_choice(gid, uid, style, bot):
             await resolve_round(gid, bot)
         except Exception as e:
             logging.error(f"Critical error in resolve_round: {e}")
-            # Fallback - если произошел сбой, просто переводим игру в следующий раунд, чтобы не зависла
             if gid in GAMES:
                 GAMES[gid]['round'] += 1
                 GAMES[gid]['p1_c'] = GAMES[gid]['p2_c'] = GAMES[gid]['p1_s'] = GAMES[gid]['p2_s'] = None
@@ -509,13 +552,11 @@ async def send_card_choice(uid, deck_left, gid, bot):
     g = GAMES.get(gid)
     if not g: return
 
-    # Сортируем карты по редкости для отображения от сильнейшей
     c_objs = [(cid, CARDS[cid]) for cid in set(deck_left)]
     rarity_order = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2,
                     "Обычная ⚪️": 1}
     c_objs.sort(key=lambda x: rarity_order.get(x[1]['rarity'], 0), reverse=True)
 
-    # Формируем медиагруппу (сверху изображения карт)
     media = []
     for i, (cid, c) in enumerate(c_objs):
         txt_card = f"{i + 1}. {c['name']} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
@@ -526,7 +567,6 @@ async def send_card_choice(uid, deck_left, gid, bot):
     except Exception as e:
         logging.error(f"Failed to send visual deck to {uid}: {e}")
 
-    # Кнопки выбора (снизу, в порядке силы)
     bld = InlineKeyboardBuilder()
     for cid, c in c_objs:
         bld.button(text=c['name'], callback_data=f"b_card:{gid}:{cid}")
@@ -613,7 +653,7 @@ async def resolve_round(gid, bot):
 
     def format_text(p_name, e_name, score_p, score_e, p_s, e_s, p_val, e_val, p_final, e_final, b_txt):
         t = (f"⬆️ Ваша карта | Карта врага ⬆️\nРаунд - {g['round']}\n\n"
-             f"Счет:\n{p_name} 🧩 - {score_p}\n{e_name} 🧩 - {score_e}\n\n"
+             f"Счет:\n{p_name} (я)🧩 - {score_p}\n{e_name} (противник)🧩 - {score_e}\n\n"
              f"⚔️ Вы совершаете {s_map[p_s][1]} атаку\nУровень атаки: {p_val}\n\n"
              f"🛡️ Противник ставит {s_map[e_s][1]} защиту\nУровень защиты: {e_val}\n\n")
         if adv != 0: t += f"Бонус\n{b_txt}\n\n"
@@ -666,28 +706,16 @@ async def finish_game(gid, bot):
 
     def apply_res(uid, is_win, is_draw, friendly):
         if uid == -1: return 0, 0
-        u = get_user(uid)
-        is_premium = len(u) > 17 and u[17] and u[17] > datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
         if friendly:
             pts = 0
-            bc = (3 if is_win else 1) + (3 if is_premium else 0)
+            bc = 3 if is_win else 1
         else:
-            if is_draw:
-                pts = 2 if is_premium else 1
-                bc = 4 if is_premium else 1
-            else:
-                pts = (4 if is_premium else 3) if is_win else -2
-                bc = (6 if is_premium else 3) if is_win else (4 if is_premium else 1)
+            pts = 3 if is_win else (1 if is_draw else -2)
+            bc = 3 if is_win else 1
+
         db_exec(f"UPDATE users SET rank_points = MAX(0, rank_points + {pts}), battlecoin = battlecoin + {bc}, " +
                 ("wins = wins + 1" if is_win else ("draws = draws + 1" if is_draw else "losses = losses + 1")) +
                 " WHERE id = ?", (uid,))
-
-        # Запускаем уведомление о том, что игрок снова может сражаться
-        delay = (30 * 60) if is_premium else (BATTLE_COOLDOWN_HOURS * 3600)
-        asyncio.create_task(
-            notify_cooldown(bot, uid, delay, "🔔 ⚔️ Поле Битвы: ваш кулдаун сброшен, вы можете снова сражаться!"))
-
         return pts, bc
 
     draw = (s1 == s2)

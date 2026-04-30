@@ -4,7 +4,7 @@ import random
 from datetime import datetime, timedelta
 
 from config import DB_PATH
-from data.cards import CARDS, RARITIES
+from data.cards import CARDS, RARITIES, PREMIUM_RARITIES
 
 # ================== ФУНКЦИИ БД ==================
 def db_exec(query, params=(), fetch=False, fetchall=False):
@@ -42,13 +42,17 @@ def init_db():
 def pull_random_card(force_rarity=None, uid=None):
     """Возвращает ключ случайной карты или None, если пул пуст."""
     try:
-        from data.cards import PREMIUM_RARITIES, RARITIES
         rates = RARITIES
         # Если передан ID игрока, проверяем, есть ли у него Премиум
         if uid:
             u = get_user(uid)
-            if u and len(u) > 17 and u[17] and u[17] > datetime.now().strftime("%Y-%m-%d %H:%M:%S"):
-                rates = PREMIUM_RARITIES
+            if u and len(u) > 17 and u[17]:
+                try:
+                    prem_until = datetime.strptime(u[17], "%Y-%m-%d %H:%M:%S")
+                    if prem_until > datetime.now():
+                        rates = PREMIUM_RARITIES
+                except (ValueError, TypeError):
+                    pass  # кривая дата — используем обычные редкости
 
         if force_rarity:
             pool = [k for k, v in CARDS.items() if v.get('rarity') == force_rarity and not v.get('exclusive')]
@@ -62,6 +66,7 @@ def pull_random_card(force_rarity=None, uid=None):
                     rolled_r = r
                     break
             pool = [k for k, v in CARDS.items() if v.get('rarity') == rolled_r and not v.get('exclusive')]
+            # Если в выпавшей редкости нет не-exclusive карт — fallback на все не-exclusive
             if not pool:
                 pool = [k for k, v in CARDS.items() if not v.get('exclusive')]
         return random.choice(pool) if pool else None
