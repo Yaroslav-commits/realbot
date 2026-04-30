@@ -32,6 +32,12 @@ def init_db():
     db_exec("CREATE TABLE IF NOT EXISTS titles_inv (user_id INTEGER, title_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS pass_claims (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS promos (code TEXT PRIMARY KEY, p_type TEXT, val TEXT, uses INTEGER)")
+    db_exec('''CREATE TABLE IF NOT EXISTS promo_uses (
+        user_id INTEGER,
+        promo_code TEXT,
+        used_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(user_id, promo_code)
+    )''')
 
 def get_user(uid):
     return db_exec("SELECT * FROM users WHERE id = ?", (uid,), fetch=True)
@@ -49,6 +55,7 @@ def get_rank(pts):
     for p, n in ranks:
         if pts >= p:
             return n
+
 def pull_random_card(force_rarity=None):
     """Возвращает ключ случайной карты или None, если пул пуст."""
     try:
@@ -92,3 +99,13 @@ def give_card_to_user(uid, card_key):
             return True, 0, c
     except Exception:
         return False, 0, None
+
+def try_use_promo(uid, code):
+    """Пытается записать использование промокода пользователем.
+    Возвращает True, если промокод ещё не был использован этим пользователем.
+    Возвращает False, если пользователь уже активировал этот промокод."""
+    try:
+        db_exec("INSERT INTO promo_uses (user_id, promo_code) VALUES (?, ?)", (uid, code))
+        return True
+    except sqlite3.IntegrityError:
+        return False

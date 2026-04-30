@@ -21,7 +21,7 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         NORMAL_PASS, ROYALE_PASS)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
-                         pull_random_card, give_card_to_user)
+                         pull_random_card, give_card_to_user, try_use_promo)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 
@@ -408,32 +408,39 @@ async def use_promo(msg: types.Message):
     if len(args) < 2:
         return await msg.answer("Введи промокод: /promo КОД")
     code = args[1]
-
-    p = db_exec("SELECT p_type, val, uses FROM promos WHERE code = ?", (code,), fetch=True)
-    if not p or p[2] <= 0:
-        return await msg.answer("Промокод недействителен.")
-
-    db_exec("UPDATE promos SET uses = uses - 1 WHERE code = ?", (code,))
     uid = msg.from_user.id
 
+    # 1. Проверяем, существует ли промокод и остались ли использования
+    p = db_exec("SELECT p_type, val, uses FROM promos WHERE code = ?", (code,), fetch=True)
+    if not p or p[2] <= 0:
+        return await msg.answer("❌ Промокод недействителен.")
+
+    # 2. Проверяем, не использовал ли уже этот пользователь данный промокод
+    if not try_use_promo(uid, code):
+        return await msg.answer("❌ Вы уже использовали этот промокод!")
+
+    # 3. Уменьшаем счётчик использований
+    db_exec("UPDATE promos SET uses = uses - 1 WHERE code = ?", (code,))
+
+    # 4. Выдаём награду
     if p[0] == 'krw':
         db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (int(p[1]), uid))
-        await msg.answer(f"Промокод успешно активирован, вы получаете {p[1]}💴 KRW")
+        await msg.answer(f"✅ Промокод активирован! Вы получаете {p[1]}💴 KRW")
     elif p[0] == 'atm':
         db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (int(p[1]), uid))
-        await msg.answer(f"Промокод успешно активирован, вы получаете {p[1]} попыток 💳")
+        await msg.answer(f"✅ Промокод активирован! Вы получаете {p[1]} попыток 💳")
     elif p[0] == 'dia':
         db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (int(p[1]), uid))
-        await msg.answer(f"Промокод успешно активирован, вы получаете {p[1]}💎 Алмазов")
+        await msg.answer(f"✅ Промокод активирован! Вы получаете {p[1]}💎 Алмазов")
     elif p[0] == 'pass':
         db_exec("UPDATE users SET royale_pass = 1 WHERE id = ?", (uid,))
-        await msg.answer("Промокод успешно активирован, вы получаете Рояль Пасс 🌠")
+        await msg.answer("✅ Промокод активирован! Вы получаете Рояль Пасс 🌠")
     elif p[0] == 'card':
         c = CARDS.get(p[1])
         if not c:
-            return await msg.answer("Промокод успешно активирован, но карта не найдена!")
+            return await msg.answer("✅ Промокод активирован, но карта не найдена!")
         is_new, krw_earned, card_data = give_card_to_user(uid, p[1])
-        txt = (f"Промокод успешно активирован!\n\n"
+        txt = (f"✅ Промокод активирован!\n\n"
                f"🃏 Получена новая боевая карта!\n\n"
                f"🎴 Персонаж: «{c['name']}»\n"
                f"🔮 Редкость: «{c['rarity']}»\n"
