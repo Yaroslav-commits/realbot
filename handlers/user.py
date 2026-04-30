@@ -30,35 +30,13 @@ from handlers import (router, TradeState, SettingsState, PromoState,
 @router.message(Command("start"))
 async def start_cmd(msg: types.Message):
     add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name)
-    await msg.answer("Добро пожаловать в ManhwCard!\n\nКанал бота: https://t.me/manhwcard\nНаш чат:https://t.me/manhwcardchat\n\nВыбирай действие и начни игру:", reply_markup=kb_main())
+    await msg.answer("Добро пожаловать в Lookism Card! \nКанал бота: https://t.me/bradkofflood\nНаш чат:https://t.me/+as-Ypv7Kfjg3YTMy\n\nВыбирай действие и начни игру:", reply_markup=kb_main())
 
-@router.message(F.video)
-async def get_video_id(msg: types.Message):
-    await msg.answer(f"ID видео:\n<code>{msg.video.file_id}</code>")
 
-@router.message(F.photo)
-async def get_photo_id(msg: types.Message):
-    # Эта функция будет присылать тебе ID любой картинки, которую ты скинешь боту
-    file_id = msg.photo[-1].file_id
-    await msg.answer(f"Вот ID этой картинки:\n<code>{file_id}</code>")
 
 @router.message(F.text == "⛩️ Банды")
 async def gangs(msg: types.Message):
     await msg.answer("В разработке")
-
-
-async def notify_cooldown(bot: Bot, uid: int, delay: int, text: str):
-    await asyncio.sleep(delay)
-    try:
-        await bot.send_message(uid, text)
-    except Exception:
-        pass
-
-def has_emoji(text):
-    for char in text:
-        if '\U00010000' <= char <= '\U0010ffff' or '\u2600' <= char <= '\u27BF':
-            return True
-    return False
 
 # ============ ГАЧА ============
 @router.message(F.text == "🎴 Получить карту")
@@ -72,27 +50,27 @@ async def get_card_cmd(msg: types.Message):
     attempts = u[6]
     now = datetime.now()
 
-    is_premium = len(u) > 17 and u[17] and u[17] > now.strftime("%Y-%m-%d %H:%M:%S")
-    cooldown_hours = 1 if is_premium else GET_COOLDOWN_HOURS
+    # Сначала проверяем кулдаун (если попыток нет)
     if attempts <= 0:
         try:
             last_get = datetime.strptime(u[11], "%Y-%m-%d %H:%M:%S")
         except Exception:
             last_get = datetime.min
-        if (now - last_get).total_seconds() < cooldown_hours * 3600:
-            rem = int(cooldown_hours * 3600 - (now - last_get).total_seconds())
+        if (now - last_get).total_seconds() < GET_COOLDOWN_HOURS * 3600:
+            rem = int(GET_COOLDOWN_HOURS * 3600 - (now - last_get).total_seconds())
             return await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
 
-    # Передаём uid, чтобы сработали шансы Premium
-    card_key = pull_random_card(uid=uid)
+    # Получаем карту
+    card_key = pull_random_card()
     if not card_key:
         return await msg.answer("❌ Ошибка: пул карт пуст или произошла ошибка.")
 
     is_new, krw, c = give_card_to_user(uid, card_key)
 
+    # Если карта или данные повреждены — не списываем попытку
     if c is None:
         return await msg.answer("❌ Ошибка при получении карты. Попробуйте снова.")
-
+    # Формируем текст
     if is_new:
         txt = (f"🃏 Получена новая боевая карта!\n\n"
                f"🎴 Персонаж: {c['name']}\n"
@@ -112,6 +90,7 @@ async def get_card_cmd(msg: types.Message):
                f"💪 Сила: {c['strength']}\n"
                f"🧠 Интеллект: {c['intellect']}")
 
+    # Пытаемся отправить фото. Если не вышло — шлём текст.
     try:
         await msg.answer_photo(photo=c['file_id'], caption=txt, has_spoiler=True)
     except Exception:
@@ -120,12 +99,11 @@ async def get_card_cmd(msg: types.Message):
         except Exception:
             return await msg.answer("❌ Не удалось открутить. Попробуйте снова.")
 
+    # Списываем попытку ТОЛЬКО после успешной отправки
     if attempts > 0:
         db_exec("UPDATE users SET attempts = attempts - 1 WHERE id = ?", (uid,))
     else:
         db_exec("UPDATE users SET last_get = ? WHERE id = ?", (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
-        # Запускаем уведомление о сбросе кулдауна
-        asyncio.create_task(notify_cooldown(msg.bot, uid, cooldown_hours * 3600, "🔔 Ваша крутка готова! Вы можете снова получить карту 🎴"))
 
 
 # ============ ПРОФИЛЬ ============
@@ -143,13 +121,9 @@ async def profile(msg: types.Message):
     else:
         title_str = "\n"
 
-    # Проверка на Premium для иконки 👑 или 🧩
-    is_premium = len(u) > 17 and u[17] and u[17] > datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    user_icon = "👑" if is_premium else "🧩"
-
     user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
     txt = (
-        f"👤 Профиль {user_link} {user_icon}\n"
+        f"👤 Профиль {user_link} 🧩\n"
         f"🆔 Id: <code>{u[0]}</code>\n"
         f"{title_str}"
         f"Баланс:\n"
@@ -168,33 +142,27 @@ async def profile(msg: types.Message):
     bld.button(text="🌄 Мои фоны",   callback_data="my_bgs")
     bld.button(text="⚙️ Настройка",  callback_data="settings")
     bld.adjust(1)
+
     bg_key = u[13] or 'default'
     bg_data = BGS.get(bg_key, BGS['default'])
     bg_file = bg_data.get('file_id')
     try:
         if bg_key in VIDEO_BGS:
-            await msg.answer_video(video=bg_file, caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+            await msg.answer_video(video=bg_file, caption=txt,
+                                   reply_markup=bld.as_markup(), parse_mode="HTML")
         else:
-            await msg.answer_photo(photo=bg_file, caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+            await msg.answer_photo(photo=bg_file, caption=txt,
+                                   reply_markup=bld.as_markup(), parse_mode="HTML")
     except Exception:
-        await msg.answer(f"{txt}\n\n[Фон не загрузился.]", reply_markup=bld.as_markup(), parse_mode="HTML")
+        await msg.answer(f"{txt}\n\n[Фон не загрузился.]",
+                         reply_markup=bld.as_markup(), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "settings")
 async def settings_cq(cq: CallbackQuery):
     u = get_user(cq.from_user.id)
-
-    prem_txt = "Не активен"
-    if len(u) > 17 and u[17] and u[17] > "2000-01-01 00:00:00":
-        prem_txt = f"Активен до {u[17]}"
-    rp_txt = "Активен" if u[16] else "Не активен"
-
     await cq.message.answer(
-        f"⚙️ Настройки\n"
-        f"Дата регистрации: {u[15]}\n"
-        f"👑 Premium: {prem_txt}\n"
-        f"🌠 Рояль Пасс: {rp_txt}\n\n"
-        f"Для смены ника отправьте команду /nick [новый ник]"
+        f"⚙️ Настройки\nДата регистрации: {u[15]}\nДля смены ника отправьте команду /nick [новый ник]"
     )
     await cq.answer()
 
@@ -204,13 +172,6 @@ async def change_nick(msg: types.Message):
     new_nick = msg.text.replace("/nick", "").strip()
     if not new_nick:
         return await msg.answer("Использование: /nick НовыйНик")
-
-    u = get_user(msg.from_user.id)
-    is_premium = len(u) > 17 and u[17] and u[17] > datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    if has_emoji(new_nick) and not is_premium:
-        return await msg.answer("❌ Использование эмодзи в нике доступно только Premium пользователям!")
-
     db_exec("UPDATE users SET nickname = ? WHERE id = ?", (new_nick, msg.from_user.id))
     await msg.answer(f"✅ Ник изменен на {new_nick}")
 

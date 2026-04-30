@@ -148,7 +148,6 @@ async def inv_collection_cb(cq: CallbackQuery):
     owned_total = len(user_owned)
     total_pct = int((owned_total / total_cards) * 100) if total_cards > 0 else 0
 
-    # --- Редкости ---
     rarities = [
         ("Божественная ⚫️", "⚫️ Божественная"),
         ("Мифическая 🔴", "🔴 Мифическая"),
@@ -164,44 +163,16 @@ async def inv_collection_cb(cq: CallbackQuery):
         "💎 Количество карт по редкостям:"
     ]
 
-    rarity_lines = []
     for db_rarity, disp_name in rarities:
         all_r = [cid for cid, c in CARDS.items() if c.get('rarity') == db_rarity]
         t_r = len(all_r)
-        if t_r == 0:
-            continue
+        if t_r == 0: continue
 
         o_r = [cid for cid in all_r if cid in user_owned]
         o_t = len(o_r)
         pct = int((o_t / t_r) * 100) if t_r > 0 else 0
 
-        rarity_lines.append(f"{disp_name}: {o_t}/{t_r} ({pct}%)")
-
-    if rarity_lines:
-        lines.append("<blockquote>" + "\n".join(rarity_lines) + "</blockquote>")
-
-    # --- Вселенные ---
-    series_total = {}
-    for cid, c in CARDS.items():
-        series = c.get('series', 'Неизвестно')
-        series_total[series] = series_total.get(series, 0) + 1
-
-    series_owned = {}
-    for cid in user_owned:
-        c = CARDS.get(cid)
-        if c:
-            series = c.get('series', 'Неизвестно')
-            series_owned[series] = series_owned.get(series, 0) + 1
-
-    sorted_series = sorted(series_total.items(), key=lambda x: x[1])
-
-    if sorted_series:
-        lines.append("\n🪐 Собранные вселленные:")
-        series_lines = []
-        for series, total in sorted_series:
-            owned = series_owned.get(series, 0)
-            series_lines.append(f"{series}: {owned}/{total}")
-        lines.append("<blockquote>" + "\n".join(series_lines) + "</blockquote>")
+        lines.append(f"{disp_name}: {o_t}/{t_r} ({pct}%)")
 
     txt = "\n".join(lines)
 
@@ -209,12 +180,11 @@ async def inv_collection_cb(cq: CallbackQuery):
     bld.button(text="🔙 Назад", callback_data="inv_main")
 
     try:
-        await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        await cq.message.edit_text(txt, reply_markup=bld.as_markup())
     except:
         await cq.message.delete()
-        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        await cq.message.answer(txt, reply_markup=bld.as_markup())
     await cq.answer()
-
 
 
 @router.callback_query(F.data.startswith("viewcard:"))

@@ -281,8 +281,6 @@ async def bdeck_select(cq: CallbackQuery):
     await cq.answer()
     await cq.message.delete()
     await show_deck_builder(cq.message, cq.from_user.id, slot + 1)
-
-
 @router.callback_query(F.data == "find_match")
 async def find_match(cq: CallbackQuery):
     uid = cq.from_user.id
@@ -331,57 +329,34 @@ async def wait_match(uid, bot, msg_to_edit):
         except: pass
         await start_battle(uid, -1, bot)
 
-
 async def start_battle(p1, p2, bot: Bot, friendly=False):
     gid = f"g_{random.randint(10000, 99999)}"
-
     deck1 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p1,), fetchall=True)]
-    u1 = get_user(p1)
 
-    # --- ФИКС 1: u2 и name2/rank2 объявляются ДО любого использования ---
     if p2 == -1:
-        all_card_keys = list(CARDS.keys())
-        # --- ФИКС 2: random.sample вместо random.choices — без повторов в колоде бота ---
-        deck2 = random.sample(all_card_keys, min(6, len(all_card_keys)))
-        u2 = None
-        name2 = random.choice(["Важни Гий", "Ли Джи Ху..", "Йена пик форма", "Злодей Васко",
-                               "Великий Мага", "Босс Табаско", "Срасул", "Брад",
-                               "Клон Хикса", "Король Бибизян"])
+        deck2 = random.choices(list(CARDS.keys()), k=6)
+        name2 = random.choice(["Важни Гий", "Ли Джи Ху..", "Йена пик форма", "Злодей Васко", "Великий Мага", "Босс Табаско", "Срасул", "Брад", "Клон Хикса", "Король Бибизян"])
         rank2 = "Бот"
     else:
         deck2 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p2,), fetchall=True)]
         u2 = get_user(p2)
-        name2 = f"<a href='tg://user?id={p2}'>{u2[2]}</a>"
-        rank2 = get_rank(u2[7])
+        name2, rank2 = f"<a href='tg://user?id={p2}'>{u2[2]}</a>", get_rank(u2[7])
 
-    GAMES[gid] = {
-        'p1': p1, 'p2': p2,
-        'd1': deck1.copy(), 'd2': deck2.copy(),
-        'n2': name2, 'r2': rank2,
-        'p1_c': None, 'p2_c': None,
-        'p1_s': None, 'p2_s': None,
-        'score1': 0, 'score2': 0,
-        'round': 1,
-        'friendly': friendly,
-        'resolving': False
-    }
+    GAMES[gid] = {'p1': p1, 'p2': p2, 'd1': deck1.copy(), 'd2': deck2.copy(), 'n2': name2, 'r2': rank2,
+                  'p1_c': None, 'p2_c': None, 'p1_s': None, 'p2_s': None, 'score1': 0, 'score2': 0, 'round': 1,
+                  'friendly': friendly, 'resolving': False}
 
-    if not friendly:
-        if p2 == -1:
-            db_exec("UPDATE users SET last_battle = ? WHERE id = ?",
-                    (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1))
-        else:
-            db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
-                    (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
+    u1 = get_user(p1)
+    if p2 == -1:
+        db_exec("UPDATE users SET last_battle = ? WHERE id = ?",
+                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1))
+    else:
+        db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
+                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
 
-    # --- ФИКС 3: отправка уведомления p1 — больше не обращаемся к u2 в ветке p2==-1 ---
-    txt1 = (f"Противник найден!\n\n"
-            f"· Имя: {name2} 🧩\n"
-            f"· Ранг: {rank2}\n"
-            f"· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\n"
-            f"Битва начинается!")
+    txt1 = f"Противник найден!\n\n· Имя: {name2} 🧩\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
 
-    if p2 != -1 and u2 is not None:
+    if p2 != -1:
         bg_key2 = u2[13] or 'default'
         bg_data2 = BGS.get(bg_key2, BGS['default'])
         bg_file2 = bg_data2.get('file_id')
@@ -395,12 +370,8 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
     else:
         await bot.send_message(p1, txt1, parse_mode="HTML")
 
-    if p2 != -1 and u2 is not None:
-        txt2 = (f"Противник найден!\n\n"
-                f"· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n"
-                f"· Ранг: {get_rank(u1[7])}\n"
-                f"· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\n"
-                f"Битва начинается!")
+    if p2 != -1:
+        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
         bg_key1 = u1[13] or 'default'
         bg_data1 = BGS.get(bg_key1, BGS['default'])
         bg_file1 = bg_data1.get('file_id')
@@ -416,6 +387,7 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
     await send_card_choice(p1, GAMES[gid]['d1'], gid, bot)
     if p2 != -1:
         await send_card_choice(p2, GAMES[gid]['d2'], gid, bot)
+
 
 
 async def auto_card_choice(gid, uid, round_num, msg_id, bot):
@@ -513,7 +485,6 @@ async def process_style_choice(gid, uid, style, bot):
             g['p2_wait_msg'] = msg.message_id
     except:
         pass
-
     if g['p1_s'] and g['p2_s']:
         g['resolving'] = True
         try:
@@ -526,6 +497,7 @@ async def process_style_choice(gid, uid, style, bot):
             await resolve_round(gid, bot)
         except Exception as e:
             logging.error(f"Critical error in resolve_round: {e}")
+            # Fallback - если произошел сбой, просто переводим игру в следующий раунд, чтобы не зависла
             if gid in GAMES:
                 GAMES[gid]['round'] += 1
                 GAMES[gid]['p1_c'] = GAMES[gid]['p2_c'] = GAMES[gid]['p1_s'] = GAMES[gid]['p2_s'] = None
@@ -552,11 +524,13 @@ async def send_card_choice(uid, deck_left, gid, bot):
     g = GAMES.get(gid)
     if not g: return
 
+    # Сортируем карты по редкости для отображения от сильнейшей
     c_objs = [(cid, CARDS[cid]) for cid in set(deck_left)]
     rarity_order = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2,
                     "Обычная ⚪️": 1}
     c_objs.sort(key=lambda x: rarity_order.get(x[1]['rarity'], 0), reverse=True)
 
+    # Формируем медиагруппу (сверху изображения карт)
     media = []
     for i, (cid, c) in enumerate(c_objs):
         txt_card = f"{i + 1}. {c['name']} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
@@ -567,6 +541,7 @@ async def send_card_choice(uid, deck_left, gid, bot):
     except Exception as e:
         logging.error(f"Failed to send visual deck to {uid}: {e}")
 
+    # Кнопки выбора (снизу, в порядке силы)
     bld = InlineKeyboardBuilder()
     for cid, c in c_objs:
         bld.button(text=c['name'], callback_data=f"b_card:{gid}:{cid}")
