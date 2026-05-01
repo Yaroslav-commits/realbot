@@ -227,7 +227,7 @@ async def change_nick(msg: types.Message):
 
 # ============ РЕФЕРАЛЬНАЯ СИСТЕМА ============
 @router.callback_query(F.data == "referral_system")
-async def referral_system_cq(cq: CallbackQuery):
+async def referral_system_cq(cq: CallbackQuery, bot: Bot):
     u = get_user(cq.from_user.id)
     if not u:
         await cq.answer("Пользователь не найден", show_alert=True)
@@ -235,18 +235,21 @@ async def referral_system_cq(cq: CallbackQuery):
 
     ref_count = get_referral_count(cq.from_user.id)
     ref_code = u[18]  # referral_code (индекс 18)
-    ref_link = f"https://t.me/ManhwCardBot?start=ref_{ref_code}"
+
+    # Динамически получаем юзернейм твоего бота, чтобы ссылка 100% работала
+    bot_info = await bot.get_me()
+    ref_link = f"https://t.me/{bot_info.username}?start=ref_{ref_code}"
 
     txt = (
         f"👥 Всего приглашенных: {ref_count}\n\n"
-        f"Приглашай друзей и получай вознаграждение от 500💴 до 1000💴 и 5💳 попыток за каждого реферала\n\n"
-        f"⛓️‍💥 Твоя уникальная реферальная ссылка: {ref_link}"
+        f"Приглашай друзей и получай вознаграждение от 500💴 до 1000💴 и 5💳 попыток за каждого реферала!\n\n"
+        f"⛓️‍💥 Твоя уникальная реферальная ссылка:\n<code>{ref_link}</code>"
     )
 
     bld = InlineKeyboardBuilder()
     bld.button(text="🔙 Назад", callback_data="settings")
 
-    await cq.message.edit_text(txt, reply_markup=bld.as_markup())
+    await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
 
 
@@ -561,6 +564,22 @@ async def use_promo(msg: types.Message):
             await msg.answer_photo(photo=c['file_id'], caption=txt)
         except Exception:
             await msg.answer(txt)
+
+
+@router.message(Command("update_refs"))
+async def update_refs_cmd(msg: types.Message):
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    import random
+    import string
+
+    users = db_exec("SELECT id FROM users", fetchall=True)
+    for (uid,) in users:
+        new_code = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+        db_exec("UPDATE users SET referral_code = ? WHERE id = ?", (new_code, uid))
+
+    await msg.answer("✅ Все реферальные ссылки игроков успешно обновлены на новые уникальные форматы!")
 
 
 # ================== ПЛАНИРОВЩИК УВЕДОМЛЕНИЙ О КУЛДАУНЕ ==================

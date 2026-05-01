@@ -82,11 +82,13 @@ def add_user(uid, uname, fname, referred_by=None):
 
 # ================== РЕФЕРАЛЬНАЯ СИСТЕМА ==================
 def generate_unique_ref_code():
-    """Генерирует уникальный 8-символьный реферальный код."""
+    """Генерирует максимально уникальный 16-символьный реферальный код."""
     while True:
-        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        # 16 символов в разном регистре — совпадения исключены, ссылки выглядят по-разному
+        code = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
         if not db_exec("SELECT 1 FROM users WHERE referral_code = ?", (code,), fetch=True):
             return code
+
 
 def get_user_by_ref_code(code):
     """Находит пользователя по реферальному коду."""
