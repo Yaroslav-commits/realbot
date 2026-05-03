@@ -10,6 +10,7 @@ from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            CallbackQuery, LabeledPrice, PreCheckoutQuery)
+from aiogram.types import FSInputFile
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -28,14 +29,14 @@ from handlers import (router, TradeState, SettingsState, PromoState,
 
 # ============ МАГАЗИН И ПАСС ============
 # Картинка магазина
-SHOP_IMG = "AgACAgIAAxkBAAIUM2nstgoTQDqJbUmaeCLLFoxMZnLiAAKJFmsbUZNhS6EpHcRVEBvhAQADAgADdwADOwQ"
+SHOP_IMG = FSInputFile("images/shop/shop.png")
 
 # Картинки паков
-PACK_LEG_IMG = "AgACAgIAAxkBAAIok2nuAAGHn07nXxOme7Ucn69VtOtlygACgRVrG8GDcEse656dcucp4QEAAwIAA3cAAzsE"
-PACK_EPIC_IMG = "AgACAgIAAxkBAAIol2nuAAGQxDnghclp-deT9emYyhTV7wACghVrG8GDcEv9vCutdP8ehgEAAwIAA3cAAzsE"
+PACK_LEG_IMG = FSInputFile("images/shop/pack_leg.jpeg")
+PACK_EPIC_IMG = FSInputFile("images/shop/pack_epic.jpeg")
 
 # Картинка Евента
-EVENT_IMG = "AgACAgIAAxkBAAIWi2ns3TnmIMe_lIjVKcVkgKF-LwiAAAKGF2sbUZNhS5heUt8GN34fAQADAgADeAADOwQ"
+EVENT_IMG = FSInputFile("images/shop/event.png")
 
 # Наборы алмазов: (звёзды, алмазы)
 DIAMOND_PACKS = [
@@ -226,15 +227,16 @@ async def shop_bgs_cb(cq: CallbackQuery):
         )
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="shop:main"))
     is_video = item["id"] in VIDEO_BGS
+    file_path = bg['file']
     try:
         if is_video:
             await cq.message.edit_media(
-                media=types.InputMediaVideo(media=bg['file_id'], caption=caption),
+                media=types.InputMediaVideo(media=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption),
                 reply_markup=bld.as_markup()
             )
         else:
             await cq.message.edit_media(
-                media=types.InputMediaPhoto(media=bg['file_id'], caption=caption),
+                media=types.InputMediaPhoto(media=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption),
                 reply_markup=bld.as_markup()
             )
     except Exception:
@@ -243,10 +245,11 @@ async def shop_bgs_cb(cq: CallbackQuery):
         except Exception:
             pass
         if is_video:
-            await cq.message.answer_video(video=bg['file_id'], caption=caption, reply_markup=bld.as_markup())
+            await cq.message.answer_video(video=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption, reply_markup=bld.as_markup())
         else:
-            await cq.message.answer_photo(photo=bg['file_id'], caption=caption, reply_markup=bld.as_markup())
+            await cq.message.answer_photo(photo=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption, reply_markup=bld.as_markup())
     await cq.answer()
+
 
 @router.callback_query(F.data.startswith("shop:bg_buy:"))
 async def shop_bg_buy_cb(cq: CallbackQuery):
@@ -349,7 +352,8 @@ async def buy_pack(msg: types.Message):
                f"💪 Сила: {c['strength']}\n"
                f"🧠 Интеллект: {c['intellect']}")
 
-    await msg.answer_photo(photo=c['file_id'], caption=txt, has_spoiler=True)
+    await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True)
+
 
 @router.message(F.text == "🔙 Назад к пакам")
 async def back_to_packs(msg: types.Message):
@@ -438,7 +442,7 @@ async def shop_event_buy_cb(cq: CallbackQuery):
                f"💪 Сила: {c['strength']}\n"
                f"🧠 Интеллект: {c['intellect']}")
 
-    await cq.message.answer_photo(photo=c['file_id'], caption=txt, has_spoiler=True)
+    await cq.message.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True)
     await cq.answer()
 
 # ===== Единая обработка оплат (алмазы через звёзды + Рояль пасс) =====
@@ -469,17 +473,17 @@ import calendar
 # Жесткая привязка к МСК (UTC+3)
 MSK = timezone(timedelta(hours=3))
 
-PASS_NORMAL_IMG_1 = "AgACAgIAAxkBAAICN2npT2usTg9JKYcN77omcGfxSMy_AALrFWsbYxlIS8jrNH8Lp0d_AQADAgADdwADOwQ"
-PASS_NORMAL_IMG_2 = "AgACAgIAAxkBAAICOWnpT3Nb7Od3EEVKv7rF-ubLjKd-AALsFWsbYxlIS4xOhVzQesKRAQADAgADdwADOwQ"
-PASS_NORMAL_IMG_3 = "AgACAgIAAxkBAAICO2npT3qdFBDkzJEtJvpAv76tZfsPAALtFWsbYxlIS9SubA_87SHZAQADAgADdwADOwQ"
-PASS_NORMAL_IMG_4 = "AgACAgIAAxkBAAICPWnpT4DmcHYmlKkeldmpIKAy4I9wAALuFWsbYxlIS5HkxNAVGOqGAQADAgADdwADOwQ"
-PASS_NORMAL_IMG_5 = "AgACAgIAAxkBAAFId29p844Oa6MPUtCfX0vsyuZerCDgaAAC9hhrG7WxmUulmFWby8rIMQEAAwIAA3cAAzsE"
+PASS_NORMAL_IMG_1 = FSInputFile("images/shop/pass_normal_1.jpeg")
+PASS_NORMAL_IMG_2 = FSInputFile("images/shop/pass_normal_2.jpeg")
+PASS_NORMAL_IMG_3 = FSInputFile("images/shop/pass_normal_3.jpeg")
+PASS_NORMAL_IMG_4 = FSInputFile("images/shop/pass_normal_4.jpeg")
+PASS_NORMAL_IMG_5 = FSInputFile("images/shop/pass_normal_5.jpeg")
 
-PASS_ROYALE_IMG_1 = "AgACAgIAAxkBAAIH5mnqYyG_EeenGODy4EZWyhhS0uv5AALzE2sbwYNYS_eXd7RzSjByAQADAgADdwADOwQ"
-PASS_ROYALE_IMG_2 = "AgACAgIAAxkBAAFId2Fp843tnZfFHZGlyjbGLoYc5BGRFgAC-hVrG-HNoUuaQ1pxBoZp9QEAAwIAA3cAAzsE"
-PASS_ROYALE_IMG_3 = "AgACAgIAAxkBAAFId2Vp8430zup6_XZPnKSzvPvHJCNlvgAC5BhrG7WxmUulUe71c18NPgEAAwIAA3cAAzsE"
-PASS_ROYALE_IMG_4 = "AgACAgIAAxkBAAFId2dp8439G9goWRErtVquu-h4y3gFWgAC5RhrG7WxmUuMMikbwjpEFgEAAwIAA3cAAzsE"
-PASS_ROYALE_IMG_5 = "AgACAgIAAxkBAAFId21p844For_mrugHSBfOeKkLrWhdBgAC8hhrG7WxmUsQBDuTStIv8wEAAwIAA3cAAzsE"
+PASS_ROYALE_IMG_1 = FSInputFile("images/shop/pass_royale_1.jpeg")
+PASS_ROYALE_IMG_2 = FSInputFile("images/shop/pass_royale_2.jpeg")
+PASS_ROYALE_IMG_3 = FSInputFile("images/shop/pass_royale_3.jpeg")
+PASS_ROYALE_IMG_4 = FSInputFile("images/shop/pass_royale_4.jpeg")
+PASS_ROYALE_IMG_5 = FSInputFile("images/shop/pass_royale_5.jpeg")
 
 
 @router.message(F.text == "🏞️ Пасс")

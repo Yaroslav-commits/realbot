@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
-                           CallbackQuery, LabeledPrice, PreCheckoutQuery)
+                           CallbackQuery, LabeledPrice, PreCheckoutQuery,
+                           FSInputFile)
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -111,7 +112,8 @@ async def get_card_cmd(msg: types.Message):
 
     # Пытаемся отправить фото. Если не вышло — шлём текст.
     try:
-        await msg.answer_photo(photo=c['file_id'], caption=txt, has_spoiler=True)
+        photo_file = FSInputFile(f"images/cards/{c['file']}")
+        await msg.answer_photo(photo=photo_file, caption=txt, has_spoiler=True)
     except Exception:
         try:
             await msg.answer(txt)
@@ -171,7 +173,7 @@ async def profile(msg: types.Message):
 
     bg_key = u[13] or 'default'
     bg_data = BGS.get(bg_key, BGS['default'])
-    bg_file = bg_data.get('file_id')
+    bg_file = FSInputFile(f"images/backgrounds/{bg_data.get('file')}")
     try:
         if bg_key in VIDEO_BGS:
             await msg.answer_video(video=bg_file, caption=txt,
@@ -339,13 +341,13 @@ async def preview_cq(cq: CallbackQuery):
 
     if type_str == "bg":
         bg_data = BGS.get(itm, BGS['default'])
-        file_id = bg_data.get('file_id')
+        bg_file = bg_data.get('file')
         name = bg_data.get('name', 'Фон')
         caption = f"🌄 Предпросмотр фона: {name}"
         if itm in VIDEO_BGS:
-            await cq.message.answer_video(video=file_id, caption=caption, reply_markup=bld.as_markup())
+            await cq.message.answer_video(video=FSInputFile(f"images/backgrounds/{bg_file}"), caption=caption, reply_markup=bld.as_markup())
         else:
-            await cq.message.answer_photo(photo=file_id, caption=caption, reply_markup=bld.as_markup())
+            await cq.message.answer_photo(photo=FSInputFile(f"images/backgrounds/{bg_file}"), caption=caption, reply_markup=bld.as_markup())
     else:
         name = TITLES.get(itm, 'Титул')
         await cq.message.answer(f"🔱 Предпросмотр титула: {name}", reply_markup=bld.as_markup())
@@ -470,7 +472,8 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
                f"💪 Сила: «{c['strength']}»\n"
                f"🧠 Интеллект: «{c['intellect']}»")
         try:
-            await bot.send_photo(uid, photo=c['file_id'], caption=txt)
+            photo_file = FSInputFile(f"images/cards/{c['file']}")
+            await bot.send_photo(uid, photo=photo_file, caption=txt)
         except Exception:
             pass
         await msg.answer(f"✅ Карта «{c['name']}» выдана пользователю {uid}!")
@@ -490,11 +493,12 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, val))
         is_video = val in VIDEO_BGS
         try:
+            bg_file = FSInputFile(f"images/backgrounds/{bg_data['file']}")
             if is_video:
-                await bot.send_video(uid, video=bg_data['file_id'],
+                await bot.send_video(uid, video=bg_file,
                                      caption="Получен фон от администратора ✅")
             else:
-                await bot.send_photo(uid, photo=bg_data['file_id'],
+                await bot.send_photo(uid, photo=bg_file,
                                      caption="Получен фон от администратора ✅")
         except Exception:
             pass
@@ -561,7 +565,8 @@ async def use_promo(msg: types.Message):
                f"💪 Сила: «{c['strength']}»\n"
                f"🧠 Интеллект: «{c['intellect']}»")
         try:
-            await msg.answer_photo(photo=c['file_id'], caption=txt)
+            photo_file = FSInputFile(f"images/cards/{c['file']}")
+            await msg.answer_photo(photo=photo_file, caption=txt)
         except Exception:
             await msg.answer(txt)
 

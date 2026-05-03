@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
-                           CallbackQuery, LabeledPrice, PreCheckoutQuery)
+                           CallbackQuery, LabeledPrice, PreCheckoutQuery, FSInputFile)
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -190,7 +190,7 @@ async def view_deck(cq: CallbackQuery):
     media = []
     for i, (cid, c) in enumerate(c_objs):
         txt_card = f"{i + 1}. {c['name']} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
-        media.append(types.InputMediaPhoto(media=c['file_id'], caption=txt_card))
+        media.append(types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c['file']}"), caption=txt_card))
 
     await cq.message.answer_media_group(media=media)
 
@@ -359,7 +359,7 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
     if p2 != -1:
         bg_key2 = u2[13] or 'default'
         bg_data2 = BGS.get(bg_key2, BGS['default'])
-        bg_file2 = bg_data2.get('file_id')
+        bg_file2 = FSInputFile(f"images/backgrounds/{bg_data2.get('file')}")
         try:
             if bg_key2 in VIDEO_BGS:
                 await bot.send_video(p1, video=bg_file2, caption=txt1, parse_mode="HTML")
@@ -374,7 +374,7 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
         bg_key1 = u1[13] or 'default'
         bg_data1 = BGS.get(bg_key1, BGS['default'])
-        bg_file1 = bg_data1.get('file_id')
+        bg_file1 = FSInputFile(f"images/backgrounds/{bg_data1.get('file')}")
         try:
             if bg_key1 in VIDEO_BGS:
                 await bot.send_video(p2, video=bg_file1, caption=txt2, parse_mode="HTML")
@@ -447,7 +447,7 @@ async def process_card_choice(gid, uid, card, bot):
     bld.button(text="🧠 Интеллект", callback_data=f"b_style:{gid}:int")
 
     txt = f"Выбрана карта: {CARDS[card]['name']}\nВыберите ⚔️ Атаку \nСтили: ⚡️ Скорость, 💪 Сила, 🧠 Интеллект.\n\nНа выбор дается 30 секунд"
-    msg = await bot.send_photo(uid, photo=CARDS[card]['file_id'], caption=txt, reply_markup=bld.as_markup())
+    msg = await bot.send_photo(uid, photo=FSInputFile(f"images/cards/{CARDS[card]['file']}"), caption=txt, reply_markup=bld.as_markup())
 
     current_round = g['round']
     asyncio.create_task(auto_style_choice(gid, uid, current_round, msg.message_id, bot))
@@ -534,7 +534,7 @@ async def send_card_choice(uid, deck_left, gid, bot):
     media = []
     for i, (cid, c) in enumerate(c_objs):
         txt_card = f"{i + 1}. {c['name']} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
-        media.append(types.InputMediaPhoto(media=c['file_id'], caption=txt_card))
+        media.append(types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c['file']}"), caption=txt_card))
 
     try:
         await bot.send_media_group(uid, media=media)
@@ -639,8 +639,8 @@ async def resolve_round(gid, bot):
 
     try:
         txt1 = format_text(n1, n2_link, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1, val2, f1, f2, bonus_txt_1)
-        media1 = [types.InputMediaPhoto(media=c1['file_id'], caption=txt1, parse_mode="HTML"),
-                  types.InputMediaPhoto(media=c2['file_id'])]
+        media1 = [types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c1['file']}"), caption=txt1, parse_mode="HTML"),
+                  types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c2['file']}"))]
         await bot.send_media_group(g['p1'], media=media1)
     except Exception as e:
         logging.error(f"Error sending round result to p1: {e}")
@@ -649,8 +649,8 @@ async def resolve_round(gid, bot):
         try:
             txt2 = format_text(n2_link, n1, g['score2'], g['score1'], g['p2_s'], g['p1_s'], val2, val1, f2, f1,
                                bonus_txt_2)
-            media2 = [types.InputMediaPhoto(media=c2['file_id'], caption=txt2, parse_mode="HTML"),
-                      types.InputMediaPhoto(media=c1['file_id'])]
+            media2 = [types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c2['file']}"), caption=txt2, parse_mode="HTML"),
+                      types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c1['file']}"))]
             await bot.send_media_group(g['p2'], media=media2)
         except Exception as e:
             logging.error(f"Error sending round result to p2: {e}")

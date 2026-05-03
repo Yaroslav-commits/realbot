@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
-                           CallbackQuery, LabeledPrice, PreCheckoutQuery)
+                           CallbackQuery, LabeledPrice, PreCheckoutQuery,
+                           FSInputFile)
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -221,7 +222,7 @@ async def view_card(cq: CallbackQuery):
     bld.adjust(1)
 
     await cq.message.delete()
-    await cq.message.answer_photo(photo=c['file_id'], caption=txt, reply_markup=bld.as_markup())
+    await cq.message.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, reply_markup=bld.as_markup())
 
 
 @router.callback_query(F.data.startswith("trade_init:"))
@@ -236,7 +237,7 @@ async def trade_init(cq: CallbackQuery, state: FSMContext):
 
     await cq.message.delete()
     await cq.message.answer_photo(
-        photo=c['file_id'],
+        photo=FSInputFile(f"images/cards/{c['file']}"),
         caption="⏳ Отправьте 🆔 игрока, которому хотите предложить обмен",
         reply_markup=bld.as_markup()
     )
@@ -295,7 +296,7 @@ async def process_trade_id(msg: types.Message, state: FSMContext):
     try:
         await msg.bot.send_photo(
             target_id,
-            photo=c['file_id'],
+            photo=FSInputFile(f"images/cards/{c['file']}"),
             caption=caption,
             reply_markup=bld.as_markup()
         )
@@ -357,8 +358,8 @@ async def trade_p2_conf(cq: CallbackQuery):
     await cq.message.delete()
 
     media = [
-        types.InputMediaPhoto(media=c2['file_id']),
-        types.InputMediaPhoto(media=c1['file_id'])
+        types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c2['file']}")),
+        types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c1['file']}"))
     ]
     await cq.message.answer_media_group(media=media)
 
@@ -400,8 +401,8 @@ async def trade_p2_final(cq: CallbackQuery):
            f"❓ Вы уверены, что хотите совершить трейд?")
 
     media = [
-        types.InputMediaPhoto(media=c1['file_id']),
-        types.InputMediaPhoto(media=c2['file_id'])
+        types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c1['file']}")),
+        types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c2['file']}"))
     ]
 
     bld = InlineKeyboardBuilder()
@@ -459,14 +460,14 @@ async def trade_p1_final(cq: CallbackQuery):
 
     await cq.message.delete()
     await cq.message.answer_photo(
-        photo=CARDS[c2_id]['file_id'],
+        photo=FSInputFile(f"images/cards/{CARDS[c2_id]['file']}"),
         caption="✅ Получена карта с трейда"
     )
 
     try:
         await cq.bot.send_photo(
             p2_id,
-            photo=CARDS[c1_id]['file_id'],
+            photo=FSInputFile(f"images/cards/{CARDS[c1_id]['file']}"),
             caption="✅ Получена карта с трейда"
         )
     except:
