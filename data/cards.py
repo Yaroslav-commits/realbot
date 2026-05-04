@@ -200,7 +200,8 @@ BGS = {
              "file": "zer.mp4",
              "price": 2500},
     "lookism_1": {"name": "Лукизм", "file": "lookism_1.png", "price": 500},
-    "admin": {"name": "Ю Джунхёк и Ким Докча", "file": "admin.mp4", "price": 99999},
+    "admin": {"name": "Ю Джунхёк и Ким Докча", "file": "admin.mp4", 'width': 1280,
+        'height': 720, "price": 99999},
 }
 VIDEO_BGS = {
 "zer": {"name": "Нулевое Поколение",

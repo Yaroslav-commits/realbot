@@ -176,9 +176,13 @@ async def profile(msg: types.Message):
     bg_file = FSInputFile(f"images/backgrounds/{bg_data.get('file')}")
     try:
         if bg_key in VIDEO_BGS:
-            await msg.answer_video(video=bg_file, caption=txt,
-                                   reply_markup=bld.as_markup(), parse_mode="HTML",
-                                   supports_streaming=True)
+            await msg.answer_video(
+                video=bg_file, caption=txt,
+                reply_markup=bld.as_markup(), parse_mode="HTML",
+                supports_streaming=True,
+                width=bg_data.get('width'),
+                height=bg_data.get('height')
+            )
         else:
             await msg.answer_photo(photo=bg_file, caption=txt,
                                    reply_markup=bld.as_markup(), parse_mode="HTML")
@@ -346,8 +350,15 @@ async def preview_cq(cq: CallbackQuery):
         name = bg_data.get('name', 'Фон')
         caption = f"🌄 Предпросмотр фона: {name}"
         if itm in VIDEO_BGS:
-            await cq.message.answer_video(video=FSInputFile(f"images/backgrounds/{bg_file}"), caption=caption,
-                                          reply_markup=bld.as_markup(), supports_streaming=True)
+            bg_data = BGS.get(itm, BGS['default'])
+            await cq.message.answer_video(
+                video=FSInputFile(f"images/backgrounds/{bg_file}"),
+                caption=caption,
+                reply_markup=bld.as_markup(),
+                supports_streaming=True,
+                width=bg_data.get('width'),
+                height=bg_data.get('height')
+            )
         else:
             await cq.message.answer_photo(photo=FSInputFile(f"images/backgrounds/{bg_file}"), caption=caption, reply_markup=bld.as_markup())
     else:
