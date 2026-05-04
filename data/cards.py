@@ -44,7 +44,7 @@ CARDS = {
 "haye_ul": {"name": "Ха Е Уль", "rarity": "Редкая 🟡", "style": "Тхэквондо", "series": "Лукизм", "speed": 36, "strength": 37, "intellect": 36, "file": "eul.png", "exclusive": False},
 "wang_junsok": {"name": "Ван Джунсок", "rarity": "Эпическая 🟢", "style": "Уличный", "series": "Лукизм", "speed": 78, "strength": 79, "intellect": 76, "file": "wang_junsok.jpeg", "exclusive": False},
 "jang_hyeon": {"name": "Чан Хён", "rarity": "Эпическая 🟢", "style": "Айкидо (Звериный)", "series": "Лукизм", "speed": 79, "strength": 78, "intellect": 75, "file": "jang_hyeon.jpeg", "exclusive": False},
-"baek_jin_hyeok": {"name": "Бэк Джин Хёк", "rarity": "Эпическая 🟢", "style": "Уличный (Звериный)", "series": "Лукизм", "speed": 78, "strength": 77, "intellect": 76, "file": "baek_jin_hyeok.jpeg", "exclusive": False},
+"beak_jin_hyeok": {"name": "Бэк Джин Хёк", "rarity": "Эпическая 🟢", "style": "Уличный (Звериный)", "series": "Лукизм", "speed": 78, "strength": 77, "intellect": 76, "file": "beak_jin_hyeok.jpeg", "exclusive": False},
 "son_hashik": {"name": "Сон Хашик", "rarity": "Эпическая 🟢", "style": "Бокс", "series": "Лукизм", "speed": 77, "strength": 77, "intellect": 77, "file": "son_hashik.jpeg", "exclusive": False},
 "do_jaewan": {"name": "До Джэван", "rarity": "Эпическая 🟢", "style": "Бокс", "series": "Лукизм", "speed": 77, "strength": 78, "intellect": 75, "file": "do_jaewan.jpeg", "exclusive": False},
 "yuseong": {"name": "Юсон", "rarity": "Эпическая 🟢", "style": "Капоейра", "series": "Лукизм", "speed": 78, "strength": 75, "intellect": 76, "file": "yuseong.jpeg", "exclusive": False},
