@@ -177,7 +177,8 @@ async def profile(msg: types.Message):
     try:
         if bg_key in VIDEO_BGS:
             await msg.answer_video(video=bg_file, caption=txt,
-                                   reply_markup=bld.as_markup(), parse_mode="HTML")
+                                   reply_markup=bld.as_markup(), parse_mode="HTML",
+                                   supports_streaming=True)
         else:
             await msg.answer_photo(photo=bg_file, caption=txt,
                                    reply_markup=bld.as_markup(), parse_mode="HTML")
@@ -345,7 +346,8 @@ async def preview_cq(cq: CallbackQuery):
         name = bg_data.get('name', 'Фон')
         caption = f"🌄 Предпросмотр фона: {name}"
         if itm in VIDEO_BGS:
-            await cq.message.answer_video(video=FSInputFile(f"images/backgrounds/{bg_file}"), caption=caption, reply_markup=bld.as_markup())
+            await cq.message.answer_video(video=FSInputFile(f"images/backgrounds/{bg_file}"), caption=caption,
+                                          reply_markup=bld.as_markup(), supports_streaming=True)
         else:
             await cq.message.answer_photo(photo=FSInputFile(f"images/backgrounds/{bg_file}"), caption=caption, reply_markup=bld.as_markup())
     else:
@@ -496,7 +498,8 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
             bg_file = FSInputFile(f"images/backgrounds/{bg_data['file']}")
             if is_video:
                 await bot.send_video(uid, video=bg_file,
-                                     caption="Получен фон от администратора ✅")
+                                     caption="Получен фон от администратора ✅",
+                                     supports_streaming=True)
             else:
                 await bot.send_photo(uid, photo=bg_file,
                                      caption="Получен фон от администратора ✅")

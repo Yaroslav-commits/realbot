@@ -231,7 +231,8 @@ async def shop_bgs_cb(cq: CallbackQuery):
     try:
         if is_video:
             await cq.message.edit_media(
-                media=types.InputMediaVideo(media=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption),
+                media=types.InputMediaVideo(media=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption,
+                                            supports_streaming=True),
                 reply_markup=bld.as_markup()
             )
         else:
@@ -245,7 +246,8 @@ async def shop_bgs_cb(cq: CallbackQuery):
         except Exception:
             pass
         if is_video:
-            await cq.message.answer_video(video=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption, reply_markup=bld.as_markup())
+            await cq.message.answer_video(video=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption,
+                                          reply_markup=bld.as_markup(), supports_streaming=True)
         else:
             await cq.message.answer_photo(photo=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption, reply_markup=bld.as_markup())
     await cq.answer()
