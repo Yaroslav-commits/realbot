@@ -80,35 +80,47 @@ def add_user(uid, uname, fname, referred_by=None):
         if referred_by and referred_by != uid:
             process_referral(referred_by, uid)
 
+
 # ================== РЕФЕРАЛЬНАЯ СИСТЕМА ==================
 def generate_unique_ref_code():
     """Генерирует уникальный 12-символьный код только из букв."""
     import random
     import string
+    # Убедимся, что используем только буквы, как ты просил
+    chars = string.ascii_letters
     while True:
-        # Только буквы, минимум 10 (делаем 12 для надежности)
-        code = ''.join(random.choices(string.ascii_letters, k=12))
-        if not db_exec("SELECT 1 FROM users WHERE referral_code = ?", (code,), fetch=True):
+        code = ''.join(random.choices(chars, k=12))
+        # Проверяем уникальность
+        res = db_exec("SELECT 1 FROM users WHERE referral_code = ?", (code,), fetch=True)
+        if not res:
             return code
 
 
 def process_referral(referrer_id, referred_id):
-    """Записывает реферала и выдаёт награду НОВОМУ игроку (referred_id)."""
+    """Выдаёт награду НОВОМУ игроку (500-850 KRW и 5 попыток)."""
+    import random
+    # Проверяем, не был ли игрок уже приглашен
     existing = db_exec("SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,), fetch=True)
     if existing:
         return
 
     try:
-        # Сохраняем связь
+        # Записываем связь
         db_exec("INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)", (referrer_id, referred_id))
 
-        # Награда от 500 до 850 KRW
+        # Генерируем награду
         krw_reward = random.randint(500, 850)
 
-        # Начисляем награду НОВОМУ игроку (тому, кто перешел по ссылке)
+        # Начисляем награду ТОМУ, КТО ЗАШЕЛ (referred_id)
         db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referred_id))
-    except sqlite3.IntegrityError:
-        pass
+    except Exception as e:
+        print(f"Ошибка в process_referral: {e}")
+
+
+def get_referral_code_fixed(uid):
+    """Надежный способ получить код пользователя."""
+    res = db_exec("SELECT referral_code FROM users WHERE id = ?", (uid,), fetch=True)
+    return res[0] if res and res[0] else None
 
 
 def get_user_by_ref_code(code):

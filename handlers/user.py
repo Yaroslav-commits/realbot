@@ -233,23 +233,26 @@ async def change_nick(msg: types.Message):
 # ============ РЕФЕРАЛЬНАЯ СИСТЕМА ============
 @router.callback_query(F.data == "referral_system")
 async def referral_system_cq(cq: CallbackQuery, bot: Bot):
-    u = get_user(cq.from_user.id)
-    if not u: return
+    from database.db import get_referral_code_fixed, get_referral_count
 
-    ref_count = get_referral_count(cq.from_user.id)
-    ref_code = u[18] # referral_code
+    uid = cq.from_user.id
+    ref_code = get_referral_code_fixed(uid)
+    ref_count = get_referral_count(uid)
+
+    if not ref_code:
+        await cq.answer("Ошибка: код не найден. Попробуйте /start", show_alert=True)
+        return
 
     bot_info = await bot.get_me()
-    # Чистая ссылка: https://t.me/bot?start=CODE
     ref_link = f"https://t.me/{bot_info.username}?start={ref_code}"
 
     txt = (
         f"👥 Всего приглашенных: {ref_count}\n\n"
         f"Приглашай друзей! Перейдя по твоей ссылке, новый игрок получит "
-        f"от 500💴 до 900💴 и 5💳 попыток бонусом!\n\n"
+        f"от 500💴 до 850💴 и 5💳 попыток бонусом!\n\n"
         f"⛓️‍💥 Твоя уникальная реферальная ссылка:\n<code>{ref_link}</code>"
     )
-
+    
     bld = InlineKeyboardBuilder()
     bld.button(text="🔙 Назад", callback_data="settings")
     await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
@@ -588,17 +591,18 @@ async def update_refs_cmd(msg: types.Message):
     if msg.from_user.id not in ADMIN_IDS:
         return
 
-    import random
-    import string
+    from database.db import generate_unique_ref_code
 
+    # Получаем всех пользователей
     users = db_exec("SELECT id FROM users", fetchall=True)
+    count = 0
+
     for (uid,) in users:
-        # Генерируем новый буквенный код для каждого
-        new_code = ''.join(random.choices(string.ascii_letters, k=12))
+        new_code = generate_unique_ref_code()
         db_exec("UPDATE users SET referral_code = ? WHERE id = ?", (new_code, uid))
+        count += 1
 
-    await msg.answer("✅ Все реферальные коды обновлены! Теперь они уникальны и состоят из букв.")
-
+    await msg.answer(f"✅ Успешно обновлено {count} кодов! Теперь у всех уникальные ссылки из букв.")
 
 # ================== ПЛАНИРОВЩИК УВЕДОМЛЕНИЙ О КУЛДАУНЕ ==================
 async def cooldown_notification_scheduler(bot: Bot):
