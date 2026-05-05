@@ -598,7 +598,7 @@ async def update_refs_cmd(msg: types.Message):
 
     users = db_exec("SELECT id FROM users", fetchall=True)
     for (uid,) in users:
-        new_code = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+        new_code = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
         db_exec("UPDATE users SET referral_code = ? WHERE id = ?", (new_code, uid))
 
     await msg.answer("✅ Все реферальные ссылки игроков успешно обновлены на новые уникальные форматы!")
