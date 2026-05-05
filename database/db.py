@@ -82,12 +82,33 @@ def add_user(uid, uname, fname, referred_by=None):
 
 # ================== РЕФЕРАЛЬНАЯ СИСТЕМА ==================
 def generate_unique_ref_code():
-    """Генерирует уникальный реферальный код из 12 букв."""
+    """Генерирует уникальный 12-символьный код только из букв."""
+    import random
+    import string
     while True:
-        # Используем только буквы (ascii_letters), длина 12 символов
+        # Только буквы, минимум 10 (делаем 12 для надежности)
         code = ''.join(random.choices(string.ascii_letters, k=12))
         if not db_exec("SELECT 1 FROM users WHERE referral_code = ?", (code,), fetch=True):
             return code
+
+
+def process_referral(referrer_id, referred_id):
+    """Записывает реферала и выдаёт награду НОВОМУ игроку (referred_id)."""
+    existing = db_exec("SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,), fetch=True)
+    if existing:
+        return
+
+    try:
+        # Сохраняем связь
+        db_exec("INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)", (referrer_id, referred_id))
+
+        # Награда от 500 до 850 KRW
+        krw_reward = random.randint(500, 850)
+
+        # Начисляем награду НОВОМУ игроку (тому, кто перешел по ссылке)
+        db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referred_id))
+    except sqlite3.IntegrityError:
+        pass
 
 
 def get_user_by_ref_code(code):
@@ -100,23 +121,6 @@ def get_referral_count(uid):
     return result[0] if result else 0
 
 
-def process_referral(referrer_id, referred_id):
-    """Записывает реферала и выдаёт награду ТОМУ, КТО ПЕРЕШЕЛ по ссылке."""
-    existing = db_exec("SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,), fetch=True)
-    if existing:
-        return  # Игрок уже был чьим-то рефералом
-
-    try:
-        # Сохраняем связь в таблице рефералов
-        db_exec("INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)", (referrer_id, referred_id))
-
-        # Генерируем награду от 500 до 850 KRW
-        krw_reward = random.randint(500, 850)
-
-        # Начисляем награду новому игроку (referred_id)
-        db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referred_id))
-    except sqlite3.IntegrityError:
-        pass
 
 # ================== УВЕДОМЛЕНИЯ ==================
 def get_users_for_cooldown_notify(cooldown_seconds):

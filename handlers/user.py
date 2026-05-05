@@ -32,17 +32,13 @@ from handlers import (router, TradeState, SettingsState, PromoState,
 # ================== HANDLERS ==================
 @router.message(Command("start"))
 async def start_cmd(msg: types.Message):
-    # Парсим реферальный код напрямую из команды
     args = msg.text.split()
     referred_by = None
-
     if len(args) > 1:
-        ref_code = args[1]
-        # Ищем владельца этого кода в базе
+        ref_code = args[1]  # Берем код как он есть
         referrer = get_user_by_ref_code(ref_code)
         if referrer:
-            referred_by = referrer[0]  # Получаем ID того, кто пригласил
-            # Важно: если пользователь новый, награда выдастся внутри add_user -> process_referral
+            referred_by = referrer[0]
 
     add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name, referred_by)
 
@@ -238,28 +234,27 @@ async def change_nick(msg: types.Message):
 @router.callback_query(F.data == "referral_system")
 async def referral_system_cq(cq: CallbackQuery, bot: Bot):
     u = get_user(cq.from_user.id)
-    if not u:
-        await cq.answer("Пользователь не найден", show_alert=True)
-        return
+    if not u: return
 
     ref_count = get_referral_count(cq.from_user.id)
-    ref_code = u[18]  # referral_code (индекс в твоей таблице)
+    ref_code = u[18] # referral_code
 
     bot_info = await bot.get_me()
-    # Формируем чистую ссылку без префиксов
+    # Чистая ссылка: https://t.me/bot?start=CODE
     ref_link = f"https://t.me/{bot_info.username}?start={ref_code}"
+
     txt = (
         f"👥 Всего приглашенных: {ref_count}\n\n"
-        f"Приглашай друзей! Когда новый игрок перейдет по твоей ссылке, "
-        f"он получит от 450💴 до 850💴 и 5💳 попыток в качестве бонуса!\n\n"
+        f"Приглашай друзей! Перейдя по твоей ссылке, новый игрок получит "
+        f"от 500💴 до 900💴 и 5💳 попыток бонусом!\n\n"
         f"⛓️‍💥 Твоя уникальная реферальная ссылка:\n<code>{ref_link}</code>"
     )
 
     bld = InlineKeyboardBuilder()
     bld.button(text="🔙 Назад", callback_data="settings")
-
     await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
+
 
 
 
@@ -598,10 +593,11 @@ async def update_refs_cmd(msg: types.Message):
 
     users = db_exec("SELECT id FROM users", fetchall=True)
     for (uid,) in users:
-        new_code = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+        # Генерируем новый буквенный код для каждого
+        new_code = ''.join(random.choices(string.ascii_letters, k=12))
         db_exec("UPDATE users SET referral_code = ? WHERE id = ?", (new_code, uid))
 
-    await msg.answer("✅ Все реферальные ссылки игроков успешно обновлены на новые уникальные форматы!")
+    await msg.answer("✅ Все реферальные коды обновлены! Теперь они уникальны и состоят из букв.")
 
 
 # ================== ПЛАНИРОВЩИК УВЕДОМЛЕНИЙ О КУЛДАУНЕ ==================
