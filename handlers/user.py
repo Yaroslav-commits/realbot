@@ -40,7 +40,18 @@ async def start_cmd(msg: types.Message):
         if referrer:
             referred_by = referrer[0]
 
-    add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name, referred_by)
+    # Вызываем добавление пользователя и получаем сумму награды, если это был реферал
+    reward_amount = add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name, referred_by)
+
+    # Если награда выдана, уведомляем владельца ссылки
+    if reward_amount and referred_by:
+        try:
+            await msg.bot.send_message(
+                referred_by,
+                f"🤝 По твоей ссылке зашёл новый игрок!\nТебе начислено: <b>{reward_amount}💴</b> и <b>5💳</b>"
+            )
+        except Exception:
+            pass  # Если у владельца бот заблокирован
 
     await msg.answer(
         "🎴 Добро пожаловать в *ManhwCard*! 🎴\n\n"
@@ -248,11 +259,11 @@ async def referral_system_cq(cq: CallbackQuery, bot: Bot):
 
     txt = (
         f"👥 Всего приглашенных: {ref_count}\n\n"
-        f"Приглашай друзей! Перейдя по твоей ссылке, новый игрок получит "
-        f"от 500💴 до 850💴 и 5💳 попыток бонусом!\n\n"
+        f"Приглашай друзей! За каждого игрока, перешедшего по твоей ссылке, "
+        f"<b>ты и твой друг</b> получите от 500💴 до 850💴 и 5💳 попыток бонусом!\n\n"
         f"⛓️‍💥 Твоя уникальная реферальная ссылка:\n<code>{ref_link}</code>"
     )
-    
+
     bld = InlineKeyboardBuilder()
     bld.button(text="🔙 Назад", callback_data="settings")
     await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")

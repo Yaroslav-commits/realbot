@@ -76,9 +76,10 @@ def add_user(uid, uname, fname, referred_by=None):
                 (uid, uname, fname, datetime.now().strftime("%Y-%m-%d"), ref_code, referred_by))
         db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, 'default'))
 
-        # Обрабатываем реферала, если есть
+        # Обрабатываем реферала и возвращаем сумму награды
         if referred_by and referred_by != uid:
-            process_referral(referred_by, uid)
+            return process_referral(referred_by, uid)
+    return None
 
 
 # ================== РЕФЕРАЛЬНАЯ СИСТЕМА ==================
@@ -97,12 +98,12 @@ def generate_unique_ref_code():
 
 
 def process_referral(referrer_id, referred_id):
-    """Выдаёт награду НОВОМУ игроку (500-850 KRW и 5 попыток)."""
+    """Выдаёт награду ОБОИМ игрокам (500-850 KRW и 5 попыток)."""
     import random
     # Проверяем, не был ли игрок уже приглашен
     existing = db_exec("SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,), fetch=True)
     if existing:
-        return
+        return None
 
     try:
         # Записываем связь
@@ -111,10 +112,16 @@ def process_referral(referrer_id, referred_id):
         # Генерируем награду
         krw_reward = random.randint(500, 850)
 
-        # Начисляем награду ТОМУ, КТО ЗАШЕЛ (referred_id)
+        # Начисляем награду НОВОМУ игроку
         db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referred_id))
+
+        # Начисляем награду ВЛАДЕЛЬЦУ ССЫЛКИ (исправлено)
+        db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referrer_id))
+
+        return krw_reward
     except Exception as e:
         print(f"Ошибка в process_referral: {e}")
+        return None
 
 
 def get_referral_code_fixed(uid):
