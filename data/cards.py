@@ -28,7 +28,7 @@ CARDS = {
 "yohan_son": {"name": "Йохан Сон", "rarity": "Легендарная 🔵", "style": "Универсал (копирование)", "series": "Лукизм", "speed": 89, "strength": 87, "intellect": 86, "file": "yohan.png", "exclusive": False},
 "jinran": {"name": "Джинран", "rarity": "Легендарная 🔵", "style": "Уличный (Волк)", "series": "Лукизм", "speed": 85, "strength": 86, "intellect": 88, "file": "jinran.png", "exclusive": False},
 "yuk_sonji": {"name": "Юк Сонджи", "rarity": "Легендарная 🔵", "style": "Дзюдо", "series": "Лукизм", "speed": 86, "strength": 84, "intellect": 85, "file": "yuk.png", "exclusive": False},
-"baek_san": {"name": "Бэк Сан", "rarity": "Эпическая 🟢", "style": "Уличный", "series": "Лукизм", "speed": 78, "strength": 78, "intellect": 78, "file": "baek_san.jpeg", "exclusive": False},
+"beak_san": {"name": "Бэк Сан", "rarity": "Эпическая 🟢", "style": "Уличный", "series": "Лукизм", "speed": 78, "strength": 78, "intellect": 78, "file": "beak_san.jpeg", "exclusive": False},
 "magami_kenta": {"name": "Магами Кента", "rarity": "Редкая 🟡", "style": "Каратэ", "series": "Лукизм", "speed": 59, "strength": 59, "intellect": 59, "file": "kenta.png", "exclusive": False},
 "choi_minsik": {"name": "Чой Минсик", "rarity": "Редкая 🟡", "style": "CQC", "series": "Лукизм", "speed": 58, "strength": 59, "intellect": 59, "file": "minsik.png", "exclusive": False},
 "kazuma_sato": {"name": "Казума Сато", "rarity": "Редкая 🟡", "style": "Сумо", "series": "Лукизм", "speed": 58, "strength": 59, "intellect": 58, "file": "kazuma.png", "exclusive": False},
