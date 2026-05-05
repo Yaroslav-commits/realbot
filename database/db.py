@@ -82,10 +82,10 @@ def add_user(uid, uname, fname, referred_by=None):
 
 # ================== РЕФЕРАЛЬНАЯ СИСТЕМА ==================
 def generate_unique_ref_code():
-    """Генерирует максимально уникальный 16-символьный реферальный код."""
+    """Генерирует уникальный реферальный код из 12 букв."""
     while True:
-        # 16 символов в разном регистре — совпадения исключены, ссылки выглядят по-разному
-        code = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+        # Используем только буквы (ascii_letters), длина 12 символов
+        code = ''.join(random.choices(string.ascii_letters, k=12))
         if not db_exec("SELECT 1 FROM users WHERE referral_code = ?", (code,), fetch=True):
             return code
 
@@ -99,16 +99,22 @@ def get_referral_count(uid):
     result = db_exec("SELECT COUNT(*) FROM referrals WHERE referrer_id = ?", (uid,), fetch=True)
     return result[0] if result else 0
 
+
 def process_referral(referrer_id, referred_id):
-    """Записывает реферала и выдаёт награду пригласившему."""
+    """Записывает реферала и выдаёт награду ТОМУ, КТО ПЕРЕШЕЛ по ссылке."""
     existing = db_exec("SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,), fetch=True)
     if existing:
-        return  # уже был приглашён кем-то
+        return  # Игрок уже был чьим-то рефералом
 
     try:
+        # Сохраняем связь в таблице рефералов
         db_exec("INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)", (referrer_id, referred_id))
-        krw_reward = random.randint(500, 1000)
-        db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referrer_id))
+
+        # Генерируем награду от 500 до 850 KRW
+        krw_reward = random.randint(500, 850)
+
+        # Начисляем награду новому игроку (referred_id)
+        db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referred_id))
     except sqlite3.IntegrityError:
         pass
 

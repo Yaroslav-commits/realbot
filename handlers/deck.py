@@ -225,29 +225,37 @@ async def view_card(cq: CallbackQuery):
     await cq.message.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, reply_markup=bld.as_markup())
 
 
+# ============ ИСПРАВЛЕННЫЙ БЛОК ТРЕЙДОВ ============
+
 @router.callback_query(F.data.startswith("trade_init:"))
 async def trade_init(cq: CallbackQuery, state: FSMContext):
+    await cq.answer()  # Обязательный ответ
     cid = cq.data.split(":")[1]
+
+    c = CARDS.get(cid)
+    if not c:
+        return await cq.message.answer("Ошибка: карта не найдена в базе данных.")
+
     await state.update_data(trade_card=cid)
     await state.set_state(TradeState.waiting_for_trade_id)
 
-    c = CARDS[cid]
     bld = InlineKeyboardBuilder()
     bld.button(text="Отменить", callback_data="trade_cancel_init")
 
     await cq.message.delete()
-    await cq.message.answer_photo(
-        photo=FSInputFile(f"images/cards/{c['file']}"),
-        caption="⏳ Отправьте 🆔 игрока, которому хотите предложить обмен",
-        reply_markup=bld.as_markup()
-    )
-
-
-@router.callback_query(F.data == "trade_cancel_init")
-async def trade_cancel_init(cq: CallbackQuery, state: FSMContext):
-    await state.clear()
-    await cq.message.delete()
-    await cq.message.answer("Трейд отменен.", reply_markup=kb_main())
+    # Используем локальный путь к картинке
+    photo_path = f"images/cards/{c['file']}"
+    if os.path.exists(photo_path):
+        await cq.message.answer_photo(
+            photo=FSInputFile(photo_path),
+            caption="⏳ Отправьте 🆔 игрока, которому хотите предложить обмен",
+            reply_markup=bld.as_markup()
+        )
+    else:
+        await cq.message.answer(
+            "⏳ Отправьте 🆔 игрока, которому хотите предложить обмен (изображение не найдено)",
+            reply_markup=bld.as_markup()
+        )
 
 
 @router.message(TradeState.waiting_for_trade_id)
@@ -258,121 +266,147 @@ async def process_trade_id(msg: types.Message, state: FSMContext):
         await state.clear()
         return
 
-    target_id = msg.text.strip()
-    if not target_id.isdigit():
-        return await msg.answer("Неверный ID. Попробуйте еще раз или нажмите Отменить.")
-    target_id = int(target_id)
+    target_id_str = msg.text.strip()
+    if not target_id_str.isdigit():
+        return await msg.answer("Неверный ID. Попробуйте еще раз или нажмите Отменить в меню выше.")
 
+    target_id = int(target_id_str)
     if target_id == msg.from_user.id:
-        return await msg.answer("Нельзя трейдиться с собой.")
+        return await msg.answer("Нельзя трейдиться с самим собой.")
 
     u_target = get_user(target_id)
     if not u_target:
-        return await msg.answer("Игрок не найден.")
+        return await msg.answer("Игрок с таким ID не найден в базе бота.")
 
     await state.clear()
 
+    # Сохраняем трейд в ожидание
     PENDING_TRADES[msg.from_user.id] = {
         'sender_card': cid,
         'receiver_id': target_id,
         'receiver_card': None
     }
 
-    c = CARDS[cid]
+    c = CARDS.get(cid)
     target_name = u_target[2] if u_target[2] else f"Игрок {target_id}"
 
-    await msg.answer(f"Ваш запрос отправлен трейдеру: {target_name}")
+    await msg.answer(f"✅ Ваш запрос отправлен трейдеру: {target_name}")
 
     has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (target_id, cid), fetch=True)
-
-    warning = " (⚠️ У вас есть эта карта!)" if has_card else ""
-    caption = f"{msg.from_user.first_name} хочет с вами трейд{warning}"
+    warning = " (⚠️ У вас уже есть эта карта!)" if has_card else ""
+    caption = f"👤 {msg.from_user.first_name} предлагает вам обмен карты!{warning}"
 
     bld = InlineKeyboardBuilder()
     bld.button(text="Выбрать карту для обмена", callback_data=f"trade_p2_select:{msg.from_user.id}")
     bld.button(text="Отказаться", callback_data=f"trade_decline:{msg.from_user.id}")
     bld.adjust(1)
-
     try:
+        photo_path = f"images/cards/{c['file']}"
         await msg.bot.send_photo(
             target_id,
-            photo=FSInputFile(f"images/cards/{c['file']}"),
+            photo=FSInputFile(photo_path) if os.path.exists(photo_path) else "https://via.placeholder.com/300",
             caption=caption,
             reply_markup=bld.as_markup()
         )
-    except Exception:
+    except Exception as e:
+        logging.error(f"Trade send error: {e}")
         await msg.answer("Не удалось отправить запрос. Возможно, игрок заблокировал бота.")
         PENDING_TRADES.pop(msg.from_user.id, None)
 
 
 @router.callback_query(F.data.startswith("trade_p2_select:"))
 async def trade_p2_select(cq: CallbackQuery):
+    # Исправляем «зависание» кнопки
+    await cq.answer()
+
     sender_id = int(cq.data.split(":")[1])
     t = PENDING_TRADES.get(sender_id)
 
     if not t or t['receiver_id'] != cq.from_user.id:
-        return await cq.answer("Трейд не актуален или отменен.", show_alert=True)
+        return await cq.message.answer("Трейд более не актуален или был отменен.")
 
-    sender_card = t['sender_card']
-    rarity = CARDS[sender_card]['rarity']
+    sender_card_id = t['sender_card']
+    # Безопасное получение редкости
+    sender_card_data = CARDS.get(sender_card_id)
+    if not sender_card_data:
+        return await cq.message.answer("Ошибка: карта инициатора не найдена.")
 
-    cards = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
-    valid_cards = list(set([cid for (cid,) in cards if CARDS[cid]['rarity'] == rarity]))
+    rarity = sender_card_data['rarity']
+
+    # Получаем инвентарь игрока
+    inv_data = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
+
+    # Фильтруем карты по редкости с проверкой на существование в коде (чтобы не упасть)
+    valid_cards = []
+    for (cid,) in inv_data:
+        card_info = CARDS.get(cid)
+        if card_info and card_info.get('rarity') == rarity:
+            valid_cards.append(cid)
+
+    # Убираем дубликаты для списка выбора
+    valid_cards = list(set(valid_cards))
 
     if not valid_cards:
         await cq.message.delete()
-        await cq.message.answer("У вас нет карт такой же редкости для обмена. Трейд отменен.")
+        await cq.message.answer(f"У вас нет карт редкости '{rarity}' для обмена. Трейд отменен.")
         PENDING_TRADES.pop(sender_id, None)
         try:
-            await cq.bot.send_message(sender_id, "Игрок не может принять трейд, так как у него нет подходящих карт.")
+            await cq.bot.send_message(sender_id, "Игрок не может принять трейд: нет подходящих карт по редкости.")
         except:
             pass
         return
 
     bld = InlineKeyboardBuilder()
-    for cid in valid_cards[:40]:
-        bld.button(text=CARDS[cid]['name'], callback_data=f"trade_p2_conf:{sender_id}:{cid}")
+    for cid in valid_cards[:40]:  # Лимит кнопок
+        name = CARDS[cid]['name']
+        bld.button(text=name, callback_data=f"trade_p2_conf:{sender_id}:{cid}")
+
     bld.button(text="❌ Отказаться", callback_data=f"trade_decline:{sender_id}")
     bld.adjust(2)
 
     await cq.message.delete()
-    await cq.message.answer("Выбери карту, которую хочешь отдать взамен:", reply_markup=bld.as_markup())
+    await cq.message.answer("🎴 Выберите вашу карту, которую отдадите взамен:", reply_markup=bld.as_markup())
 
 
 @router.callback_query(F.data.startswith("trade_p2_conf:"))
 async def trade_p2_conf(cq: CallbackQuery):
-    _, sender_id, p2_card = cq.data.split(":")
-    sender_id = int(sender_id)
+    await cq.answer()
+    parts = cq.data.split(":")
+    sender_id = int(parts[1])
+    p2_card = parts[2]
 
     t = PENDING_TRADES.get(sender_id)
     if not t or t['receiver_id'] != cq.from_user.id:
-        return await cq.answer("Трейд не актуален.", show_alert=True)
+        return await cq.message.answer("Трейд не актуален.")
 
     t['receiver_card'] = p2_card
 
-    c1 = CARDS[t['sender_card']]
-    c2 = CARDS[p2_card]
+    c_sender = CARDS.get(t['sender_card'])
+    c_receiver = CARDS.get(p2_card)
+
     sender_user = get_user(sender_id)
     sender_name = sender_user[2] if sender_user else f"Игрок {sender_id}"
 
     await cq.message.delete()
 
-    media = [
-        types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c2['file']}")),
-        types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c1['file']}"))
-    ]
-    await cq.message.answer_media_group(media=media)
+    # Отправляем предпросмотр обеих карт через локальные файлы
+    media = []
+    for c in [c_receiver, c_sender]:
+        p = f"images/cards/{c['file']}"
+        if os.path.exists(p):
+            media.append(types.InputMediaPhoto(media=FSInputFile(p)))
 
-    txt = (f"🔄 Подтверждение трейда c {sender_name}:\n\n"
-           f"📤 Вы отдаете: {c2['name']}\n"
-           f"📥 Вы получите: {c1['name']}\n\n"
-           f"❓ Вы уверены, что хотите совершить трейд?")
+    if media:
+        await cq.message.answer_media_group(media=media)
+    txt = (f"🔄 Подтверждение обмена c {sender_name}:\n\n"
+           f"📤 Вы отдаете: {c_receiver['name']}\n"
+           f"📥 Вы получите: {c_sender['name']}\n\n"
+           f"❓ Вы уверены?")
 
     bld = InlineKeyboardBuilder()
     bld.button(text="✅ Подтвердить", callback_data=f"trade_p2_final:{sender_id}")
     bld.button(text="❌ Отказаться", callback_data=f"trade_decline:{sender_id}")
     bld.adjust(2)
-
     await cq.message.answer(txt, reply_markup=bld.as_markup())
 
 

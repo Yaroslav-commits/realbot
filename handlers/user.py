@@ -32,16 +32,20 @@ from handlers import (router, TradeState, SettingsState, PromoState,
 # ================== HANDLERS ==================
 @router.message(Command("start"))
 async def start_cmd(msg: types.Message):
-    # Парсим реферальный параметр (глубокая ссылка: /start ref_XXXX)
+    # Парсим реферальный код напрямую из команды
     args = msg.text.split()
     referred_by = None
-    if len(args) > 1 and args[1].startswith('ref_'):
-        ref_code = args[1][4:]  # убираем префикс 'ref_'
+
+    if len(args) > 1:
+        ref_code = args[1]
+        # Ищем владельца этого кода в базе
         referrer = get_user_by_ref_code(ref_code)
         if referrer:
-            referred_by = referrer[0]  # ID пригласившего
+            referred_by = referrer[0]  # Получаем ID того, кто пригласил
+            # Важно: если пользователь новый, награда выдастся внутри add_user -> process_referral
 
     add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name, referred_by)
+
     await msg.answer(
         "🎴 Добро пожаловать в *ManhwCard*! 🎴\n\n"
         "Здесь ты сможешь собирать карты любимых персонажей, сражаться с другими игроками и обмениваться редкими картами 💥\n\n"
@@ -51,8 +55,6 @@ async def start_cmd(msg: types.Message):
         reply_markup=kb_main(),
         parse_mode="Markdown"
     )
-
-
 
 @router.message(F.text == "⛩️ Банды")
 async def gangs(msg: types.Message):
@@ -241,15 +243,15 @@ async def referral_system_cq(cq: CallbackQuery, bot: Bot):
         return
 
     ref_count = get_referral_count(cq.from_user.id)
-    ref_code = u[18]  # referral_code (индекс 18)
+    ref_code = u[18]  # referral_code (индекс в твоей таблице)
 
-    # Динамически получаем юзернейм твоего бота, чтобы ссылка 100% работала
     bot_info = await bot.get_me()
-    ref_link = f"https://t.me/{bot_info.username}?start=ref_{ref_code}"
-
+    # Формируем чистую ссылку без префиксов
+    ref_link = f"https://t.me/{bot_info.username}?start={ref_code}"
     txt = (
         f"👥 Всего приглашенных: {ref_count}\n\n"
-        f"Приглашай друзей и получай вознаграждение от 500💴 до 1000💴 и 5💳 попыток за каждого реферала!\n\n"
+        f"Приглашай друзей! Когда новый игрок перейдет по твоей ссылке, "
+        f"он получит от 450💴 до 850💴 и 5💳 попыток в качестве бонуса!\n\n"
         f"⛓️‍💥 Твоя уникальная реферальная ссылка:\n<code>{ref_link}</code>"
     )
 
@@ -258,6 +260,7 @@ async def referral_system_cq(cq: CallbackQuery, bot: Bot):
 
     await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
+
 
 
 # ============ ПЕРЕКЛЮЧЕНИЕ УВЕДОМЛЕНИЙ ============
