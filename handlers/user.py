@@ -28,7 +28,8 @@ from database.db import (db_exec, init_db, get_user, add_user, get_rank,
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 
-
+class BroadcastState(StatesGroup):
+    waiting_for_message = State()
 # ================== HANDLERS ==================
 @router.message(Command("start"))
 async def start_cmd(msg: types.Message):
@@ -429,6 +430,60 @@ async def equip_cq(cq: CallbackQuery):
 
 
 # ============ АДМИН И ПРОМО ============
+# ============ КОМАНДА РАССЫЛКИ (NOTIFER) ============
+
+@router.message(Command("notifer"))
+async def notifier_cmd(msg: types.Message, state: FSMContext):
+    # Проверка на админа (используем твой список ADMIN_IDS из config)
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    await msg.answer("📥 Пришлите сообщение, которое хотите разослать всем пользователям.\n"
+                     "Это может быть текст, фото, видео или <b>пересланное сообщение</b> из канала.")
+    await state.set_state(BroadcastState.waiting_for_message)
+
+
+@router.message(BroadcastState.waiting_for_message)
+async def process_broadcast(msg: types.Message, state: FSMContext, bot: Bot):
+    await state.clear()
+
+    # Получаем всех пользователей из базы данных
+    users = db_exec("SELECT id FROM users", fetchall=True)
+
+    if not users:
+        return await msg.answer("❌ В базе данных нет пользователей.")
+
+    await msg.answer(f"🚀 Начинаю рассылку для {len(users)} пользователей...")
+
+    count = 0
+    blocked = 0
+    errors = 0
+
+    for (uid,) in users:
+        try:
+            # Используем copy_to, так как оно идеально копирует всё:
+            # текст, кнопки, медиа и сохраняет ссылки.
+            # Если это пересланное сообщение, оно сохранится как пересланное.
+            await msg.copy_to(chat_id=uid)
+            count += 1
+            # Небольшая задержка, чтобы Telegram не забанил за спам
+            await asyncio.sleep(0.05)
+        except Exception as e:
+            # Если пользователь заблокировал бота
+            if "forbidden" in str(e).lower():
+                blocked += 1
+            else:
+                errors += 1
+
+    await msg.answer(
+        f"✅ <b>Рассылка завершена!</b>\n\n"
+        f"👤 Получили: {count}\n"
+        f"🚫 Заблокировали бота: {blocked}\n"
+        f"⚠️ Ошибок: {errors}",
+        parse_mode="HTML"
+    )
+
+
 @router.message(
     Command(commands=["give_attempts", "give_card", "give_money", "give_title", "give_background", "give_diamond", "give_pass", "create_promo"]))
 async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
