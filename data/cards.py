@@ -268,7 +268,7 @@ CARDS = {
 "yoo_jin_ho": {"name": "Ю Джин-Хо", "rarity": "Обычная ⚪️", "style": "Боец", "series": "Поднятие уровня в одиночку", "speed": 13, "strength": 16, "intellect": 15, "file": "yoo_jin_ho.jpeg", "exclusive": False},
 "yoo_myung_han": {"name": "Ю Мён-Хан", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 10, "strength": 10, "intellect": 12, "file": "yoo_myung_han.jpeg", "exclusive": False},
 "choi_yoo_ra": {"name": "Чхве Ю-Ра", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 10, "strength": 10, "intellect": 11, "file": "choi_yoo_ra.jpeg", "exclusive": False},
-"han_song_yi": {"name": "Хан Сон-И", "rarity": "Обычная ⚪️", "style": "Кинжалы", "series": "Поднятие уровня в одиночку", "speed": 13, "strength": 11, "intellect": 11, "file": "han_song_yi.jpeg", "exclusive": False},
+"han_song_yi": {"name": "Хан Сон-И", "rarity": "Обычная ⚪️", "style": "Кинжалы", "series": "Поднятие уровня в одиночку", "speed": 13, "strength": 11, "intellect": 11, "file": "hang_song_yi.jpeg", "exclusive": False},
 "ko_myung_hwan": {"name": "Ко Мён-Хван", "rarity": "Обычная ⚪️", "style": "Мастер боевых искусств", "series": "Поднятие уровня в одиночку", "speed": 20, "strength": 19, "intellect": 17, "file": "ko_myung_hwan.jpeg", "exclusive": False},
 "hwang_dong_seok": {"name": "Хван Дон Сок", "rarity": "Обычная ⚪️", "style": "Танк", "series": "Поднятие уровня в одиночку", "speed": 17, "strength": 24, "intellect": 19, "file": "hwang_dong_seok.jpeg", "exclusive": False},
 #====LIMITED CARDS=====
