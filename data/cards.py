@@ -181,6 +181,96 @@ CARDS = {
 "eun_gel": {"name": "Ын Гель", "rarity": "Эпическая 🟢", "style": "Универсал", "series": "Факультет зачистки подземелий", "speed": 80, "strength": 79, "intellect": 79, "file": "eun_gel.jpeg", "exclusive": False},
 "jang_san_yeong": {"name": "Чан Сан Ён", "rarity": "Редкая 🟡", "style": "Рукопашный бой", "series": "Факультет зачистки подземелий", "speed": 46, "strength": 48, "intellect": 45, "file": "jang_san_yeong.jpeg", "exclusive": False},
 "yu_cha_ryeon": {"name": "Ю Ча Рён", "rarity": "Легендарная 🔵", "style": "Зыбь", "series": "Факультет зачистки подземелий", "speed": 85, "strength": 85, "intellect": 84, "file": "yu_cha_ryeon.jpeg", "exclusive": False},
+# ======== СОЛО ЛЕВЕЛИНГ ========
+"son_jin_woo": {
+    "name": "Сон Джин Ву",
+    "rarity": "Божественная ⚫️",
+    "style": "Правитель теней",
+    "series": "Поднятие уровня в одиночку",
+    "speed": 99, "strength": 99, "intellect": 101,
+    "file": "son_jin_woo.png",
+    "video": "son_jin_woo.mp4",
+    "width": 960,
+    "height": 1280,
+    "exclusive": False
+},
+"antares": {"name": "Антарес", "rarity": "Мифическая 🔴", "style": "Огненное разрушение", "series": "Поднятие уровня в одиночку", "speed": 98, "strength": 100, "intellect": 98, "file": "antares.jpeg", "exclusive": False},
+"ashborn": {"name": "Эшборн", "rarity": "Мифическая 🔴", "style": "Правитель теней", "series": "Поднятие уровня в одиночку", "speed": 97, "strength": 98, "intellect": 100, "file": "ashborn.jpeg", "exclusive": False},
+"absolute_being": {"name": "Абсолютное Существо", "rarity": "Мифическая 🔴", "style": "Повелитель Ангелов", "series": "Поднятие уровня в одиночку", "speed": 96, "strength": 99, "intellect": 97, "file": "absolute_being.jpeg", "exclusive": False},
+"thomas_andre": {"name": "Томас Андре", "rarity": "Мифическая 🔴", "style": "Приврощение", "series": "Поднятие уровня в одиночку", "speed": 92, "strength": 93, "intellect": 91, "file": "thomas_andre.jpeg", "exclusive": False},
+"baran": {"name": "Баран", "rarity": "Мифическая 🔴", "style": "Меч Молний", "series": "Поднятие уровня в одиночку", "speed": 95, "strength": 94, "intellect": 93, "file": "baran.jpeg", "exclusive": False},
+"legia": {"name": "Легия", "rarity": "Мифическая 🔴", "style": "Титаний Король", "series": "Поднятие уровня в одиночку", "speed": 92, "strength": 95, "intellect": 93, "file": "legia.jpeg", "exclusive": False},
+"tarnak": {"name": "Тарнак", "rarity": "Мифическая 🔴", "style": "Король Чудовищ/Телекинез", "series": "Поднятие уровня в одиночку", "speed": 95, "strength": 94, "intellect": 96, "file": "tarnak.jpeg", "exclusive": False},
+"yogmund": {"name": "Йогмунд", "rarity": "Мифическая 🔴", "style": "Маг Хаоса", "series": "Поднятие уровня в одиночку", "speed": 93, "strength": 92, "intellect": 94, "file": "yogmund.jpeg", "exclusive": False},
+"rakan": {"name": "Ракан", "rarity": "Мифическая 🔴", "style": "Животный", "series": "Поднятие уровня в одиночку", "speed": 95, "strength": 96, "intellect": 94, "file": "rakan.jpeg", "exclusive": False},
+"hokhan": {"name": "Хокхан", "rarity": "Мифическая 🔴", "style": "Маг Льда", "series": "Поднятие уровня в одиночку", "speed": 96, "strength": 94, "intellect": 97, "file": "hokhan.jpeg", "exclusive": False},
+"kerehsha": {"name": "Керехша", "rarity": "Мифическая 🔴", "style": "Маг Ядов", "series": "Поднятие уровня в одиночку", "speed": 94, "strength": 95, "intellect": 96, "file": "kerehsha.jpeg", "exclusive": False},
+"architect": {"name": "Архитектор", "rarity": "Мифическая 🔴", "style": "Универсал", "series": "Поднятие уровня в одиночку", "speed": 93, "strength": 93, "intellect": 94, "file": "architect.jpeg", "exclusive": False},
+"liu_zhigang": {"name": "Лю Джиган", "rarity": "Легендарная 🔵", "style": "Двойные Мечи", "series": "Поднятие уровня в одиночку", "speed": 86, "strength": 87, "intellect": 86, "file": "liu_zhigang.jpeg", "exclusive": False},
+"thomas_andre1": {"name": "Томас Андре", "rarity": "Легендарная 🔵", "style": "Телекинез", "series": "Поднятие уровня в одиночку", "speed": 87, "strength": 86, "intellect": 87, "file": "thomas_andre1.jpeg", "exclusive": False},
+"igris": {"name": "Игрис", "rarity": "Легендарная 🔵", "style": "Мастер Меча", "series": "Поднятие уровня в одиночку", "speed": 87, "strength": 86, "intellect": 85, "file": "igris.jpeg", "exclusive": False},
+"baek_yoon_ho": {"name": "Бэк Юн-Хо", "rarity": "Легендарная 🔵", "style": "Животный", "series": "Поднятие уровня в одиночку", "speed": 81, "strength": 83, "intellect": 82, "file": "baek_yoon_ho.jpeg", "exclusive": False},
+"bellion": {"name": "Беллион", "rarity": "Легендарная 🔵", "style": "Мастер оружий", "series": "Поднятие уровня в одиночку", "speed": 87, "strength": 88, "intellect": 86, "file": "bellion.jpeg", "exclusive": False},
+"ber": {"name": "Бер", "rarity": "Легендарная 🔵", "style": "Хищная скорость", "series": "Поднятие уровня в одиночку", "speed": 88, "strength": 87, "intellect": 85, "file": "ber.jpeg", "exclusive": False},
+"atsushi_kumamoto": {"name": "Ацуши Кумамото", "rarity": "Легендарная 🔵", "style": "Вероломное фехтование", "series": "Поднятие уровня в одиночку", "speed": 82, "strength": 82, "intellect": 81, "file": "atsushi_kumamoto.jpeg", "exclusive": False},
+"goto_ryuji": {"name": "Гото Рюджи", "rarity": "Легендарная 🔵", "style": "Кэндзюцу", "series": "Поднятие уровня в одиночку", "speed": 83, "strength": 83, "intellect": 82, "file": "goto_ryuji.jpeg", "exclusive": False},
+"lennart_niermann": {"name": "Леннарт Нирман", "rarity": "Легендарная 🔵", "style": "Агрессивный боец", "series": "Поднятие уровня в одиночку", "speed": 82, "strength": 82, "intellect": 81, "file": "lennart_niermann.jpeg", "exclusive": False},
+"go_gun_hee": {"name": "Го Гун-Хи", "rarity": "Легендарная 🔵", "style": "Силовой натиск", "series": "Поднятие уровня в одиночку", "speed": 83, "strength": 85, "intellect": 85, "file": "go_gun_hee.jpeg", "exclusive": False},
+"kamish": {"name": "Камиш", "rarity": "Легендарная 🔵", "style": "Драконье дыхание", "series": "Поднятие уровня в одиночку", "speed": 84, "strength": 87, "intellect": 86, "file": "kamish.jpeg", "exclusive": False},
+"tank": {"name": "Танк", "rarity": "Легендарная 🔵", "style": "Животный", "series": "Поднятие уровня в одиночку", "speed": 81, "strength": 82, "intellect": 81, "file": "tank.jpeg", "exclusive": False},
+"tusk": {"name": "Таск", "rarity": "Легендарная 🔵", "style": "Универсальный Маг", "series": "Поднятие уровня в одиночку", "speed": 81, "strength": 83, "intellect": 84, "file": "tusk.jpeg", "exclusive": False},
+"man_dong_woon": {"name": "Ман Дон-Ун", "rarity": "Легендарная 🔵", "style": "Танк", "series": "Поднятие уровня в одиночку", "speed": 81, "strength": 83, "intellect": 81, "file": "man_dong_woon.jpeg", "exclusive": False},
+"yuri_orlov": {"name": "Юрий Орлов", "rarity": "Легендарная 🔵", "style": "Маг", "series": "Поднятие уровня в одиночку", "speed": 82, "strength": 83, "intellect": 85, "file": "yuri_orlov.jpeg", "exclusive": False},
+"lim_tae_gyu": {"name": "Лим Тхэ-Гю", "rarity": "Легендарная 🔵", "style": "Стрелок", "series": "Поднятие уровня в одиночку", "speed": 83, "strength": 82, "intellect": 81, "file": "lim_tae_gyu.jpeg", "exclusive": False},
+"christopher_reed": {"name": "Кристофер Рид", "rarity": "Легендарная 🔵", "style": "Магия Огня", "series": "Поднятие уровня в одиночку", "speed": 84, "strength": 86, "intellect": 86, "file": "christopher_reed.jpeg", "exclusive": False},
+"hwang_dong_su": {"name": "Хван Дон-Су", "rarity": "Легендарная 🔵", "style": "Боец", "series": "Поднятие уровня в одиночку", "speed": 82, "strength": 82, "intellect": 81, "file": "hwang_dong_su.jpeg", "exclusive": False},
+"song_il_hwan": {"name": "Сон Иль Хван", "rarity": "Легендарная 🔵", "style": "Божественные Клинки", "series": "Поднятие уровня в одиночку", "speed": 88, "strength": 89, "intellect": 87, "file": "song_il_hwan.jpeg", "exclusive": False},
+"kenzo_tanaka": {"name": "Кэндзо Танака", "rarity": "Легендарная 🔵", "style": "Магический Боец", "series": "Поднятие уровня в одиночку", "speed": 82, "strength": 82, "intellect": 81, "file": "kenzo_tanaka.jpeg", "exclusive": False},
+"grid": {"name": "Грид", "rarity": "Эпическая 🟢", "style": "Ближний Боец", "series": "Поднятие уровня в одиночку", "speed": 75, "strength": 76, "intellect": 72, "file": "grid.jpeg", "exclusive": False},
+"baruka": {"name": "Барука", "rarity": "Эпическая 🟢", "style": "Ассассин", "series": "Поднятие уровня в одиночку", "speed": 76, "strength": 76, "intellect": 74, "file": "baruka.jpeg", "exclusive": False},
+"iron": {"name": "Айрон", "rarity": "Эпическая 🟢", "style": "Танк", "series": "Поднятие уровня в одиночку", "speed": 74, "strength": 76, "intellect": 73, "file": "iron.jpeg", "exclusive": False},
+"baek_yoon_ho1": {"name": "Бэк Юн-Хо", "rarity": "Эпическая 🟢", "style": "Животный", "series": "Поднятие уровня в одиночку", "speed": 76, "strength": 77, "intellect": 74, "file": "baek_yoon_ho1.jpeg", "exclusive": False},
+"choi_jong_in": {"name": "Чхве Чон-Ин", "rarity": "Эпическая 🟢", "style": "Маг Огня", "series": "Поднятие уровня в одиночку", "speed": 76, "strength": 78, "intellect": 80, "file": "choi_jong_in.jpeg", "exclusive": False},
+"tawata_kanae": {"name": "Тавата Канаэ", "rarity": "Эпическая 🟢", "style": "Парные клинки", "series": "Поднятие уровня в одиночку", "speed": 77, "strength": 78, "intellect": 76, "file": "tawata_kanae.jpeg", "exclusive": False},
+"akari_shimizu": {"name": "Акари Шимизу", "rarity": "Эпическая 🟢", "style": "Исцеление", "series": "Поднятие уровня в одиночку", "speed": 76, "strength": 74, "intellect": 77, "file": "akari_shimizu.jpeg", "exclusive": False},
+"red_igris": {"name": "Алый Игрис", "rarity": "Эпическая 🟢", "style": "Мастер Меча", "series": "Поднятие уровня в одиночку", "speed": 79, "strength": 80, "intellect": 78, "file": "red_igris.jpeg", "exclusive": False},
+"cha_hae_in": {"name": "Ча Хэ Ин", "rarity": "Эпическая 🟢", "style": "Танцовщица", "series": "Поднятие уровня в одиночку", "speed": 80, "strength": 78, "intellect": 80, "file": "cha_hae_in.jpeg", "exclusive": False},
+"minoru_hoshino": {"name": "Минору Хошино", "rarity": "Эпическая 🟢", "style": "Мечник", "series": "Поднятие уровня в одиночку", "speed": 75, "strength": 76, "intellect": 74, "file": "minoru_hoshino.jpeg", "exclusive": False},
+"mari_ishida": {"name": "Мари Исида", "rarity": "Эпическая 🟢", "style": "Мечи", "series": "Поднятие уровня в одиночку", "speed": 75, "strength": 76, "intellect": 73, "file": "mari_ishida.jpeg", "exclusive": False},
+"kei": {"name": "Кей", "rarity": "Эпическая 🟢", "style": "Маг Льда", "series": "Поднятие уровня в одиночку", "speed": 74, "strength": 78, "intellect": 79, "file": "kei.jpeg", "exclusive": False},
+"ippei_izawa": {"name": "Иппэй Идзава", "rarity": "Эпическая 🟢", "style": "Ассассин", "series": "Поднятие уровня в одиночку", "speed": 77, "strength": 75, "intellect": 76, "file": "ippei_izawa.jpeg", "exclusive": False},
+"min_byung_gu": {"name": "Мин Бюн-Гу", "rarity": "Эпическая 🟢", "style": "Исцеление", "series": "Поднятие уровня в одиночку", "speed": 78, "strength": 77, "intellect": 79, "file": "min_byung_gu.jpeg", "exclusive": False},
+"kaisel": {"name": "Кайсел", "rarity": "Эпическая 🟢", "style": "Животный", "series": "Поднятие уровня в одиночку", "speed": 77, "strength": 78, "intellect": 76, "file": "kaisel.jpeg", "exclusive": False},
+"statue_of_god": {"name": "Сатуя бога", "rarity": "Эпическая 🟢", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 73, "strength": 79, "intellect": 74, "file": "statue_of_god.jpeg", "exclusive": False},
+"park_he_jin": {"name": "Пак Хи-Чин", "rarity": "Редкая 🟡", "style": "Маг ветра", "series": "Поднятие уровня в одиночку", "speed": 57, "strength": 56, "intellect": 59, "file": "park_he_jin.jpeg", "exclusive": False},
+"kim_chul": {"name": "Ким Чхоль", "rarity": "Редкая 🟡", "style": "Танк", "series": "Поднятие уровня в одиночку", "speed": 56, "strength": 58, "intellect": 55, "file": "kim_chul.jpeg", "exclusive": False},
+"esil_radir": {"name": "Эсиль Радир", "rarity": "Редкая 🟡", "style": "Копье", "series": "Поднятие уровня в одиночку", "speed": 59, "strength": 58, "intellect": 59, "file": "esil_radir.jpeg", "exclusive": False},
+"kang_tae_sik": {"name": "Кан Тхэ-Сик", "rarity": "Редкая 🟡", "style": "Ассассин", "series": "Поднятие уровня в одиночку", "speed": 58, "strength": 57, "intellect": 55, "file": "kang_tae_sik.jpeg", "exclusive": False},
+"woo_jin_chul": {"name": "Ву Джин-Чоль", "rarity": "Редкая 🟡", "style": "Боец", "series": "Поднятие уровня в одиночку", "speed": 57, "strength": 59, "intellect": 58, "file": "woo_jin_chul.jpeg", "exclusive": False},
+"lee_bora": {"name": "Ли Бора", "rarity": "Редкая 🟡", "style": "Тёмный Маг", "series": "Поднятие уровня в одиночку", "speed": 51, "strength": 50, "intellect": 53, "file": "lee_bora.jpeg", "exclusive": False},
+"adam_white": {"name": "Адам Уайт", "rarity": "Редкая 🟡", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 34, "strength": 39, "intellect": 43, "file": "adam_white.jpeg", "exclusive": False},
+"norma_selner": {"name": "Норма Селнер", "rarity": "Редкая 🟡", "style": "Видение", "series": "Поднятие уровня в одиночку", "speed": 35, "strength": 34, "intellect": 51, "file": "norma_selner.jpeg", "exclusive": False},
+"yu_su_hyun": {"name": "Ю Су-Хён", "rarity": "Редкая 🟡", "style": "Магический Стрелок", "series": "Поднятие уровня в одиночку", "speed": 53, "strength": 52, "intellect": 54, "file": "yu_su_hyun.jpeg", "exclusive": False},
+"jina": {"name": "Джина", "rarity": "Редкая 🟡", "style": "Ман Огня", "series": "Поднятие уровня в одиночку", "speed": 53, "strength": 55, "intellect": 57, "file": "jina.jpeg", "exclusive": False},
+"hanekawa": {"name": "Ханекава", "rarity": "Редкая 🟡", "style": "Ближний бой", "series": "Поднятие уровня в одиночку", "speed": 58, "strength": 55, "intellect": 56, "file": "hanekawa.jpeg", "exclusive": False},
+"park_jong_su": {"name": "Пак Чон-Су", "rarity": "Редкая 🟡", "style": "Боец", "series": "Поднятие уровня в одиночку", "speed": 54, "strength": 57, "intellect": 55, "file": "park_jong_su.jpeg", "exclusive": False},
+"song_ki_hoon": {"name": "Сон Ки-Хун", "rarity": "Редкая 🟡", "style": "Мечник", "series": "Поднятие уровня в одиночку", "speed": 57, "strength": 59, "intellect": 56, "file": "song_ki_hoon.jpeg", "exclusive": False},
+"matsumoto_shigeo": {"name": "Мацумото Шигео", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 13, "strength": 12, "intellect": 16, "file": "matsumoto_shigeo.jpeg", "exclusive": False},
+"laura": {"name": "Лаура", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 21, "strength": 19, "intellect": 23, "file": "laura.jpeg", "exclusive": False},
+"ahn_sang_min": {"name": "Ан Сан-Мин", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 14, "strength": 13, "intellect": 16, "file": "ahn_sang_min.jpeg", "exclusive": False},
+"park_jin_suk": {"name": "Парк Джин-Сук", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 21, "strength": 24, "intellect": 23, "file": "park_jin_suk.jpeg", "exclusive": False},
+"song_chi_yul": {"name": "Сон Чи-Юл", "rarity": "Обычная ⚪️", "style": "Маг Огня", "series": "Поднятие уровня в одиночку", "speed": 26, "strength": 27, "intellect": 30, "file": "song_chi_yul.jpeg", "exclusive": False},
+"song_ji_a": {"name": "Сон Джи-А", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 11, "strength": 10, "intellect": 13, "file": "song_ji_a.jpeg", "exclusive": False},
+"park_hyun_hee": {"name": "Пак Кён-Хе", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 10, "strength": 10, "intellect": 12, "file": "park_hyun_hee.jpeg", "exclusive": False},
+"lee_joo_hee": {"name": "Ли Джу-Хи", "rarity": "Обычная ⚪️", "style": "Исцеление", "series": "Поднятие уровня в одиночку", "speed": 20, "strength": 16, "intellect": 25, "file": "lee_joo_hee.jpeg", "exclusive": False},
+"kim_sang_shik": {"name": "Ким Сан-Шик", "rarity": "Обычная ⚪️", "style": "Мечник", "series": "Поднятие уровня в одиночку", "speed": 19, "strength": 20, "intellect": 16, "file": "kim_sang_shik.jpeg", "exclusive": False},
+"vulcan": {"name": "Вулкан", "rarity": "Обычная ⚪️", "style": "Дубинка", "series": "Поднятие уровня в одиночку", "speed": 30, "strength": 30, "intellect": 26, "file": "vulcan.jpeg", "exclusive": False},
+"yoo_jin_ho": {"name": "Ю Джин-Хо", "rarity": "Обычная ⚪️", "style": "Боец", "series": "Поднятие уровня в одиночку", "speed": 13, "strength": 16, "intellect": 15, "file": "yoo_jin_ho.jpeg", "exclusive": False},
+"yoo_myung_han": {"name": "Ю Мён-Хан", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 10, "strength": 10, "intellect": 12, "file": "yoo_myung_han.jpeg", "exclusive": False},
+"choi_yoo_ra": {"name": "Чхве Ю-Ра", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Поднятие уровня в одиночку", "speed": 10, "strength": 10, "intellect": 11, "file": "choi_yoo_ra.jpeg", "exclusive": False},
+"han_song_yi": {"name": "Хан Сон-И", "rarity": "Обычная ⚪️", "style": "Кинжалы", "series": "Поднятие уровня в одиночку", "speed": 13, "strength": 11, "intellect": 11, "file": "han_song_yi.jpeg", "exclusive": False},
+"ko_myung_hwan": {"name": "Ко Мён-Хван", "rarity": "Обычная ⚪️", "style": "Мастер боевых искусств", "series": "Поднятие уровня в одиночку", "speed": 20, "strength": 19, "intellect": 17, "file": "ko_myung_hwan.jpeg", "exclusive": False},
+"hwang_dong_seok": {"name": "Хван Дон Сок", "rarity": "Обычная ⚪️", "style": "Танк", "series": "Поднятие уровня в одиночку", "speed": 17, "strength": 24, "intellect": 19, "file": "hwang_dong_seok.jpeg", "exclusive": False},
 #====LIMITED CARDS=====
 "exclusive_card_1": {"name": "Юк Сонджи и Джин Хобин", "rarity": "Легендарная 🔵", "style": "Дзюдо", "series": "Лукизм", "speed": 90, "strength": 90, "intellect": 85, "file": "exclusive_card_1.png", "exclusive": True},
 }
@@ -216,3 +306,22 @@ TITLES = {
 
 NORMAL_PASS = {1:('krw',25), 2:('atm',5), 3:('bc',12), 4:('atm',2), 5:('pack','epic'), 6:('dia',5), 7:('krw',30), 8:('atm',3), 9:('krw',40), 10:('bc',10), 11:('atm',4), 12:('pack','epic'), 13:('krw',50), 14:('dia',2), 15:('krw',60), 16:('atm',5), 17:('bc',20), 18:('krw',70), 19:('pack','epic'), 20:('atm',3), 21:('krw',30), 22:('dia',3), 23:('krw',90), 24:('bc',10), 25:('pack','leg'), 26:('krw',100), 27:('atm',5), 28:('krw',25), 29:('dia',4), 30:('krw',50), 31:('atm',10)}
 ROYALE_PASS = {1:('krw',80), 2:('atm',10), 3:('bc',25), 4:('atm',8), 5:('pack','epic'), 6:('dia',25), 7:('krw',100), 8:('atm',8), 9:('krw',120), 10:('bc',50), 11:('atm',10), 12:('pack','epic'), 13:('krw',150), 14:('dia',150), 15:('krw',180), 16:('atm',5), 17:('bc',60), 18:('krw',200), 19:('pack','epic'), 20:('atm',10), 21:('krw',230), 22:('dia',50), 23:('krw',260), 24:('bc',50), 25:('pack','leg'), 26:('krw',300), 27:('atm',12), 28:('krw',350), 29:('dia',200), 30:('krw',400), 31:('atm',20)}
+
+# ===== Хелпер для Божественных карт (картинка + видео) =====
+def is_divine(card_or_id):
+    """Принимает либо словарь карты, либо её ключ. True если редкость Божественная."""
+    if isinstance(card_or_id, str):
+        c = CARDS.get(card_or_id)
+        if not c:
+            return False
+        return "Божественная" in c.get("rarity", "")
+    return "Божественная" in card_or_id.get("rarity", "")
+
+def card_has_video(card_or_id):
+    if isinstance(card_or_id, str):
+        c = CARDS.get(card_or_id)
+        if not c:
+            return False
+        return bool(c.get("video"))
+    return bool(card_or_id.get("video"))
+

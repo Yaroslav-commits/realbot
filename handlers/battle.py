@@ -19,7 +19,7 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
                     GET_COOLDOWN_HOURS, BATTLE_COOLDOWN_HOURS,
                     MAIN_PRIZE_NORMAL_TITLE, MAIN_PRIZE_ROYALE_CARD)
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
-                        NORMAL_PASS, ROYALE_PASS)
+                        NORMAL_PASS, ROYALE_PASS, is_divine)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user)
 from handlers import (router, TradeState, SettingsState, PromoState,
@@ -229,58 +229,338 @@ async def auto_deck(cq: CallbackQuery):
     await cq.answer("✅ Колода автоматически собрана лучшими картами!", show_alert=True)
 
 
-@router.callback_query(F.data == "manual_deck_start")
-async def manual_deck_start(cq: CallbackQuery):
-    db_exec("DELETE FROM decks WHERE user_id = ?", (cq.from_user.id,))
-    await cq.answer()
-    await cq.message.answer("🆕 Сборка колоды начата. Выберите 6 карт по очереди.")
-    await show_deck_builder(cq.message, cq.from_user.id, 1)
+# ============ СИСТЕМА КОЛОД (НОВАЯ) ============
+
+class MultiDeckState(StatesGroup):
+    waiting_for_deck_name = State()
+    waiting_for_deck_rename = State()
 
 
-async def show_deck_builder(msg, uid, slot):
-    if slot > 6:
-        await msg.answer("✅ Колода успешно собрана!")
-        return
+def ensure_multi_deck_tables():
+    db_exec('''CREATE TABLE IF NOT EXISTS multi_decks (
+        deck_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        name TEXT
+    )''')
+    db_exec('''CREATE TABLE IF NOT EXISTS multi_deck_slots (
+        deck_id INTEGER,
+        slot_index INTEGER,
+        card_id TEXT
+    )''')
 
-    inv = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (uid,), fetchall=True)
-    deck = db_exec("SELECT card_id FROM decks WHERE user_id = ?", (uid,), fetchall=True)
-    deck_ids = [d[0] for d in deck]
 
-    mythic_divine_cnt = sum(1 for cid in deck_ids if "Мифическая" in CARDS[cid]['rarity'] or "Божественная" in CARDS[cid]['rarity'])
-    leg_cnt = sum(1 for cid in deck_ids if "Легендарная" in CARDS[cid]['rarity'])
+def sync_active_deck(user_id, deck_id):
+    # Синхронизируем собранную колоду с основной таблицей decks для совместимости с боями
+    db_exec("DELETE FROM decks WHERE user_id = ?", (user_id,))
+    slots = db_exec("SELECT slot_index, card_id FROM multi_deck_slots WHERE deck_id = ?", (deck_id,), fetchall=True)
+    for slot_index, card_id in slots:
+        db_exec("INSERT INTO decks (user_id, card_id, slot_index) VALUES (?, ?, ?)", (user_id, card_id, slot_index - 1))
 
-    avail = []
-    owned_counts = {}
-    for (cid,) in inv:
-        owned_counts[cid] = owned_counts.get(cid, 0) + 1
 
-    for cid, count in owned_counts.items():
-        if deck_ids.count(cid) >= count: continue
-        if ("Мифическая" in CARDS[cid]['rarity'] or "Божественная" in CARDS[cid]['rarity']) and mythic_divine_cnt >= 1: continue
-        if "Легендарная" in CARDS[cid]['rarity'] and leg_cnt >= 2: continue
-        avail.append(cid)
-
-    if not avail:
-        await msg.answer(
-            "❌ Недостаточно подходящих карт для завершения колоды. Вы не можете выполнить правила (максимум 1 Божественная или Мифическая, 2 Легендарные). Колода сброшена.")
-        db_exec("DELETE FROM decks WHERE user_id = ?", (uid,))
-        return
+async def show_multi_deck_main(message, user_id):
+    ensure_multi_deck_tables()
+    decks = db_exec("SELECT deck_id, name FROM multi_decks WHERE user_id = ?", (user_id,), fetchall=True)
 
     bld = InlineKeyboardBuilder()
-    for cid in avail[:40]:
-        bld.button(text=CARDS[cid]['name'], callback_data=f"bdeck:{slot}:{cid}")
-    bld.adjust(2)
-    await msg.answer(f"Выберите карту для слота {slot}/6:", reply_markup=bld.as_markup())
+    if len(decks) == 0:
+        bld.button(text="Добавить колоду 🆕", callback_data="mdeck_add")
+        bld.button(text="Назад 🔙", callback_data="view_deck")  # Возврат в меню колоды
+    elif len(decks) == 1:
+        bld.button(text=decks[0][1], callback_data=f"mdeck_view:{decks[0][0]}")
+        bld.button(text="Добавить колоду 🆕", callback_data="mdeck_add")
+        bld.button(text="Назад 🔙", callback_data="view_deck")
+    else:
+        for d in decks:
+            bld.button(text=d[1], callback_data=f"mdeck_view:{d[0]}")
+        bld.button(text="Назад 🔙", callback_data="view_deck")
+
+    bld.adjust(1)
+
+    text = (
+        "Здесь место для вашых колод 🎴\n\n"
+        "Можно иметь лишь две колоды. Нажмите на кнопку «Собрать колоду», для сбора своей боевой колоды."
+    )
+    if isinstance(message, types.Message):
+        await message.answer(text, reply_markup=bld.as_markup())
+    else:
+        await message.edit_text(text, reply_markup=bld.as_markup())
 
 
-@router.callback_query(F.data.startswith("bdeck:"))
-async def bdeck_select(cq: CallbackQuery):
-    _, slot, cid = cq.data.split(":")
-    slot = int(slot)
-    db_exec("INSERT INTO decks (user_id, card_id, slot_index) VALUES (?, ?, ?)", (cq.from_user.id, cid, slot - 1))
-    await cq.answer()
-    await cq.message.delete()
-    await show_deck_builder(cq.message, cq.from_user.id, slot + 1)
+@router.callback_query(F.data == "manual_deck_start")
+async def manual_deck_start(cq: CallbackQuery):
+    await show_multi_deck_main(cq.message, cq.from_user.id)
+
+
+@router.callback_query(F.data == "mdeck_add")
+async def mdeck_add_cb(cq: CallbackQuery, state: FSMContext):
+    decks = db_exec("SELECT deck_id FROM multi_decks WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
+    if len(decks) >= 2:
+        return await cq.answer("Максимум 2 колоды!", show_alert=True)
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Отменить", callback_data="manual_deck_start")
+    await cq.message.edit_text("🗞️ Введите название для колоды, максимум 10 букв..", reply_markup=bld.as_markup())
+    await state.set_state(MultiDeckState.waiting_for_deck_name)
+
+
+@router.message(MultiDeckState.waiting_for_deck_name)
+async def mdeck_name_entered(msg: types.Message, state: FSMContext):
+    name = msg.text.strip()
+    if len(name) > 10:
+        return await msg.answer("Максимум 10 букв! Попробуйте еще раз.")
+
+    db_exec("INSERT INTO multi_decks (user_id, name) VALUES (?, ?)", (msg.from_user.id, name))
+    await state.clear()
+    await show_multi_deck_main(msg, msg.from_user.id)
+
+
+@router.callback_query(F.data.startswith("mdeck_view:"))
+async def mdeck_view_cb(cq: CallbackQuery):
+    deck_id = int(cq.data.split(":")[1])
+    deck = db_exec("SELECT name FROM multi_decks WHERE deck_id = ? AND user_id = ?", (deck_id, cq.from_user.id),
+                   fetch=True)
+    if not deck: return await cq.answer("Колода не найдена!", show_alert=True)
+    deck_name = deck[0]
+
+    slots = db_exec("SELECT slot_index, card_id FROM multi_deck_slots WHERE deck_id = ?", (deck_id,), fetchall=True)
+    cards_text = ""
+    count = 0
+    for s in slots:
+        cid = s[1]
+        c = CARDS.get(cid)
+        if c:
+            count += 1
+            emoji = c['rarity'].split()[-1] if len(c['rarity'].split()) > 1 else ""
+            cards_text += f"«{c['name']}» {emoji} - 1 | Рейтинги - {c['speed']}, {c['strength']}, {c['intellect']}\n"
+
+    if not cards_text:
+        cards_text = "Пусто\n"
+
+    text = (f"🃏 Колода - «{deck_name}»\n\n"
+            f"Количество карт - {count} ✅\n\n"
+            f"Карты и редкости:\n{cards_text}\n"
+            "Добавьте карты в колоду")
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Переименовать колоду 📝", callback_data=f"mdeck_rename:{deck_id}")
+    bld.button(text="Ручная сборка 🔃", callback_data=f"mdeck_edit:{deck_id}")
+    bld.button(text="Удалить колоду ♻️", callback_data=f"mdeck_del:{deck_id}")
+    bld.button(text="Назад 🔙", callback_data="manual_deck_start")
+    bld.adjust(1)
+
+    await cq.message.edit_text(text, reply_markup=bld.as_markup())
+
+
+@router.callback_query(F.data.startswith("mdeck_rename:"))
+async def mdeck_rename_cb(cq: CallbackQuery, state: FSMContext):
+    deck_id = int(cq.data.split(":")[1])
+    await state.update_data(rename_deck_id=deck_id)
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Отменить", callback_data=f"mdeck_view:{deck_id}")
+    await cq.message.edit_text("🗞️ Введите новое название для колоды, максимум 10 букв..", reply_markup=bld.as_markup())
+    await state.set_state(MultiDeckState.waiting_for_deck_rename)
+
+
+@router.message(MultiDeckState.waiting_for_deck_rename)
+async def mdeck_renamed(msg: types.Message, state: FSMContext):
+    name = msg.text.strip()
+    if len(name) > 10:
+        return await msg.answer("Максимум 10 букв! Попробуйте еще раз.")
+
+    data = await state.get_data()
+    deck_id = data.get('rename_deck_id')
+    db_exec("UPDATE multi_decks SET name = ? WHERE deck_id = ? AND user_id = ?", (name, deck_id, msg.from_user.id))
+    await state.clear()
+
+    await show_multi_deck_main(msg, msg.from_user.id)
+
+
+@router.callback_query(F.data.startswith("mdeck_del:"))
+async def mdeck_del_cb(cq: CallbackQuery):
+    deck_id = int(cq.data.split(":")[1])
+    db_exec("DELETE FROM multi_decks WHERE deck_id = ? AND user_id = ?", (deck_id, cq.from_user.id))
+    db_exec("DELETE FROM multi_deck_slots WHERE deck_id = ?", (deck_id,))
+    await cq.answer("Колода удалена!")
+    await show_multi_deck_main(cq.message, cq.from_user.id)
+@router.callback_query(F.data.startswith("mdeck_edit:"))
+async def mdeck_edit_cb(cq: CallbackQuery):
+    deck_id = int(cq.data.split(":")[1])
+    await show_mdeck_slots(cq, deck_id)
+
+
+async def show_mdeck_slots(cq: CallbackQuery, deck_id: int):
+    deck = db_exec("SELECT name FROM multi_decks WHERE deck_id = ? AND user_id = ?", (deck_id, cq.from_user.id),
+                   fetch=True)
+    if not deck: return
+    deck_name = deck[0]
+
+    # Делаем эту колоду активной
+    sync_active_deck(cq.from_user.id, deck_id)
+
+    slots = db_exec("SELECT slot_index, card_id FROM multi_deck_slots WHERE deck_id = ?", (deck_id,), fetchall=True)
+    slot_dict = {s[0]: s[1] for s in slots}
+
+    text_lines = [f"🃏 Колода: «{deck_name}»", "Нажимайте на ячейки снизу, чтобы выбрать карту:\n"]
+
+    bld = InlineKeyboardBuilder()
+    row_btns = []
+
+    for i in range(1, 7):
+        cid = slot_dict.get(i)
+        if cid and cid in CARDS:
+            c = CARDS[cid]
+            cname = f"«{c['name']}»"
+            spd, str_, int_ = c['speed'], c['strength'], c['intellect']
+            btn_text = f"✅"
+        else:
+            cname = "Пусто"
+            spd, str_, int_ = 0, 0, 0
+            btn_text = f"❌"
+
+        prefix = "┌" if i == 1 else ("└" if i == 6 else "├")
+        if i == 6:
+            text_lines.append(f"{prefix} {cname}")
+            text_lines.append(f"    ⚡️ {spd} │ 💪 {str_} │ 🧠 {int_} ")
+        else:
+            text_lines.append(f"{prefix} {cname}")
+            text_lines.append(f"│ ⚡️ {spd} │ 💪 {str_} │ 🧠 {int_} ")
+
+        row_btns.append(InlineKeyboardButton(text=btn_text, callback_data=f"mdeck_slot:{deck_id}:{i}"))
+
+    bld.row(*row_btns)
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"mdeck_view:{deck_id}"))
+
+    text = "\n".join(text_lines)
+    if isinstance(cq, types.Message):
+        await cq.answer(text, reply_markup=bld.as_markup())
+    else:
+        await cq.message.edit_text(text, reply_markup=bld.as_markup())
+
+
+@router.callback_query(F.data.startswith("mdeck_slot:"))
+async def mdeck_slot_cb(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    deck_id, slot_index = int(parts[1]), int(parts[2])
+
+    text = (
+        "📜 Правила формирования колоды:\n\n"
+        "В колоде допускается максимум 6 карт. При этом действуют следующие ограничения:\n"
+        "🎴 1 Божественная или Мифическая карта\n"
+        "🎴 2 Легендарные карты\n"
+        "🎴 Без ограничений остальные редкости, можно иметь в колоде до 6 эпических карт\n\n"
+        "➡️ Выберите редкость для вывода списка карт"
+    )
+
+    bld = InlineKeyboardBuilder()
+    inv_cids = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
+    user_rarities = set()
+    for (cid,) in inv_cids:
+        if cid in CARDS:
+            user_rarities.add(CARDS[cid]['rarity'])
+
+    r_key_to_emoji = {
+        "divine": "Божественная ⚫️", "mythic": "Мифическая 🔴",
+        "legendary": "Легендарная 🔵", "epic": "Эпическая 🟢",
+        "rare": "Редкая 🟡", "common": "Обычная ⚪️"
+    }
+    order = ["divine", "mythic", "legendary", "epic", "rare", "common"]
+
+    for rk in order:
+        if r_key_to_emoji[rk] in user_rarities:
+            bld.button(text=r_key_to_emoji[rk], callback_data=f"mdeck_rarity:{deck_id}:{slot_index}:{rk}:0")
+
+    bld.button(text="Назад 🔙", callback_data=f"mdeck_edit:{deck_id}")
+    bld.adjust(1)
+    await cq.message.edit_text(text, reply_markup=bld.as_markup())
+
+
+@router.callback_query(F.data.startswith("mdeck_rarity:"))
+async def mdeck_rarity_cb(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    deck_id, slot_index, r_key, page = int(parts[1]), int(parts[2]), parts[3], int(parts[4])
+
+    r_key_to_emoji = {
+        "divine": "Божественная ⚫️", "mythic": "Мифическая 🔴",
+        "legendary": "Легендарная 🔵", "epic": "Эпическая 🟢",
+        "rare": "Редкая 🟡", "common": "Обычная ⚪️"
+    }
+    rarity = r_key_to_emoji.get(r_key)
+
+    inv_cids = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
+    owned_counts = {}
+    for (cid,) in inv_cids:
+        owned_counts[cid] = owned_counts.get(cid, 0) + 1
+
+    slots = db_exec("SELECT card_id FROM multi_deck_slots WHERE deck_id = ? AND slot_index != ?", (deck_id, slot_index),
+                    fetchall=True)
+    current_deck_cids = [s[0] for s in slots]
+
+    mythic_divine_cnt = sum(1 for cid in current_deck_cids if cid in CARDS and (
+                "Мифическая" in CARDS[cid]['rarity'] or "Божественная" in CARDS[cid]['rarity']))
+    leg_cnt = sum(1 for cid in current_deck_cids if cid in CARDS and "Легендарная" in CARDS[cid]['rarity'])
+
+    if r_key in ["divine", "mythic"] and mythic_divine_cnt >= 1:
+        return await cq.answer("Максимум 1 Божественная или Мифическая карта!", show_alert=True)
+    if r_key == "legendary" and leg_cnt >= 2:
+        return await cq.answer("Максимум 2 Легендарные карты!", show_alert=True)
+
+    avail = []
+    for cid, count in owned_counts.items():
+        if cid in CARDS and CARDS[cid]['rarity'] == rarity:
+            if current_deck_cids.count(cid) < count:
+                avail.append(cid)
+
+    if not avail:
+        return await cq.answer("Нет доступных карт этой редкости для добавления!", show_alert=True)
+
+    items_per_page = 10
+    total_pages = (len(avail) + items_per_page - 1) // items_per_page
+    if page >= total_pages: page = max(0, total_pages - 1)
+
+    start_idx = page * items_per_page
+    page_cids = avail[start_idx:start_idx + items_per_page]
+
+    bld = InlineKeyboardBuilder()
+    for cid in page_cids:
+        c = CARDS[cid]
+        btn_text = f"«{c['name']}» {c['speed']} | {c['strength']} | {c['intellect']}"
+        bld.button(text=btn_text, callback_data=f"mdeck_set:{deck_id}:{slot_index}:{cid}")
+
+    bld.adjust(1)
+
+    nav_row = []
+    if page > 0:
+        nav_row.append(
+            InlineKeyboardButton(text="⬅️", callback_data=f"mdeck_rarity:{deck_id}:{slot_index}:{r_key}:{page - 1}"))
+    else:
+        nav_row.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
+
+    nav_row.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="ignore"))
+
+    if page < total_pages - 1:
+        nav_row.append(
+            InlineKeyboardButton(text="➡️", callback_data=f"mdeck_rarity:{deck_id}:{slot_index}:{r_key}:{page + 1}"))
+    else:
+        nav_row.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
+
+    bld.row(*nav_row)
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"mdeck_slot:{deck_id}:{slot_index}"))
+
+    await cq.message.edit_text(f"Выберите карту ({rarity}):", reply_markup=bld.as_markup())
+
+
+@router.callback_query(F.data.startswith("mdeck_set:"))
+async def mdeck_set_cb(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    deck_id, slot_index, cid = int(parts[1]), int(parts[2]), parts[3]
+
+    db_exec("DELETE FROM multi_deck_slots WHERE deck_id = ? AND slot_index = ?", (deck_id, slot_index))
+    db_exec("INSERT INTO multi_deck_slots (deck_id, slot_index, card_id) VALUES (?, ?, ?)", (deck_id, slot_index, cid))
+
+    await cq.answer("Карта установлена!")
+    await show_mdeck_slots(cq, deck_id)
+
+
 @router.callback_query(F.data == "find_match")
 async def find_match(cq: CallbackQuery):
     uid = cq.from_user.id
@@ -447,10 +727,42 @@ async def process_card_choice(gid, uid, card, bot):
     bld.button(text="🧠 Интеллект", callback_data=f"b_style:{gid}:int")
 
     txt = f"Выбрана карта: {CARDS[card]['name']}\nВыберите ⚔️ Атаку \nСтили: ⚡️ Скорость, 💪 Сила, 🧠 Интеллект.\n\nНа выбор дается 30 секунд"
-    msg = await bot.send_photo(uid, photo=FSInputFile(f"images/cards/{CARDS[card]['file']}"), caption=txt, reply_markup=bld.as_markup())
+    card_data = CARDS[card]
+
+    if is_divine(card_data) and card_data.get("video"):
+        msg = await bot.send_video(
+            uid,
+            video=FSInputFile(f"images/cards/{card_data['video']}"),
+            caption=txt,
+            width=card_data.get("width", 960),
+            height=card_data.get("height", 1280),
+            reply_markup=bld.as_markup(),
+            supports_streaming=True
+        )
+        opponent_id = g['p2'] if uid == g['p1'] else g['p1']
+        if opponent_id != -1:
+            try:
+                await bot.send_video(
+                    opponent_id,
+                    video=FSInputFile(f"images/cards/{card_data['video']}"),
+                    caption=f"⚫️ Противник выбрасывает Божественную карту: {card_data['name']}!",
+                    width=card_data.get("width", 960),
+                    height=card_data.get("height", 1280),
+                    supports_streaming=True
+                )
+            except Exception:
+                pass
+    else:
+        msg = await bot.send_photo(
+            uid,
+            photo=FSInputFile(f"images/cards/{card_data['file']}"),
+            caption=txt,
+            reply_markup=bld.as_markup()
+        )
 
     current_round = g['round']
     asyncio.create_task(auto_style_choice(gid, uid, current_round, msg.message_id, bot))
+
 
     if g['p2'] == -1 and g['p2_c'] is None:
         bot_c = random.choice(g['d2'])

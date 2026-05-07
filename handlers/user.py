@@ -119,15 +119,23 @@ async def get_card_cmd(msg: types.Message):
                f"💪 Сила: {c['strength']}\n"
                f"🧠 Интеллект: {c['intellect']}")
 
-    # Пытаемся отправить фото. Если не вышло — шлём текст.
+    # Божественные карты приходят видео, остальные — фото.
     try:
-        photo_file = FSInputFile(f"images/cards/{c['file']}")
-        await msg.answer_photo(photo=photo_file, caption=txt, has_spoiler=True)
+        if "Божественная" in c.get("rarity", "") and c.get("video"):
+            await msg.answer_video(
+                video=FSInputFile(f"images/cards/{c['video']}"),
+                caption=txt,
+                width=c.get("width", 960),
+                height=c.get("height", 1280),
+                has_spoiler=True,
+                supports_streaming=True
+            )
+        else:
+            await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True)
     except Exception:
-        try:
-            await msg.answer(txt)
-        except Exception:
-            return await msg.answer("❌ Не удалось открутить. Попробуйте снова.")
+        try: await msg.answer(txt)
+        except: return await msg.answer("❌ Не удалось открутить.")
+
 
     # Списываем попытку ТОЛЬКО после успешной отправки
     if attempts > 0:
@@ -497,8 +505,17 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
                f"💪 Сила: «{c['strength']}»\n"
                f"🧠 Интеллект: «{c['intellect']}»")
         try:
-            photo_file = FSInputFile(f"images/cards/{c['file']}")
-            await bot.send_photo(uid, photo=photo_file, caption=txt)
+            if "Божественная" in c.get("rarity", "") and c.get("video"):
+                await bot.send_video(
+                    uid,
+                    video=FSInputFile(f"images/cards/{c['video']}"),
+                    caption=txt,
+                    width=c.get("width", 960),
+                    height=c.get("height", 1280),
+                    supports_streaming=True
+                )
+            else:
+                await bot.send_photo(uid, photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt)
         except Exception:
             pass
         await msg.answer(f"✅ Карта «{c['name']}» выдана пользователю {uid}!")
@@ -591,11 +608,18 @@ async def use_promo(msg: types.Message):
                f"💪 Сила: «{c['strength']}»\n"
                f"🧠 Интеллект: «{c['intellect']}»")
         try:
-            photo_file = FSInputFile(f"images/cards/{c['file']}")
-            await msg.answer_photo(photo=photo_file, caption=txt)
+            if "Божественная" in c.get("rarity", "") and c.get("video"):
+                await msg.answer_video(
+                    video=FSInputFile(f"images/cards/{c['video']}"),
+                    caption=txt,
+                    width=c.get("width", 960),
+                    height=c.get("height", 1280),
+                    supports_streaming=True
+                )
+            else:
+                await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt)
         except Exception:
             await msg.answer(txt)
-
 
 @router.message(Command("update_refs"))
 async def update_refs_cmd(msg: types.Message):

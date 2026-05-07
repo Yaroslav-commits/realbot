@@ -20,7 +20,7 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
                     GET_COOLDOWN_HOURS, BATTLE_COOLDOWN_HOURS,
                     MAIN_PRIZE_NORMAL_TITLE, MAIN_PRIZE_ROYALE_CARD)
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
-                        NORMAL_PASS, ROYALE_PASS)
+                        NORMAL_PASS, ROYALE_PASS, is_divine)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user)
 from handlers import (router, TradeState, SettingsState, PromoState,
@@ -209,20 +209,96 @@ async def inv_collection_cb(cq: CallbackQuery):
 async def view_card(cq: CallbackQuery):
     parts = cq.data.split(":")
     cid = parts[1]
-
     page = parts[2] if len(parts) > 2 else "0"
     r_filter = parts[3] if len(parts) > 3 else "all"
 
     c = CARDS[cid]
-    txt = f"🃏 Ваша боевая карта!\n\n🎴 Персонаж: {c['name']}\n🔮 Редкость: {c['rarity']}\n👊 Стиль боя: {c['style']}\n🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n⚡️ Скорость: {c['speed']}\n💪 Сила: {c['strength']}\n🧠 Интеллект: {c['intellect']}"
+    txt = (f"🃏 Ваша боевая карта!\n\n"
+           f"🎴 Персонаж: {c['name']}\n"
+           f"🔮 Редкость: {c['rarity']}\n"
+           f"👊 Стиль боя: {c['style']}\n"
+           f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+           f"⚡️ Скорость: {c['speed']}\n"
+           f"💪 Сила: {c['strength']}\n"
+           f"🧠 Интеллект: {c['intellect']}")
 
     bld = InlineKeyboardBuilder()
     bld.button(text="〽️ Трейд", callback_data=f"trade_init:{cid}")
+
+    if is_divine(cid) and c.get("video"):
+        bld.button(text="Показать арт 👀", callback_data=f"divshow:{cid}:art:{page}:{r_filter}")
+
+    bld.button(text="Назад", callback_data=f"inv_view:{page}:{r_filter}")
+    bld.adjust(1)
+    await cq.message.delete()
+
+    if is_divine(cid) and c.get("video"):
+        await cq.message.answer_video(
+            video=FSInputFile(f"images/cards/{c['video']}"),
+            caption=txt,
+            width=c.get("width", 960),
+            height=c.get("height", 1280),
+            reply_markup=bld.as_markup(),
+            supports_streaming=True
+        )
+    else:
+        await cq.message.answer_photo(
+            photo=FSInputFile(f"images/cards/{c['file']}"),
+            caption=txt,
+            reply_markup=bld.as_markup()
+        )
+
+# ===== Переключение арт/видео для Божественной карты =====
+@router.callback_query(F.data.startswith("divshow:"))
+async def divine_toggle(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    cid, mode = parts[1], parts[2]
+    page = parts[3] if len(parts) > 3 else "0"
+    r_filter = parts[4] if len(parts) > 4 else "all"
+
+    c = CARDS.get(cid)
+    if not c: return await cq.answer("Карта не найдена.", show_alert=True)
+
+    txt = (f"🃏 Ваша боевая карта!\n\n"
+           f"🎴 Персонаж: {c['name']}\n"
+           f"🔮 Редкость: {c['rarity']}\n"
+           f"👊 Стиль боя: {c['style']}\n"
+           f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+           f"⚡️ Скорость: {c['speed']}\n"
+           f"💪 Сила: {c['strength']}\n"
+           f"🧠 Интеллект: {c['intellect']}")
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="〽️ Трейд", callback_data=f"trade_init:{cid}")
+
+    if mode == "art":
+        bld.button(text="Показать видео 👀", callback_data=f"divshow:{cid}:video:{page}:{r_filter}")
+    else:
+        bld.button(text="Показать арт 👀", callback_data=f"divshow:{cid}:art:{page}:{r_filter}")
     bld.button(text="Назад", callback_data=f"inv_view:{page}:{r_filter}")
     bld.adjust(1)
 
-    await cq.message.delete()
-    await cq.message.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, reply_markup=bld.as_markup())
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    if mode == "art":
+        await cq.message.answer_photo(
+            photo=FSInputFile(f"images/cards/{c['file']}"),
+            caption=txt,
+            reply_markup=bld.as_markup()
+        )
+    else:
+        await cq.message.answer_video(
+            video=FSInputFile(f"images/cards/{c['video']}"),
+            caption=txt,
+            width=c.get("width", 960),
+            height=c.get("height", 1280),
+            reply_markup=bld.as_markup(),
+            supports_streaming=True
+        )
+    await cq.answer()
 
 
 # ============ ИСПРАВЛЕННЫЙ БЛОК ТРЕЙДОВ ============
@@ -258,6 +334,17 @@ async def trade_init(cq: CallbackQuery, state: FSMContext):
         )
 
 
+@router.callback_query(F.data == "trade_cancel_init")
+async def trade_cancel_init(cq: CallbackQuery, state: FSMContext):
+    await cq.answer()
+    await state.clear()
+    PENDING_TRADES.pop(cq.from_user.id, None)
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+    await cq.message.answer("❌ Трейд отменен.")
+
 @router.message(TradeState.waiting_for_trade_id)
 async def process_trade_id(msg: types.Message, state: FSMContext):
     data = await state.get_data()
@@ -266,17 +353,25 @@ async def process_trade_id(msg: types.Message, state: FSMContext):
         await state.clear()
         return
 
-    target_id_str = msg.text.strip()
+    target_id_str = (msg.text or "").strip()
+
+    # Любой невалидный ввод — сбрасываем трейд и выводим сообщение ОДИН раз
     if not target_id_str.isdigit():
-        return await msg.answer("Неверный ID. Попробуйте еще раз или нажмите Отменить в меню выше.")
+        await state.clear()
+        PENDING_TRADES.pop(msg.from_user.id, None)
+        return await msg.answer("Неверный ID. Трейд отменен.")
 
     target_id = int(target_id_str)
     if target_id == msg.from_user.id:
-        return await msg.answer("Нельзя трейдиться с самим собой.")
+        await state.clear()
+        PENDING_TRADES.pop(msg.from_user.id, None)
+        return await msg.answer("Нельзя трейдиться с самим собой. Трейд отменен.")
 
     u_target = get_user(target_id)
     if not u_target:
-        return await msg.answer("Игрок с таким ID не найден в базе бота.")
+        await state.clear()
+        PENDING_TRADES.pop(msg.from_user.id, None)
+        return await msg.answer("Игрок с таким ID не найден в базе бота. Трейд отменен.")
 
     await state.clear()
 
@@ -312,6 +407,7 @@ async def process_trade_id(msg: types.Message, state: FSMContext):
         logging.error(f"Trade send error: {e}")
         await msg.answer("Не удалось отправить запрос. Возможно, игрок заблокировал бота.")
         PENDING_TRADES.pop(msg.from_user.id, None)
+
 
 
 @router.callback_query(F.data.startswith("trade_p2_select:"))
