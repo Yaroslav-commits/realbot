@@ -485,7 +485,7 @@ async def process_broadcast(msg: types.Message, state: FSMContext, bot: Bot):
 
 
 @router.message(
-    Command(commands=["give_attempts", "give_card", "give_money", "give_title", "give_background", "give_diamond", "give_pass", "create_promo"]))
+    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "give_pass", "create_promo"]))
 async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if msg.from_user.id not in ADMIN_IDS: return
     args = msg.text.split()
@@ -517,7 +517,7 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         return await msg.answer(f"✅ Рояль Пасс выдан пользователю {uid}!")
 
     if len(args) < 3:
-        return await msg.answer("Ошибка аргументов. Формат: /команда [ID] [значение]")
+        return await msg.answer("Ошибка аргументов. Формат: /команда [ID] [значение/id_карты]")
 
     uid, val = int(args[1]), args[2]
 
@@ -544,12 +544,11 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         except Exception:
             pass
         await msg.answer(f"✅ Выдано пользователю {uid}!")
-
     elif cmd == "/give_card":
         c = CARDS.get(val)
         if not c:
             return await msg.answer(f"❌ Карта с ключом «{val}» не найдена!")
-        # Прямая выдача (даже если дубликат)
+        # Прямая выдача
         db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (uid, val))
         txt = (f"🃏 Получена новая боевая карта от администратора ✅\n\n"
                f"🎴 Персонаж: {c['name']}\n"
@@ -574,6 +573,56 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         except Exception:
             pass
         await msg.answer(f"✅ Карта «{c['name']}» выдана пользователю {uid}!")
+
+    elif cmd == "/delete_card":
+        c = CARDS.get(val)
+        if not c:
+            return await msg.answer(f"❌ Карта с ключом «{val}» не найдена в базе кода!")
+
+        # Проверяем наличие карты у игрока
+        has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, val), fetch=True)
+        if not has_card:
+            return await msg.answer(f"❌ У пользователя {uid} нет карты «{c['name']}»")
+
+        # Удаляем одну копию (используя rowid для SQLite, чтобы не удалить все сразу, если их несколько)
+        db_exec(
+            "DELETE FROM cards_inv WHERE rowid = (SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1)",
+            (uid, val))
+
+        try:
+            await bot.send_message(uid, f"⚠️ Администратор удалил у вас карту: {c['name']}")
+        except Exception:
+            pass
+        await msg.answer(f"✅ Карта «{c['name']}» успешно удалена у пользователя {uid}!")
+
+    elif cmd == "/give_title":
+        title_name = TITLES.get(val, val)
+        db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, val))
+        try:
+            await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅")
+        except Exception:
+            pass
+        await msg.answer(f"✅ Титул выдан пользователю {uid}!")
+
+    elif cmd == "/give_background":
+        bg_data = BGS.get(val)
+        if not bg_data:
+            return await msg.answer(f"❌ Фон с ключом «{val}» не найден!")
+        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, val))
+        is_video = val in VIDEO_BGS
+        try:
+            bg_file = FSInputFile(f"images/backgrounds/{bg_data['file']}")
+            if is_video:
+                await bot.send_video(uid, video=bg_file,
+                                     caption="Получен фон от администратора ✅",
+                                     supports_streaming=True)
+            else:
+                await bot.send_photo(uid, photo=bg_file,
+                                     caption="Получен фон от администратора ✅")
+        except Exception:
+            pass
+        await msg.answer(f"✅ Фон «{bg_data.get('name', val)}» выдан пользователю {uid}!")
+
     elif cmd == "/give_title":
         title_name = TITLES.get(val, val)
         db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, val))
