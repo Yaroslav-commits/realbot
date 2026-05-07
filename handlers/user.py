@@ -552,13 +552,13 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         # Прямая выдача (даже если дубликат)
         db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (uid, val))
         txt = (f"🃏 Получена новая боевая карта от администратора ✅\n\n"
-               f"🎴 Персонаж: «{c['name']}»\n"
-               f"🔮 Редкость: «{c['rarity']}»\n"
-               f"👊 Стиль боя: «{c['style']}»\n"
-               f"🪐 Вселенная: «{c.get('series', 'Неизвестно')}»\n\n"
-               f"⚡️ Скорость: «{c['speed']}»\n"
-               f"💪 Сила: «{c['strength']}»\n"
-               f"🧠 Интеллект: «{c['intellect']}»")
+               f"🎴 Персонаж: {c['name']}\n"
+               f"🔮 Редкость: {c['rarity']}\n"
+               f"👊 Стиль боя: {c['style']}\n"
+               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+               f"⚡️ Скорость: {c['speed']}\n"
+               f"💪 Сила: {c['strength']}\n"
+               f"🧠 Интеллект: {c['intellect']}")
         try:
             if "Божественная" in c.get("rarity", "") and c.get("video"):
                 await bot.send_video(
@@ -655,13 +655,13 @@ async def use_promo(msg: types.Message):
         is_new, krw_earned, card_data = give_card_to_user(uid, p[1])
         txt = (f"✅ Промокод активирован!\n\n"
                f"🃏 Получена новая боевая карта!\n\n"
-               f"🎴 Персонаж: «{c['name']}»\n"
-               f"🔮 Редкость: «{c['rarity']}»\n"
-               f"👊 Стиль боя: «{c['style']}»\n"
-               f"🪐 Вселенная: «{c.get('series', 'Неизвестно')}»\n\n"
-               f"⚡️ Скорость: «{c['speed']}»\n"
-               f"💪 Сила: «{c['strength']}»\n"
-               f"🧠 Интеллект: «{c['intellect']}»")
+               f"🎴 Персонаж: {c['name']}\n"
+               f"🔮 Редкость: {c['rarity']}\n"
+               f"👊 Стиль боя: {c['style']}\n"
+               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+               f"⚡️ Скорость: {c['speed']}\n"
+               f"💪 Сила: {c['strength']}\n"
+               f"🧠 Интеллект: {c['intellect']}")
         try:
             if "Божественная" in c.get("rarity", "") and c.get("video"):
                 await msg.answer_video(
