@@ -3,11 +3,9 @@ import sqlite3
 import random
 import string
 from datetime import datetime, timedelta, timezone
-from datetime import datetime
 
 from config import DB_PATH
-from data.cards import CARDS, RARITIES, PREMIUM_RARITIES, ROYALE_PASS
-
+from data.cards import CARDS, RARITIES, ROYALE_PASS
 
 # ================== ФУНКЦИИ БД ==================
 def db_exec(query, params=(), fetch=False, fetchall=False):
@@ -55,8 +53,6 @@ def init_db():
         ('referral_code', 'TEXT'),
         ('referred_by', 'INTEGER'),
         ('cooldown_notified', 'INTEGER DEFAULT 1'),
-        ('premium_until', 'TEXT'),
-        ('battle_cooldown_notified', 'INTEGER DEFAULT 1'),
     ]:
         try:
             db_exec(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
@@ -182,7 +178,7 @@ def get_rank(pts):
         if pts >= p:
             return n
 
-def pull_random_card(force_rarity=None, uid=None):
+def pull_random_card(force_rarity=None):
     """Возвращает ключ случайной карты или None, если пул пуст."""
     try:
         if force_rarity:
@@ -191,20 +187,7 @@ def pull_random_card(force_rarity=None, uid=None):
             roll = random.uniform(0, 100)
             cum = 0
             rolled_r = "Обычная ⚪️"
-
-            is_prem = False
-            if uid:
-                res = db_exec("SELECT premium_until FROM users WHERE id = ?", (uid,), fetch=True)
-                if res and res[0]:
-                    try:
-                        if datetime.strptime(res[0], "%Y-%m-%d %H:%M:%S") > datetime.now():
-                            is_prem = True
-                    except:
-                        pass
-
-            target_rarities = PREMIUM_RARITIES if is_prem else RARITIES
-
-            for r, d in target_rarities.items():
+            for r, d in RARITIES.items():
                 cum += d.get('chance', 0)
                 if roll <= cum:
                     rolled_r = r
@@ -215,7 +198,6 @@ def pull_random_card(force_rarity=None, uid=None):
         return random.choice(pool) if pool else None
     except Exception:
         return None
-
 
 def give_card_to_user(uid, card_key):
     """Выдаёт карту игроку. Возвращает (is_new, krw, card_data) или (False, 0, None) при ошибке."""
@@ -307,16 +289,3 @@ def grant_retroactive_royale_pass(uid):
     if rewards_summary['packs']: lines.append(f"• {rewards_summary['packs']} 🗃️ Паков (карты добавлены в инвентарь)")
 
     return "\n\n🎁 Автоматически начислены награды за " + str(len(days_to_grant)) + " дн. (из обычного пасса):\n" + "\n".join(lines)
-
-
-def is_premium(uid):
-    """Проверяет, активен ли премиум. Возвращает True/False."""
-    res = db_exec("SELECT premium_until FROM users WHERE id = ?", (uid,), fetch=True)
-    if res and res[0][0] and res[0][0] != "Нет":
-        try:
-            # Сравниваем дату из БД с текущим моментом
-            if datetime.strptime(res[0][0], "%Y-%m-%d %H:%M:%S") > datetime.now():
-                return True
-        except:
-            return False
-    return False

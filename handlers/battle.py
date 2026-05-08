@@ -92,18 +92,8 @@ async def process_friend_id(msg: types.Message, state: FSMContext):
     u = get_user(msg.from_user.id)
     last_b = datetime.strptime(u[12], "%Y-%m-%d %H:%M:%S")
     now = datetime.now()
-
-    is_prem = False
-    if len(u) > 21 and u[21]:
-        try:
-            if datetime.strptime(u[21], "%Y-%m-%d %H:%M:%S") > now:
-                is_prem = True
-        except:
-            pass
-    b_cooldown = 0.5 if is_prem else BATTLE_COOLDOWN_HOURS
-
-    if (now - last_b).total_seconds() < b_cooldown * 3600:
-        rem = int(b_cooldown * 3600 - (now - last_b).total_seconds())
+    if (now - last_b).total_seconds() < BATTLE_COOLDOWN_HOURS * 3600:
+        rem = int(BATTLE_COOLDOWN_HOURS * 3600 - (now - last_b).total_seconds())
         await state.clear()
         return await msg.answer(f"⏳ Кулдаун битвы: {rem // 3600}ч {(rem % 3600) // 60}м")
     my_name = u[2]
@@ -152,18 +142,8 @@ async def accept_f(cq: CallbackQuery):
     u = get_user(target_id)
     last_b = datetime.strptime(u[12], "%Y-%m-%d %H:%M:%S")
     now = datetime.now()
-
-    is_prem = False
-    if len(u) > 21 and u[21]:
-        try:
-            if datetime.strptime(u[21], "%Y-%m-%d %H:%M:%S") > now:
-                is_prem = True
-        except:
-            pass
-    b_cooldown = 0.5 if is_prem else BATTLE_COOLDOWN_HOURS
-
-    if (now - last_b).total_seconds() < b_cooldown * 3600:
-        rem = int(b_cooldown * 3600 - (now - last_b).total_seconds())
+    if (now - last_b).total_seconds() < BATTLE_COOLDOWN_HOURS * 3600:
+        rem = int(BATTLE_COOLDOWN_HOURS * 3600 - (now - last_b).total_seconds())
         await cq.answer(f"У вас кулдаун битвы: {rem // 3600}ч {(rem % 3600) // 60}м", show_alert=True)
         try:
             await cq.bot.send_message(sender_id, "У игрока кулдаун битвы. Он не может принять бой.")
@@ -173,19 +153,12 @@ async def accept_f(cq: CallbackQuery):
 
     u_sender = get_user(sender_id)
     last_b_s = datetime.strptime(u_sender[12], "%Y-%m-%d %H:%M:%S")
-
-    is_prem_s = False
-    if len(u_sender) > 21 and u_sender[21]:
-        try:
-            if datetime.strptime(u_sender[21], "%Y-%m-%d %H:%M:%S") > now:
-                is_prem_s = True
-        except: pass
-    b_cooldown_s = 0.5 if is_prem_s else BATTLE_COOLDOWN_HOURS
-    if (now - last_b_s).total_seconds() < b_cooldown_s * 3600:
+    if (now - last_b_s).total_seconds() < BATTLE_COOLDOWN_HOURS * 3600:
         await cq.answer("У инициатора боя сейчас кулдаун.", show_alert=True)
         try:
             await cq.bot.send_message(sender_id, "Ваш кулдаун не позволяет начать бой.")
-        except: pass
+        except:
+            pass
         return
 
     await start_battle(sender_id, target_id, cq.bot, friendly=True)
@@ -596,18 +569,8 @@ async def find_match(cq: CallbackQuery):
     u = get_user(uid)
     last_b = datetime.strptime(u[12], "%Y-%m-%d %H:%M:%S")
     now = datetime.now()
-
-    is_prem = False
-    if len(u) > 21 and u[21]:
-        try:
-            if datetime.strptime(u[21], "%Y-%m-%d %H:%M:%S") > now:
-                is_prem = True
-        except:
-            pass
-    b_cooldown = 0.5 if is_prem else BATTLE_COOLDOWN_HOURS
-
-    if (now - last_b).total_seconds() < b_cooldown * 3600:
-        rem = int(b_cooldown * 3600 - (now - last_b).total_seconds())
+    if (now - last_b).total_seconds() < BATTLE_COOLDOWN_HOURS * 3600:
+        rem = int(BATTLE_COOLDOWN_HOURS * 3600 - (now - last_b).total_seconds())
         return await cq.answer(f"⏳ Кулдаун битвы: {rem // 3600}ч {(rem % 3600) // 60}м", show_alert=True)
 
     if MATCH_QUEUE and MATCH_QUEUE[0] != uid:
@@ -665,19 +628,13 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
 
     u1 = get_user(p1)
     if p2 == -1:
-        db_exec("UPDATE users SET last_battle = ?, battle_cooldown_notified = 0 WHERE id = ?",
+        db_exec("UPDATE users SET last_battle = ? WHERE id = ?",
                 (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1))
     else:
-        db_exec("UPDATE users SET last_battle = ?, battle_cooldown_notified = 0 WHERE id IN (?, ?)",
+        db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
                 (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
 
-    from database.db import is_premium
-
-    # Определяем эмодзи для обоих игроков
-    p1_emoji = "👑" if is_premium(p1) else "🧩"
-    p2_emoji = "👑" if (p2 != -1 and is_premium(p2)) else "🧩"
-
-    txt1 = f"Противник найден!\n\n· Имя: {name2} {p2_emoji}\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+    txt1 = f"Противник найден!\n\n· Имя: {name2} 🧩\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
 
     if p2 != -1:
         bg_key2 = u2[13] or 'default'
@@ -694,7 +651,7 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         await bot.send_message(p1, txt1, parse_mode="HTML")
 
     if p2 != -1:
-        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> {p1_emoji}\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
         bg_key1 = u1[13] or 'default'
         bg_data1 = BGS.get(bg_key1, BGS['default'])
         bg_file1 = FSInputFile(f"images/backgrounds/{bg_data1.get('file')}")
@@ -981,19 +938,16 @@ async def resolve_round(gid, bot):
     else:
         winner_name = "Ничья"
 
-    def format_text(p_name, e_name, score_p, score_e, p_s, e_s, p_val, e_val, p_final, e_final, b_txt, p_em="🧩", e_em="🧩"):
+    def format_text(p_name, e_name, score_p, score_e, p_s, e_s, p_val, e_val, p_final, e_final, b_txt):
         t = (f"⬆️ Ваша карта | Карта врага ⬆️\nРаунд - {g['round']}\n\n"
-             f"Счет:\n{p_name} (я){p_em} - {score_p}\n{e_name} (противник){e_em} - {score_e}\n\n"
+             f"Счет:\n{p_name} (я)🧩 - {score_p}\n{e_name} (противник)🧩 - {score_e}\n\n"
              f"⚔️ Вы совершаете {s_map[p_s][1]} атаку\nУровень атаки: {p_val}\n\n"
              f"🛡️ Противник ставит {s_map[e_s][1]} защиту\nУровень защиты: {e_val}\n\n")
         if adv != 0: t += f"Бонус\n{b_txt}\n\n"
         t += (f"Итоговый уровень атаки {s_map[p_s][0].split()[0]} : {p_final}\n"
               f"Итоговый уровень защиты {s_map[e_s][0].split()[0]}: {e_final}\n\n")
-
-        win_emoji = p_em if winner_name == n1 else (e_em if winner_name != "Ничья" else "")
-        t += f"Раунд завершился в ничью!" if winner_name == "Ничья" else f"Раунд выиграл {winner_name}{win_emoji}"
+        t += f"Раунд завершился в ничью!" if winner_name == "Ничья" else f"Раунд выиграл {winner_name}🧩"
         return t
-
 
     try:
         txt1 = format_text(n1, n2_link, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1, val2, f1, f2, bonus_txt_1)
@@ -1039,24 +993,12 @@ async def finish_game(gid, bot):
 
     def apply_res(uid, is_win, is_draw, friendly):
         if uid == -1: return 0, 0
-        u = get_user(uid)
-        is_prem = False
-        if u and len(u) > 21 and u[21]:
-            try:
-                if datetime.strptime(u[21], "%Y-%m-%d %H:%M:%S") > datetime.now():
-                    is_prem = True
-            except:
-                pass
-
         if friendly:
             pts = 0
-            bc = (3 if is_win else 1) + (3 if is_prem else 0)
+            bc = 3 if is_win else 1
         else:
-            base_pts = 3 if is_win else (1 if is_draw else -2)
-            if base_pts > 0 and is_prem:
-                base_pts += 1
-            pts = base_pts
-            bc = (3 if is_win else 1) + (3 if is_prem else 0)
+            pts = 3 if is_win else (1 if is_draw else -2)
+            bc = 3 if is_win else 1
 
         db_exec(f"UPDATE users SET rank_points = MAX(0, rank_points + {pts}), battlecoin = battlecoin + {bc}, " +
                 ("wins = wins + 1" if is_win else ("draws = draws + 1" if is_draw else "losses = losses + 1")) +
