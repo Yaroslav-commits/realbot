@@ -175,12 +175,18 @@ async def profile(msg: types.Message):
         except:
             pass
 
+    from database.db import is_premium  # Импорт функции
+
+    is_prem = is_premium(u[0])
+    p_emoji = "👑" if is_prem else "🧩"  # Выбираем эмодзи
+
     if is_prem:
         user_link = f'<a href="tg://user?id={u[0]}">{u[2]} 👑</a>'
     else:
         user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
+
     txt = (
-        f"👤 Профиль {user_link} 🧩\n"
+        f"👤 Профиль {user_link} {p_emoji}\n"
         f"🆔 Id: <code>{u[0]}</code>\n"
         f"{title_str}"
         f"Баланс:\n"
@@ -243,7 +249,8 @@ async def settings_cq(cq: CallbackQuery):
     txt = (
         f"⚙️ Настройки\n"
         f"Дата регистрации: {u[15]}\n"
-        f"👑 Premium до: {prem_until_str}\n"
+        f"👑 Статус Premium: {'✅ Активен' if prem_until_str != 'Нет' else '❌ Не активен'}\n"
+        f"⏳ Срок действия: <b>{prem_until_str}</b>\n\n"
         f"Для смены ника отправьте команду /nick [новый ник]\n"
         f"{notif_text} > {notif_emoji}"
     )

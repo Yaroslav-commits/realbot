@@ -671,7 +671,13 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         db_exec("UPDATE users SET last_battle = ?, battle_cooldown_notified = 0 WHERE id IN (?, ?)",
                 (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
 
-    txt1 = f"Противник найден!\n\n· Имя: {name2} 🧩\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+    from database.db import is_premium
+
+    # Определяем эмодзи для обоих игроков
+    p1_emoji = "👑" if is_premium(p1) else "🧩"
+    p2_emoji = "👑" if (p2 != -1 and is_premium(p2)) else "🧩"
+
+    txt1 = f"Противник найден!\n\n· Имя: {name2} {p2_emoji}\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
 
     if p2 != -1:
         bg_key2 = u2[13] or 'default'
@@ -688,7 +694,7 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         await bot.send_message(p1, txt1, parse_mode="HTML")
 
     if p2 != -1:
-        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> {p1_emoji}\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
         bg_key1 = u1[13] or 'default'
         bg_data1 = BGS.get(bg_key1, BGS['default'])
         bg_file1 = FSInputFile(f"images/backgrounds/{bg_data1.get('file')}")
@@ -975,16 +981,19 @@ async def resolve_round(gid, bot):
     else:
         winner_name = "Ничья"
 
-    def format_text(p_name, e_name, score_p, score_e, p_s, e_s, p_val, e_val, p_final, e_final, b_txt):
+    def format_text(p_name, e_name, score_p, score_e, p_s, e_s, p_val, e_val, p_final, e_final, b_txt, p_em="🧩", e_em="🧩"):
         t = (f"⬆️ Ваша карта | Карта врага ⬆️\nРаунд - {g['round']}\n\n"
-             f"Счет:\n{p_name} (я)🧩 - {score_p}\n{e_name} (противник)🧩 - {score_e}\n\n"
+             f"Счет:\n{p_name} (я){p_em} - {score_p}\n{e_name} (противник){e_em} - {score_e}\n\n"
              f"⚔️ Вы совершаете {s_map[p_s][1]} атаку\nУровень атаки: {p_val}\n\n"
              f"🛡️ Противник ставит {s_map[e_s][1]} защиту\nУровень защиты: {e_val}\n\n")
         if adv != 0: t += f"Бонус\n{b_txt}\n\n"
         t += (f"Итоговый уровень атаки {s_map[p_s][0].split()[0]} : {p_final}\n"
               f"Итоговый уровень защиты {s_map[e_s][0].split()[0]}: {e_final}\n\n")
-        t += f"Раунд завершился в ничью!" if winner_name == "Ничья" else f"Раунд выиграл {winner_name}🧩"
+
+        win_emoji = p_em if winner_name == n1 else (e_em if winner_name != "Ничья" else "")
+        t += f"Раунд завершился в ничью!" if winner_name == "Ничья" else f"Раунд выиграл {winner_name}{win_emoji}"
         return t
+
 
     try:
         txt1 = format_text(n1, n2_link, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1, val2, f1, f2, bonus_txt_1)

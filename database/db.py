@@ -3,6 +3,7 @@ import sqlite3
 import random
 import string
 from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 from config import DB_PATH
 from data.cards import CARDS, RARITIES, PREMIUM_RARITIES, ROYALE_PASS
@@ -61,7 +62,7 @@ def init_db():
             db_exec(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
         except sqlite3.OperationalError:
             pass  # колонка уже существует
-        
+
     # Генерируем реферальные коды для существующих пользователей, у которых их нет
     users_no_code = db_exec("SELECT id FROM users WHERE referral_code IS NULL", fetchall=True)
     if users_no_code:
@@ -306,3 +307,16 @@ def grant_retroactive_royale_pass(uid):
     if rewards_summary['packs']: lines.append(f"• {rewards_summary['packs']} 🗃️ Паков (карты добавлены в инвентарь)")
 
     return "\n\n🎁 Автоматически начислены награды за " + str(len(days_to_grant)) + " дн. (из обычного пасса):\n" + "\n".join(lines)
+
+
+def is_premium(uid):
+    """Проверяет, активен ли премиум. Возвращает True/False."""
+    res = db_exec("SELECT premium_until FROM users WHERE id = ?", (uid,), fetch=True)
+    if res and res[0][0] and res[0][0] != "Нет":
+        try:
+            # Сравниваем дату из БД с текущим моментом
+            if datetime.strptime(res[0][0], "%Y-%m-%d %H:%M:%S") > datetime.now():
+                return True
+        except:
+            return False
+    return False
