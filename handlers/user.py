@@ -528,7 +528,7 @@ async def process_broadcast(msg: types.Message, state: FSMContext, bot: Bot):
 
 
 @router.message(
-    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "give_pass", "create_promo"]))
+    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "give_pass", "give_prem", "create_promo"]))
 async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if msg.from_user.id not in ADMIN_IDS: return
     args = msg.text.split()
@@ -537,14 +537,16 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if cmd == "/create_promo":
         await state.set_state(PromoState.waiting_for_promo_data)
         await msg.answer(
-            "Отправь данные промокода в формате:\n[КОД] [ТИП: krw/atm/card/dia/pass] [ЗНАЧЕНИЕ] [КОЛ-ВО ИСПОЛЬЗОВАНИЙ]\n"
-            "Пример: LOOKISM krw 500 10\n\n"
+            "Отправь данные промокода в формате:\n[КОД] [ТИП: krw/atm/card/dia/pass/prem] [ЗНАЧЕНИЕ] [КОЛ-ВО ИСПОЛЬЗОВАНИЙ]\n"
+            "Пример: LOOKISM krw 500 10\n"
+            "Пример Premium: VDAY prem 7 10 (премиум на 7 дней, 10 активаций)\n\n"
             "Типы:\n"
             "• krw — KRW 💴\n"
             "• atm — попытки 💳\n"
             "• card — карта (ключ)\n"
             "• dia — алмазы 💎\n"
-            "• pass — Рояль Пасс (значение любое, например 1)")
+            "• pass — Рояль Пасс (значение любое, например 1)\n"
+            "• prem — Premium 👑 (значение = кол-во дней)")
         return
 
     # /give_pass — только 2 аргумента
@@ -587,6 +589,52 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         except Exception:
             pass
         await msg.answer(f"✅ Выдано пользователю {uid}!")
+    elif cmd == "/give_prem":
+        try:
+            days = int(val)
+        except ValueError:
+            return await msg.answer("❌ Кол-во дней должно быть числом.\nИспользование: /give_prem [ID] [ДНИ]")
+
+        now = datetime.now()
+        res = db_exec("SELECT premium_until FROM users WHERE id = ?", (uid,), fetch=True)
+        current_until_str = res[0] if res else None
+        if current_until_str:
+            try:
+                current_until = datetime.strptime(current_until_str, "%Y-%m-%d %H:%M:%S")
+                new_until = (current_until if current_until > now else now) + timedelta(days=days)
+            except Exception:
+                new_until = now + timedelta(days=days)
+        else:
+            new_until = now + timedelta(days=days)
+        new_until_str = new_until.strftime("%Y-%m-%d %H:%M:%S")
+        db_exec("UPDATE users SET premium_until = ? WHERE id = ?", (new_until_str, uid))
+        # Лимитированная премиум-карта (только при покупке в магазине или /give_prem)
+        is_new, krw_earn, c = give_card_to_user(uid, "premium_card_1")
+        try:
+            await bot.send_message(
+                uid,
+                f"👑 Получен Premium на {days} дн. от администратора ✅\nДействует до: {new_until_str}"
+            )
+            if is_new and c:
+                card_txt = (f"🃏 Бонус: лимитированная Premium карта!\n\n"
+                            f"🎴 Персонаж: {c['name']}\n"
+                            f"🔮 Редкость: {c['rarity']}\n"
+                            f"👊 Стиль боя: {c['style']}\n"
+                            f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+                            f"⚡️ Скорость: {c['speed']}\n"
+                            f"💪 Сила: {c['strength']}\n"
+                            f"🧠 Интеллект: {c['intellect']}")
+                try:
+                    await bot.send_photo(
+                        uid,
+                        photo=FSInputFile(f"images/cards/{c.get('file', 'premium_card.jpeg')}"),
+                        caption=card_txt, has_spoiler=True
+                    )
+                except Exception:
+                    await bot.send_message(uid, card_txt)
+        except Exception:
+            pass
+        return await msg.answer(f"✅ Premium на {days} дн. выдан пользователю {uid}!")
     elif cmd == "/give_card":
         c = CARDS.get(val)
         if not c:
@@ -700,8 +748,14 @@ async def create_promo(msg: types.Message, state: FSMContext):
     if len(args) != 4:
         return await msg.answer("Неверный формат. Нужно: [КОД] [ТИП] [ЗНАЧЕНИЕ] [ИСПОЛЬЗОВАНИЙ]")
     p_type = args[1]
-    if p_type not in ('krw', 'atm', 'card', 'dia', 'pass'):
-        return await msg.answer("Неверный тип. Допустимые: krw, atm, card, dia, pass")
+    if p_type not in ('krw', 'atm', 'card', 'dia', 'pass', 'prem'):
+        return await msg.answer("Неверный тип. Допустимые: krw, atm, card, dia, pass, prem")
+    if p_type == 'prem':
+        try:
+            if int(args[2]) <= 0:
+                return await msg.answer("❌ Для prem значение — кол-во дней (целое число > 0).")
+        except ValueError:
+            return await msg.answer("❌ Для prem значение должно быть числом дней.")
     db_exec("INSERT INTO promos (code, p_type, val, uses) VALUES (?, ?, ?, ?)",
             (args[0], args[1], args[2], int(args[3])))
     await state.clear()
@@ -767,6 +821,29 @@ async def use_promo(msg: types.Message):
                 await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt)
         except Exception:
             await msg.answer(txt)
+    elif p[0] == 'prem':
+            try:
+                days = int(p[1])
+            except ValueError:
+                return await msg.answer("❌ Ошибка промокода: некорректное значение дней.")
+            now = datetime.now()
+            res = db_exec("SELECT premium_until FROM users WHERE id = ?", (uid,), fetch=True)
+            current_until_str = res[0] if res else None
+            if current_until_str:
+                try:
+                    current_until = datetime.strptime(current_until_str, "%Y-%m-%d %H:%M:%S")
+                    new_until = (current_until if current_until > now else now) + timedelta(days=days)
+                except Exception:
+                    new_until = now + timedelta(days=days)
+            else:
+                new_until = now + timedelta(days=days)
+            new_until_str = new_until.strftime("%Y-%m-%d %H:%M:%S")
+            db_exec("UPDATE users SET premium_until = ? WHERE id = ?", (new_until_str, uid))
+            await msg.answer(
+                f"✅ Промокод активирован! Вы получаете Premium на {days} дн. 👑\n"
+                f"Premium действует до: {new_until_str}"
+            )
+
 
 @router.message(Command("update_refs"))
 async def update_refs_cmd(msg: types.Message):
