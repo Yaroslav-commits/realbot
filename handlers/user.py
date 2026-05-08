@@ -80,27 +80,32 @@ async def get_card_cmd(msg: types.Message):
     attempts = u[6]
     now = datetime.now()
 
-    # Сначала проверяем кулдаун (если попыток нет)
+    is_prem = False
+    if len(u) > 21 and u[21]:
+        try:
+            if datetime.strptime(u[21], "%Y-%m-%d %H:%M:%S") > now:
+                is_prem = True
+        except: pass
+
+    cooldown_hours = 1 if is_prem else GET_COOLDOWN_HOURS
+
     if attempts <= 0:
         try:
             last_get = datetime.strptime(u[11], "%Y-%m-%d %H:%M:%S")
         except Exception:
             last_get = datetime.min
-        if (now - last_get).total_seconds() < GET_COOLDOWN_HOURS * 3600:
-            rem = int(GET_COOLDOWN_HOURS * 3600 - (now - last_get).total_seconds())
+        if (now - last_get).total_seconds() < cooldown_hours * 3600:
+            rem = int(cooldown_hours * 3600 - (now - last_get).total_seconds())
             return await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
 
-    # Получаем карту
-    card_key = pull_random_card()
+    card_key = pull_random_card(uid=uid)
     if not card_key:
         return await msg.answer("❌ Ошибка: пул карт пуст или произошла ошибка.")
 
     is_new, krw, c = give_card_to_user(uid, card_key)
-
-    # Если карта или данные повреждены — не списываем попытку
     if c is None:
         return await msg.answer("❌ Ошибка при получении карты. Попробуйте снова.")
-    # Формируем текст
+
     if is_new:
         txt = (f"🃏 Получена новая боевая карта!\n\n"
                f"🎴 Персонаж: {c['name']}\n"
@@ -120,7 +125,6 @@ async def get_card_cmd(msg: types.Message):
                f"💪 Сила: {c['strength']}\n"
                f"🧠 Интеллект: {c['intellect']}")
 
-    # Божественные карты приходят видео, остальные — фото.
     try:
         if "Божественная" in c.get("rarity", "") and c.get("video"):
             await msg.answer_video(
@@ -137,17 +141,13 @@ async def get_card_cmd(msg: types.Message):
         try: await msg.answer(txt)
         except: return await msg.answer("❌ Не удалось открутить.")
 
-
-    # Списываем попытку ТОЛЬКО после успешной отправки
     if attempts > 0:
         new_attempts = attempts - 1
         db_exec("UPDATE users SET attempts = ? WHERE id = ?", (new_attempts, uid))
         if new_attempts == 0:
-            # Последняя попытка использована — запускаем кулдаун и сбрасываем флаг уведомления
             db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
                     (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
     else:
-        # Попыток 0 — кулдаун уже идёт, обновляем last_get и сбрасываем флаг
         db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
                 (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
 
@@ -167,7 +167,18 @@ async def profile(msg: types.Message):
     else:
         title_str = "\n"
 
-    user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
+    is_prem = False
+    if len(u) > 21 and u[21]:
+        try:
+            if datetime.strptime(u[21], "%Y-%m-%d %H:%M:%S") > datetime.now():
+                is_prem = True
+        except:
+            pass
+
+    if is_prem:
+        user_link = f'<a href="tg://user?id={u[0]}">{u[2]} 👑</a>'
+    else:
+        user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
     txt = (
         f"👤 Профиль {user_link} 🧩\n"
         f"🆔 Id: <code>{u[0]}</code>\n"
@@ -217,13 +228,22 @@ async def settings_cq(cq: CallbackQuery):
         await cq.answer("Пользователь не найден", show_alert=True)
         return
 
-    notif_on = bool(u[17])  # notifications (индекс 17)
+    notif_on = bool(u[17])
     notif_emoji = "✅" if notif_on else "☑️"
     notif_text = "Включить уведомления" if notif_on else "Выключить уведомления"
+
+    prem_until_str = "Нет"
+    if len(u) > 21 and u[21]:
+        try:
+            if datetime.strptime(u[21], "%Y-%m-%d %H:%M:%S") > datetime.now():
+                prem_until_str = u[21]
+        except:
+            pass
 
     txt = (
         f"⚙️ Настройки\n"
         f"Дата регистрации: {u[15]}\n"
+        f"👑 Premium до: {prem_until_str}\n"
         f"Для смены ника отправьте команду /nick [новый ник]\n"
         f"{notif_text} > {notif_emoji}"
     )
@@ -246,6 +266,20 @@ async def change_nick(msg: types.Message):
     new_nick = msg.text.replace("/nick", "").strip()
     if not new_nick:
         return await msg.answer("Использование: /nick НовыйНик")
+
+    u = get_user(msg.from_user.id)
+    is_prem = False
+    if u and len(u) > 21 and u[21]:
+        try:
+            if datetime.strptime(u[21], "%Y-%m-%d %H:%M:%S") > datetime.now():
+                is_prem = True
+        except:
+            pass
+
+    has_emoji = any(ord(char) > 0x2600 for char in new_nick)
+    if has_emoji and not is_prem:
+        return await msg.answer("❌ Использовать эмодзи в никнейме могут только Premium 👑 пользователи!")
+
     db_exec("UPDATE users SET nickname = ? WHERE id = ?", (new_nick, msg.from_user.id))
     await msg.answer(f"✅ Ник изменен на {new_nick}")
 
@@ -295,9 +329,18 @@ async def toggle_notifications_cq(cq: CallbackQuery):
     notif_emoji = "✅" if new_state else "☑️"
     notif_text = "Включить уведомления" if new_state else "Выключить уведомления"
 
+    prem_until_str = "Нет"
+    if len(u) > 21 and u[21]:
+        try:
+            if datetime.strptime(u[21], "%Y-%m-%d %H:%M:%S") > datetime.now():
+                prem_until_str = u[21]
+        except:
+            pass
+
     txt = (
         f"⚙️ Настройки\n"
         f"Дата регистрации: {u[15]}\n"
+        f"👑 Premium до: {prem_until_str}\n"
         f"Для смены ника отправьте команду /nick [новый ник]\n"
         f"{notif_text} > {notif_emoji}"
     )
@@ -744,21 +787,90 @@ async def update_refs_cmd(msg: types.Message):
     await msg.answer(f"✅ Успешно обновлено {count} кодов! Теперь у всех уникальные ссылки из букв.")
 
 # ================== ПЛАНИРОВЩИК УВЕДОМЛЕНИЙ О КУЛДАУНЕ ==================
-async def cooldown_notification_scheduler(bot: Bot):
+async def cooldown_notification_scheduler(bot):
     """Фоновый task: проверяет истёкшие кулдауны и шлёт уведомления в ЛС."""
     while True:
         try:
-            users = get_users_for_cooldown_notify(GET_COOLDOWN_HOURS * 3600)
-            for (uid,) in users:
-                try:
-                    await bot.send_message(
-                        uid,
-                        "🎴 Крутка восстановлена! Ты можешь получить новую карту.\n"
-                        "Используй кнопку «Получить карту» в главном меню."
-                    )
-                    mark_cooldown_notified(uid)
-                except Exception:
-                    pass  # Пользователь мог заблокировать бота
+            now = datetime.now()
+
+            # 1. Обычные крутки
+            users_get = db_exec(
+                "SELECT id, last_get, premium_until FROM users WHERE attempts = 0 AND notifications = 1 AND cooldown_notified = 0",
+                fetchall=True)
+            if users_get:
+                for row in users_get:
+                    uid, last_get_str, premium_until_str = row
+
+                    is_prem = False
+                    if premium_until_str:
+                        try:
+                            if datetime.strptime(premium_until_str, "%Y-%m-%d %H:%M:%S") > now:
+                                is_prem = True
+                        except Exception:
+                            pass
+
+                    cooldown_h = 1 if is_prem else GET_COOLDOWN_HOURS
+
+                    try:
+                        if last_get_str:
+                            last_get = datetime.strptime(last_get_str, "%Y-%m-%d %H:%M:%S")
+                        else:
+                            last_get = datetime.min
+                    except Exception:
+                        last_get = datetime.min
+
+                    if (now - last_get).total_seconds() >= cooldown_h * 3600:
+                        try:
+                            await bot.send_message(
+                                uid,
+                                "🎴 Крутка восстановлена! Ты можешь получить новую карту.\nИспользуй кнопку «Получить карту» в главном меню."
+                            )
+                            db_exec("UPDATE users SET cooldown_notified = 1 WHERE id = ?", (uid,))
+                        except Exception:
+                            pass
+            # 2. Поле битвы
+            users_battle = db_exec(
+                "SELECT id, last_battle, premium_until FROM users WHERE notifications = 1 AND battle_cooldown_notified = 0",
+                fetchall=True)
+            if users_battle:
+                for row in users_battle:
+                    uid, last_b_str, premium_until_str = row
+
+                    is_prem = False
+                    if premium_until_str:
+                        try:
+                            if datetime.strptime(premium_until_str, "%Y-%m-%d %H:%M:%S") > now:
+                                is_prem = True
+                        except Exception:
+                            pass
+
+                    b_cooldown_h = 0.5 if is_prem else BATTLE_COOLDOWN_HOURS
+
+                    try:
+                        if last_b_str:
+                            last_b = datetime.strptime(last_b_str, "%Y-%m-%d %H:%M:%S")
+                        else:
+                            last_b = datetime.min
+                    except Exception:
+                        last_b = datetime.min
+
+                    if (now - last_b).total_seconds() >= b_cooldown_h * 3600:
+                        try:
+                            await bot.send_message(
+                                uid,
+                                "⚔️ Поле битвы снова доступно! Твой кулдаун сброшен."
+                            )
+                            db_exec("UPDATE users SET battle_cooldown_notified = 1 WHERE id = ?", (uid,))
+                        except Exception:
+                            pass
+
         except Exception as e:
-            logging.error(f"Cooldown scheduler error: {e}")
+            try:
+                import logging
+                logging.error(f"Cooldown scheduler error: {e}")
+            except Exception:
+                pass
+
+        import asyncio
         await asyncio.sleep(60)  # Проверка раз в минуту
+

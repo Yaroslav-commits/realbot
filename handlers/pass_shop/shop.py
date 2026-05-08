@@ -164,9 +164,96 @@ async def shop_dia_buy_cb(cq: CallbackQuery, bot: Bot):
 # ===== Premium =====
 @router.callback_query(F.data == "shop:premium")
 async def shop_premium_cb(cq: CallbackQuery):
-    await cq.answer("🎫 Premium пока недоступен.", show_alert=True)
+    txt = (
+        "Список бонусов на месяц, что вы получите при покупке Premium 👑\n\n"
+        "👑 Вы будете отображаться как премиум пользователь;\n"
+        "📞 Уведомление о сбросе кулдауна в ⚔️ Поле Битвы;\n"
+        "⌛️ Возможность получать карточки каждый 1 час вместо 3;\n"
+        "⚔️ Возможность сражаться в поле битвы каждые пол часа (30м) вместо 1.5;\n"
+        "🃏 Повышенная вероятность выпадения Легендарных, Мифических и Божественных карт;\n"
+        "👤 Возможность изменять никнейм и добавлять в него эмодзи;\n"
+        "🪙 Получение большего количества BATTLECOIN;\n"
+        "🏅 Увеличение количества очков ранга за победу и ничью в PVP +1;\n\n"
+        "При покупке Premium подписки на 1 месяц вы получаете сразу:\n"
+        "10 круток 💳\n"
+        "500 KRW 💴\n"
+        "Лимитированная премиум карточка 🎴👑"
+    )
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Купить 250 💎", callback_data="shop:buy_premium")
+    bld.button(text="Назад 🔙", callback_data="shop:main")
+    bld.adjust(1)
 
-# ===== Крутки =====
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup())
+    except:
+        try:
+            await cq.message.delete()
+        except:
+            pass
+        await cq.message.answer_photo(photo=SHOP_IMG, caption=txt, reply_markup=bld.as_markup())
+    await cq.answer()
+
+
+@router.callback_query(F.data == "shop:buy_premium")
+async def shop_buy_premium_cb(cq: CallbackQuery):
+    u = get_user(cq.from_user.id)
+    if u[3] < 250:
+        return await cq.answer("❌ Недостаточно алмазов! Нужно: 250 💎", show_alert=True)
+
+    uid = cq.from_user.id
+    now = datetime.now()
+
+    premium_until_str = u[21] if len(u) > 21 else None
+    if premium_until_str:
+        try:
+            current_until = datetime.strptime(premium_until_str, "%Y-%m-%d %H:%M:%S")
+            if current_until > now:
+                new_until = current_until + timedelta(days=30)
+            else:
+                new_until = now + timedelta(days=30)
+        except:
+            new_until = now + timedelta(days=30)
+    else:
+        new_until = now + timedelta(days=30)
+
+    new_until_str = new_until.strftime("%Y-%m-%d %H:%M:%S")
+
+    db_exec(
+        "UPDATE users SET diamond = diamond - 250, krw = krw + 500, attempts = attempts + 10, premium_until = ? WHERE id = ?",
+        (new_until_str, uid))
+
+    is_new, krw_earn, c = give_card_to_user(uid, "premium_card_1")
+
+    if is_new:
+        txt = (f"🃏 Получена новая боевая карта!\n\n"
+               f"🎴 Персонаж: {c['name']}\n"
+               f"🔮 Редкость: {c['rarity']}\n"
+               f"👊 Стиль боя: {c['style']}\n"
+               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+               f"⚡️ Скорость: {c['speed']}\n"
+               f"💪 Сила: {c['strength']}\n"
+               f"🧠 Интеллект: {c['intellect']}")
+    else:
+        txt = (f"🛑 Вам попалась повторная карта! Вы получаете {krw_earn} 💴 KRW\n\n"
+               f"🎴 Персонаж: {c['name']}\n"
+               f"🔮 Редкость: {c['rarity']}\n"
+               f"👊 Стиль боя: {c['style']}\n"
+               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+               f"⚡️ Скорость: {c['speed']}\n"
+               f"💪 Сила: {c['strength']}\n"
+               f"🧠 Интеллект: {c['intellect']}")
+
+        try:
+            await cq.message.answer_photo(photo=FSInputFile(f"images/cards/{c.get('file', 'premium_card.jpeg')}"),
+                                          caption=txt, has_spoiler=True)
+        except:
+            await cq.message.answer(txt)
+
+        await cq.answer("✅ Premium успешно куплен!", show_alert=True)
+        await _back_to_shop_main(cq)
+
+        # ===== Крутки =====
 def _spin_kb():
     bld = InlineKeyboardBuilder()
     for dia, att in SPIN_PACKS:
@@ -332,7 +419,7 @@ async def buy_pack(msg: types.Message):
     if u[4] < cost:
         return await msg.answer(f"❌ Недостаточно KRW. Нужно: {cost} 💴")
     db_exec("UPDATE users SET krw = krw - ? WHERE id = ?", (cost, msg.from_user.id))
-    card_key = pull_random_card(force_rarity=rarity) or pull_random_card()
+    card_key = pull_random_card(force_rarity=rarity) or pull_random_card(uid=msg.from_user.id)
     is_new, krw_earn, c = give_card_to_user(msg.from_user.id, card_key)
 
     if is_new:

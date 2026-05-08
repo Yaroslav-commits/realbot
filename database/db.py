@@ -5,7 +5,8 @@ import string
 from datetime import datetime, timedelta, timezone
 
 from config import DB_PATH
-from data.cards import CARDS, RARITIES, ROYALE_PASS
+from data.cards import CARDS, RARITIES, PREMIUM_RARITIES, ROYALE_PASS
+
 
 # ================== ФУНКЦИИ БД ==================
 def db_exec(query, params=(), fetch=False, fetchall=False):
@@ -53,12 +54,14 @@ def init_db():
         ('referral_code', 'TEXT'),
         ('referred_by', 'INTEGER'),
         ('cooldown_notified', 'INTEGER DEFAULT 1'),
+        ('premium_until', 'TEXT'),
+        ('battle_cooldown_notified', 'INTEGER DEFAULT 1'),
     ]:
         try:
             db_exec(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
         except sqlite3.OperationalError:
             pass  # колонка уже существует
-
+        
     # Генерируем реферальные коды для существующих пользователей, у которых их нет
     users_no_code = db_exec("SELECT id FROM users WHERE referral_code IS NULL", fetchall=True)
     if users_no_code:
@@ -178,7 +181,7 @@ def get_rank(pts):
         if pts >= p:
             return n
 
-def pull_random_card(force_rarity=None):
+def pull_random_card(force_rarity=None, uid=None):
     """Возвращает ключ случайной карты или None, если пул пуст."""
     try:
         if force_rarity:
@@ -187,7 +190,20 @@ def pull_random_card(force_rarity=None):
             roll = random.uniform(0, 100)
             cum = 0
             rolled_r = "Обычная ⚪️"
-            for r, d in RARITIES.items():
+
+            is_prem = False
+            if uid:
+                res = db_exec("SELECT premium_until FROM users WHERE id = ?", (uid,), fetch=True)
+                if res and res[0]:
+                    try:
+                        if datetime.strptime(res[0], "%Y-%m-%d %H:%M:%S") > datetime.now():
+                            is_prem = True
+                    except:
+                        pass
+
+            target_rarities = PREMIUM_RARITIES if is_prem else RARITIES
+
+            for r, d in target_rarities.items():
                 cum += d.get('chance', 0)
                 if roll <= cum:
                     rolled_r = r
@@ -198,6 +214,7 @@ def pull_random_card(force_rarity=None):
         return random.choice(pool) if pool else None
     except Exception:
         return None
+
 
 def give_card_to_user(uid, card_key):
     """Выдаёт карту игроку. Возвращает (is_new, krw, card_data) или (False, 0, None) при ошибке."""
