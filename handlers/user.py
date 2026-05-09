@@ -1,11 +1,11 @@
 import os
+import re
 import asyncio
 import logging
 import sqlite3
 import random
 import calendar
 from datetime import datetime, timedelta
-
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
@@ -24,9 +24,32 @@ from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user, try_use_promo, grant_retroactive_royale_pass,
                          get_user_by_ref_code, get_referral_count, get_users_for_cooldown_notify,
-                         mark_cooldown_notified, reset_cooldown_notified, toggle_notifications)
+                         mark_cooldown_notified, reset_cooldown_notified, toggle_notifications,
+                         is_premium, get_premium_until,
+                         get_users_for_battle_cooldown_notify, mark_battle_cooldown_notified)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
+
+# Регулярка для эмодзи в нике (запрет для не-Premium)
+EMOJI_RE = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"
+    "\U0001F300-\U0001F5FF"
+    "\U0001F680-\U0001F6FF"
+    "\U0001F1E0-\U0001F1FF"
+    "\U00002500-\U00002BEF"
+    "\U00002702-\U000027B0"
+    "\U000024C2-\U0001F251"
+    "\U0001F900-\U0001F9FF"
+    "\U0001FA70-\U0001FAFF"
+    "\u2600-\u26FF"
+    "\u2700-\u27BF"
+    "\u200d"
+    "\ufe0f"
+    "]+",
+    flags=re.UNICODE
+)
+
 
 class BroadcastState(StatesGroup):
     waiting_for_message = State()
@@ -80,23 +103,26 @@ async def get_card_cmd(msg: types.Message):
     attempts = u[6]
     now = datetime.now()
 
+    # Premium = 1 час, обычный = GET_COOLDOWN_HOURS (3 часа)
+    user_is_premium = is_premium(uid)
+    cooldown_hours = 1 if user_is_premium else GET_COOLDOWN_HOURS
+
     # Сначала проверяем кулдаун (если попыток нет)
     if attempts <= 0:
         try:
             last_get = datetime.strptime(u[11], "%Y-%m-%d %H:%M:%S")
         except Exception:
             last_get = datetime.min
-        if (now - last_get).total_seconds() < GET_COOLDOWN_HOURS * 3600:
-            rem = int(GET_COOLDOWN_HOURS * 3600 - (now - last_get).total_seconds())
+        if (now - last_get).total_seconds() < cooldown_hours * 3600:
+            rem = int(cooldown_hours * 3600 - (now - last_get).total_seconds())
             return await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
 
-    # Получаем карту
-    card_key = pull_random_card()
+    # Получаем карту (Premium — повышенный шанс)
+    card_key = pull_random_card(premium=user_is_premium)
     if not card_key:
         return await msg.answer("❌ Ошибка: пул карт пуст или произошла ошибка.")
 
     is_new, krw, c = give_card_to_user(uid, card_key)
-
     # Если карта или данные повреждены — не списываем попытку
     if c is None:
         return await msg.answer("❌ Ошибка при получении карты. Попробуйте снова.")
@@ -137,7 +163,6 @@ async def get_card_cmd(msg: types.Message):
         try: await msg.answer(txt)
         except: return await msg.answer("❌ Не удалось открутить.")
 
-
     # Списываем попытку ТОЛЬКО после успешной отправки
     if attempts > 0:
         new_attempts = attempts - 1
@@ -150,6 +175,7 @@ async def get_card_cmd(msg: types.Message):
         # Попыток 0 — кулдаун уже идёт, обновляем last_get и сбрасываем флаг
         db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
                 (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
+
 
 
 # ============ ПРОФИЛЬ ============
@@ -167,9 +193,12 @@ async def profile(msg: types.Message):
     else:
         title_str = "\n"
 
+    # Эмодзи статуса (Корона для Premium, Пазл для обычных)
+    status_emoji = "👑" if is_premium(uid) else "🧩"
     user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
+
     txt = (
-        f"👤 Профиль {user_link} 🧩\n"
+        f"👤 Профиль {user_link} {status_emoji}\n"
         f"🆔 Id: <code>{u[0]}</code>\n"
         f"{title_str}"
         f"Баланс:\n"
@@ -185,8 +214,8 @@ async def profile(msg: types.Message):
 
     bld = InlineKeyboardBuilder()
     bld.button(text="🔱 Мои титулы", callback_data="my_titles")
-    bld.button(text="🌄 Мои фоны",   callback_data="my_bgs")
-    bld.button(text="⚙️ Настройка",  callback_data="settings")
+    bld.button(text="🌄 Мои фоны", callback_data="my_bgs")
+    bld.button(text="⚙️ Настройка", callback_data="settings")
     bld.adjust(1)
 
     bg_key = u[13] or 'default'
@@ -221,9 +250,16 @@ async def settings_cq(cq: CallbackQuery):
     notif_emoji = "✅" if notif_on else "☑️"
     notif_text = "Включить уведомления" if notif_on else "Выключить уведомления"
 
+    premium_until_dt = get_premium_until(cq.from_user.id)
+    if premium_until_dt and premium_until_dt > datetime.now():
+        premium_line = f"👑 Premium активен до: {premium_until_dt.strftime('%d.%m.%Y')}\n"
+    else:
+        premium_line = "👑 Premium: не активен\n"
+
     txt = (
         f"⚙️ Настройки\n"
         f"Дата регистрации: {u[15]}\n"
+        f"{premium_line}"
         f"Для смены ника отправьте команду /nick [новый ник]\n"
         f"{notif_text} > {notif_emoji}"
     )
@@ -240,14 +276,16 @@ async def settings_cq(cq: CallbackQuery):
 
     await cq.answer()
 
-
 @router.message(Command("nick"))
 async def change_nick(msg: types.Message):
     new_nick = msg.text.replace("/nick", "").strip()
     if not new_nick:
         return await msg.answer("Использование: /nick НовыйНик")
+    if EMOJI_RE.search(new_nick) and not is_premium(msg.from_user.id):
+        return await msg.answer("❌ Эмодзи в нике доступны только Premium 👑 пользователям.")
     db_exec("UPDATE users SET nickname = ? WHERE id = ?", (new_nick, msg.from_user.id))
-    await msg.answer(f"✅ Ник изменен на {new_nick}")
+    await msg.answer(f"✅ Ник изменён на {new_nick}")
+
 
 
 # ============ РЕФЕРАЛЬНАЯ СИСТЕМА ============
@@ -295,13 +333,19 @@ async def toggle_notifications_cq(cq: CallbackQuery):
     notif_emoji = "✅" if new_state else "☑️"
     notif_text = "Включить уведомления" if new_state else "Выключить уведомления"
 
+    premium_until_dt = get_premium_until(cq.from_user.id)
+    if premium_until_dt and premium_until_dt > datetime.now():
+        premium_line = f"👑 Premium активен до: {premium_until_dt.strftime('%d.%m.%Y')}\n"
+    else:
+        premium_line = "👑 Premium: не активен\n"
+
     txt = (
         f"⚙️ Настройки\n"
         f"Дата регистрации: {u[15]}\n"
+        f"{premium_line}"
         f"Для смены ника отправьте команду /nick [новый ник]\n"
         f"{notif_text} > {notif_emoji}"
     )
-
     bld = InlineKeyboardBuilder()
     bld.button(text="👥 Реферальная система", callback_data="referral_system")
     bld.button(text=f"Вкл/выкл уведомления {notif_emoji}", callback_data="toggle_notifications")
@@ -313,6 +357,7 @@ async def toggle_notifications_cq(cq: CallbackQuery):
         pass
 
     await cq.answer(f"Уведомления {'включены' if new_state else 'выключены'}")
+
 
 
 @router.callback_query(F.data.in_(["my_bgs", "my_titles"]))
@@ -743,22 +788,91 @@ async def update_refs_cmd(msg: types.Message):
 
     await msg.answer(f"✅ Успешно обновлено {count} кодов! Теперь у всех уникальные ссылки из букв.")
 
-# ================== ПЛАНИРОВЩИК УВЕДОМЛЕНИЙ О КУЛДАУНЕ ==================
+
+# ================== ПЛАНИРОВЩИК УВЕДОМЛЕНИЙ ==================
+
 async def cooldown_notification_scheduler(bot: Bot):
-    """Фоновый task: проверяет истёкшие кулдауны и шлёт уведомления в ЛС."""
+    """Фоновый task: уведомляет о сбросе кулдауна крутки.
+    Premium = 1 час, обычные = 3 часа."""
     while True:
         try:
-            users = get_users_for_cooldown_notify(GET_COOLDOWN_HOURS * 3600)
-            for (uid,) in users:
+            users = get_users_for_cooldown_notify()
+            now = datetime.now()
+            for row in users:
+                uid, last_get_str, premium_until_str = row
+
+                # Проверка Premium статуса
+                user_premium = False
+                if premium_until_str:
+                    try:
+                        until_dt = datetime.strptime(premium_until_str, "%Y-%m-%d %H:%M:%S")
+                        user_premium = until_dt > now
+                    except Exception:
+                        user_premium = False
+
+                # Кулдаун в часах
+                cd_hours = 1 if user_premium else GET_COOLDOWN_HOURS
+
+                try:
+                    last_get = datetime.strptime(last_get_str, "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    last_get = datetime.min
+
+                # Если время еще не пришло — пропускаем
+                if (now - last_get).total_seconds() < cd_hours * 3600:
+                    continue
+
                 try:
                     await bot.send_message(
                         uid,
-                        "🎴 Крутка восстановлена! Ты можешь получить новую карту.\n"
-                        "Используй кнопку «Получить карту» в главном меню."
+                        "🎴 Крутка восстановлена! Ты можешь получить новую карту."
                     )
                     mark_cooldown_notified(uid)
                 except Exception:
-                    pass  # Пользователь мог заблокировать бота
+                    pass
         except Exception as e:
             logging.error(f"Cooldown scheduler error: {e}")
-        await asyncio.sleep(60)  # Проверка раз в минуту
+        await asyncio.sleep(60)
+
+
+async def battle_cooldown_notification_scheduler(bot: Bot):
+    """Фоновый task ТОЛЬКО для Premium: уведомляет о сбросе кулдауна боя (30 мин)."""
+    while True:
+        try:
+            users = get_users_for_battle_cooldown_notify()
+            now = datetime.now()
+            for row in users:
+                uid, last_battle_str, premium_until_str = row
+
+                # Проверяем, не истек ли Premium за это время
+                user_premium = False
+                if premium_until_str:
+                    try:
+                        until_dt = datetime.strptime(premium_until_str, "%Y-%m-%d %H:%M:%S")
+                        user_premium = until_dt > now
+                    except Exception:
+                        user_premium = False
+
+                if not user_premium:
+                    continue
+
+                try:
+                    last_battle = datetime.strptime(last_battle_str, "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    last_battle = datetime.min
+
+                # Кулдаун для Premium — 30 минут (0.5 часа)
+                if (now - last_battle).total_seconds() < 0.5 * 3600:
+                    continue
+                try:
+                    await bot.send_message(
+                        uid,
+                        "⚔️ Вы снова можете сражаться на Поле Битвы!\n"
+                        "Отправляйтесь в бой и покажите свою силу."
+                    )
+                    mark_battle_cooldown_notified(uid)
+                except Exception:
+                    pass
+        except Exception as e:
+            logging.error(f"Battle cooldown scheduler error: {e}")
+        await asyncio.sleep(60)

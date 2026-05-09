@@ -21,7 +21,7 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         NORMAL_PASS, ROYALE_PASS, is_divine)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
-                         pull_random_card, give_card_to_user)
+                         pull_random_card, give_card_to_user, is_premium)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 
@@ -92,8 +92,11 @@ async def process_friend_id(msg: types.Message, state: FSMContext):
     u = get_user(msg.from_user.id)
     last_b = datetime.strptime(u[12], "%Y-%m-%d %H:%M:%S")
     now = datetime.now()
-    if (now - last_b).total_seconds() < BATTLE_COOLDOWN_HOURS * 3600:
-        rem = int(BATTLE_COOLDOWN_HOURS * 3600 - (now - last_b).total_seconds())
+
+    cd_hours = 0.5 if is_premium(msg.from_user.id) else BATTLE_COOLDOWN_HOURS
+
+    if (now - last_b).total_seconds() < cd_hours * 3600:
+        rem = int(cd_hours * 3600 - (now - last_b).total_seconds())
         await state.clear()
         return await msg.answer(f"⏳ Кулдаун битвы: {rem // 3600}ч {(rem % 3600) // 60}м")
     my_name = u[2]
@@ -142,8 +145,9 @@ async def accept_f(cq: CallbackQuery):
     u = get_user(target_id)
     last_b = datetime.strptime(u[12], "%Y-%m-%d %H:%M:%S")
     now = datetime.now()
-    if (now - last_b).total_seconds() < BATTLE_COOLDOWN_HOURS * 3600:
-        rem = int(BATTLE_COOLDOWN_HOURS * 3600 - (now - last_b).total_seconds())
+    cd_hours_target = 0.5 if is_premium(target_id) else BATTLE_COOLDOWN_HOURS
+    if (now - last_b).total_seconds() < cd_hours_target * 3600:
+        rem = int(cd_hours_target * 3600 - (now - last_b).total_seconds())
         await cq.answer(f"У вас кулдаун битвы: {rem // 3600}ч {(rem % 3600) // 60}м", show_alert=True)
         try:
             await cq.bot.send_message(sender_id, "У игрока кулдаун битвы. Он не может принять бой.")
@@ -153,13 +157,15 @@ async def accept_f(cq: CallbackQuery):
 
     u_sender = get_user(sender_id)
     last_b_s = datetime.strptime(u_sender[12], "%Y-%m-%d %H:%M:%S")
-    if (now - last_b_s).total_seconds() < BATTLE_COOLDOWN_HOURS * 3600:
+    cd_hours_sender = 0.5 if is_premium(sender_id) else BATTLE_COOLDOWN_HOURS
+    if (now - last_b_s).total_seconds() < cd_hours_sender * 3600:
         await cq.answer("У инициатора боя сейчас кулдаун.", show_alert=True)
         try:
             await cq.bot.send_message(sender_id, "Ваш кулдаун не позволяет начать бой.")
         except:
             pass
         return
+
 
     await start_battle(sender_id, target_id, cq.bot, friendly=True)
 
@@ -569,8 +575,9 @@ async def find_match(cq: CallbackQuery):
     u = get_user(uid)
     last_b = datetime.strptime(u[12], "%Y-%m-%d %H:%M:%S")
     now = datetime.now()
-    if (now - last_b).total_seconds() < BATTLE_COOLDOWN_HOURS * 3600:
-        rem = int(BATTLE_COOLDOWN_HOURS * 3600 - (now - last_b).total_seconds())
+    cd_hours = 0.5 if is_premium(uid) else BATTLE_COOLDOWN_HOURS
+    if (now - last_b).total_seconds() < cd_hours * 3600:
+        rem = int(cd_hours * 3600 - (now - last_b).total_seconds())
         return await cq.answer(f"⏳ Кулдаун битвы: {rem // 3600}ч {(rem % 3600) // 60}м", show_alert=True)
 
     if MATCH_QUEUE and MATCH_QUEUE[0] != uid:
@@ -628,13 +635,16 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
 
     u1 = get_user(p1)
     if p2 == -1:
-        db_exec("UPDATE users SET last_battle = ? WHERE id = ?",
+        db_exec("UPDATE users SET last_battle = ?, battle_cooldown_notified = 0 WHERE id = ?",
                 (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1))
     else:
-        db_exec("UPDATE users SET last_battle = ? WHERE id IN (?, ?)",
+        db_exec("UPDATE users SET last_battle = ?, battle_cooldown_notified = 0 WHERE id IN (?, ?)",
                 (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1, p2))
 
-    txt1 = f"Противник найден!\n\n· Имя: {name2} 🧩\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+    emoji1 = "👑" if is_premium(p1) else "🧩"
+    emoji2 = "👑" if p2 != -1 and is_premium(p2) else "🧩"
+
+    txt1 = f"Противник найден!\n\n· Имя: {name2} {emoji2}\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
 
     if p2 != -1:
         bg_key2 = u2[13] or 'default'
@@ -651,7 +661,7 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         await bot.send_message(p1, txt1, parse_mode="HTML")
 
     if p2 != -1:
-        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> 🧩\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> {emoji1}\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
         bg_key1 = u1[13] or 'default'
         bg_data1 = BGS.get(bg_key1, BGS['default'])
         bg_file1 = FSInputFile(f"images/backgrounds/{bg_data1.get('file')}")
@@ -929,28 +939,31 @@ async def resolve_round(gid, bot):
 
     f1, f2 = int(val1 * m1), int(val2 * m2)
 
+    emoji1 = "👑" if is_premium(g['p1']) else "🧩"
+    emoji2 = "👑" if g['p2'] != -1 and is_premium(g['p2']) else "🧩"
+
     if f1 > f2:
         g['score1'] += 1
-        winner_name = n1
+        winner_name = f"{n1} {emoji1}"
     elif f2 > f1:
         g['score2'] += 1
-        winner_name = n2_link
+        winner_name = f"{n2_link} {emoji2}"
     else:
         winner_name = "Ничья"
 
-    def format_text(p_name, e_name, score_p, score_e, p_s, e_s, p_val, e_val, p_final, e_final, b_txt):
+    def format_text(p_name, e_name, score_p, score_e, p_s, e_s, p_val, e_val, p_final, e_final, b_txt, p_emoji, e_emoji):
         t = (f"⬆️ Ваша карта | Карта врага ⬆️\nРаунд - {g['round']}\n\n"
-             f"Счет:\n{p_name} (я)🧩 - {score_p}\n{e_name} (противник)🧩 - {score_e}\n\n"
+             f"Счет:\n{p_name} {p_emoji} - {score_p}\n{e_name} {e_emoji} - {score_e}\n\n"
              f"⚔️ Вы совершаете {s_map[p_s][1]} атаку\nУровень атаки: {p_val}\n\n"
              f"🛡️ Противник ставит {s_map[e_s][1]} защиту\nУровень защиты: {e_val}\n\n")
         if adv != 0: t += f"Бонус\n{b_txt}\n\n"
         t += (f"Итоговый уровень атаки {s_map[p_s][0].split()[0]} : {p_final}\n"
               f"Итоговый уровень защиты {s_map[e_s][0].split()[0]}: {e_final}\n\n")
-        t += f"Раунд завершился в ничью!" if winner_name == "Ничья" else f"Раунд выиграл {winner_name}🧩"
+        t += f"Раунд завершился в ничью!" if winner_name == "Ничья" else f"Раунд выиграл {winner_name}"
         return t
 
     try:
-        txt1 = format_text(n1, n2_link, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1, val2, f1, f2, bonus_txt_1)
+        txt1 = format_text(n1, n2_link, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1, val2, f1, f2, bonus_txt_1, emoji1, emoji2)
         media1 = [types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c1['file']}"), caption=txt1, parse_mode="HTML"),
                   types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c2['file']}"))]
         await bot.send_media_group(g['p1'], media=media1)
@@ -960,7 +973,7 @@ async def resolve_round(gid, bot):
     if g['p2'] != -1:
         try:
             txt2 = format_text(n2_link, n1, g['score2'], g['score1'], g['p2_s'], g['p1_s'], val2, val1, f2, f1,
-                               bonus_txt_2)
+                               bonus_txt_2, emoji2, emoji1)
             media2 = [types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c2['file']}"), caption=txt2, parse_mode="HTML"),
                       types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c1['file']}"))]
             await bot.send_media_group(g['p2'], media=media2)
@@ -993,12 +1006,21 @@ async def finish_game(gid, bot):
 
     def apply_res(uid, is_win, is_draw, friendly):
         if uid == -1: return 0, 0
+        premium = is_premium(uid)
+
         if friendly:
             pts = 0
             bc = 3 if is_win else 1
         else:
+            # Очки ранга: +1 за победу/ничью для Premium
             pts = 3 if is_win else (1 if is_draw else -2)
+            if premium and (is_win or is_draw):
+                pts += 1
+
+            # BattleCoin: +2 к любой награде для Premium
             bc = 3 if is_win else 1
+            if premium:
+                bc += 2
 
         db_exec(f"UPDATE users SET rank_points = MAX(0, rank_points + {pts}), battlecoin = battlecoin + {bc}, " +
                 ("wins = wins + 1" if is_win else ("draws = draws + 1" if is_draw else "losses = losses + 1")) +

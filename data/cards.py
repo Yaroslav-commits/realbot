@@ -272,7 +272,7 @@ CARDS = {
 "ko_myung_hwan": {"name": "Ко Мён-Хван", "rarity": "Обычная ⚪️", "style": "Мастер боевых искусств", "series": "Поднятие уровня в одиночку", "speed": 20, "strength": 19, "intellect": 17, "file": "ko_myung_hwan.jpeg", "exclusive": False},
 "hwang_dong_seok": {"name": "Хван Дон Сок", "rarity": "Обычная ⚪️", "style": "Танк", "series": "Поднятие уровня в одиночку", "speed": 17, "strength": 24, "intellect": 19, "file": "hwang_dong_seok.jpeg", "exclusive": False},
 #====LIMITED CARDS=====
-#"premium_card_1": {"name": "Лу Шень", "rarity": "Эпическая 🟢", "style": "Гибрид", "series": "Я прокачиваюсь во сне, убивая монстров", "speed": 80, "strength": 80, "intellect": 80, "file": "prumium_card.jpeg", "exclusive": True},
+"premium_card_1": {"name": "Лу Шень", "rarity": "Эпическая 🟢", "style": "Гибрид", "series": "Я прокачиваюсь во сне, убивая монстров", "speed": 80, "strength": 80, "intellect": 80, "file": "prumium_card.jpeg", "exclusive": True},
 "exclusive_card_1": {"name": "Юк Сонджи и Джин Хобин", "rarity": "Легендарная 🔵", "style": "Дзюдо", "series": "Лукизм", "speed": 90, "strength": 90, "intellect": 85, "file": "exclusive_card_1.png", "exclusive": True},
 }
 
@@ -284,7 +284,14 @@ RARITIES = {
     "Мифическая 🔴": {"chance": 0.2, "dup": (15, 20)},
     "Божественная ⚫️": {"chance": 0.01, "dup": (50, 100)}
 }
-
+PREMIUM_RARITIES = {
+    "Обычная ⚪️": {"chance": 54.2, "dup": 1},
+    "Редкая 🟡": {"chance": 29.71, "dup": 2},
+    "Эпическая 🟢": {"chance": 14.46, "dup": (4, 5)},
+    "Легендарная 🔵": {"chance": 1.1, "dup": (8, 11)},
+    "Мифическая 🔴": {"chance": 0.5, "dup": (15, 20)},
+    "Божественная ⚫️": {"chance": 0.03, "dup": (50, 100)}
+}
 
 
 BGS = {

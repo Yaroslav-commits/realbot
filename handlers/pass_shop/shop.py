@@ -162,9 +162,106 @@ async def shop_dia_buy_cb(cq: CallbackQuery, bot: Bot):
     await cq.answer()
 
 # ===== Premium =====
+PREMIUM_PRICE = 250  # алмазов
+PREMIUM_BONUS_ATTEMPTS = 10
+PREMIUM_BONUS_KRW = 500
+PREMIUM_CARD_KEY = "premium_card_1"
+
+def _premium_kb():
+    bld = InlineKeyboardBuilder()
+    bld.button(text=f"Купить {PREMIUM_PRICE} 💎", callback_data="shop:premium_buy")
+    bld.button(text="Назад 🔙", callback_data="shop:main")
+    bld.adjust(1)
+    return bld.as_markup()
+
 @router.callback_query(F.data == "shop:premium")
 async def shop_premium_cb(cq: CallbackQuery):
-    await cq.answer("🎫 Premium пока недоступен.", show_alert=True)
+    txt = (
+        "Список бонусов на месяц, что вы получите при покупке Premium 👑\n\n"
+        "👑 Вы будете отображаться как премиум пользователь;\n"
+        "📞 Уведомление о сбросе кулдауна в ⚔️ Поле Битвы;\n"
+        "⌛️ Возможность получать карточки каждый 1 час вместо 3;\n"
+        "⚔️ Возможность сражаться в поле битвы каждые пол часа (30м) вместо 1.5;\n"
+        "🃏 Повышенная вероятность выпадения Легендарных, Мифических и Божественных карт;\n"
+        "👤 Возможность изменять никнейм и добавлять в него эмодзи;\n"
+        "🪙 Получение большего количества BATTLECOIN;\n"
+        "🏅 Увеличение количества очков ранга за победу и ничью в PVP +1;\n\n"
+        "При покупке Premium подписки на 1 месяц вы получаете сразу:\n"
+        "10 круток 💳\n"
+        "500 KRW 💴\n"
+        "Лимитированная премиум карточка 🎴👑"
+    )
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup=_premium_kb())
+    except Exception:
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+        await cq.message.answer_photo(photo=SHOP_IMG, caption=txt, reply_markup=_premium_kb())
+    await cq.answer()
+@router.callback_query(F.data == "shop:premium_buy")
+async def shop_premium_buy_cb(cq: CallbackQuery):
+    from database.db import add_premium_months
+    uid = cq.from_user.id
+    u = get_user(uid)
+    if not u:
+        return await cq.answer("Пользователь не найден.", show_alert=True)
+    if u[3] < PREMIUM_PRICE:
+        return await cq.answer(f"❌ Недостаточно алмазов! Нужно: {PREMIUM_PRICE} 💎", show_alert=True)
+
+    # Списываем алмазы и продлеваем Premium на 1 месяц
+    db_exec("UPDATE users SET diamond = diamond - ? WHERE id = ?", (PREMIUM_PRICE, uid))
+    new_until = add_premium_months(uid, months=1)
+
+    # Молча начисляем крутки и валюту
+    db_exec("UPDATE users SET attempts = attempts + ?, krw = krw + ? WHERE id = ?",
+            (PREMIUM_BONUS_ATTEMPTS, PREMIUM_BONUS_KRW, uid))
+
+    # Выдаём премиум-карту (как при выбивании). Дубликат не задвоится — будет повторка с KRW.
+    if PREMIUM_CARD_KEY in CARDS:
+        is_new, krw_earn, c = give_card_to_user(uid, PREMIUM_CARD_KEY)
+        if is_new:
+            txt_card = (f"🃏 Получена новая боевая карта!\n\n"
+                        f"🎴 Персонаж: {c['name']}\n"
+                        f"🔮 Редкость: {c['rarity']}\n"
+                        f"👊 Стиль боя: {c['style']}\n"
+                        f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+                        f"⚡️ Скорость: {c['speed']}\n"
+                        f"💪 Сила: {c['strength']}\n"
+                        f"🧠 Интеллект: {c['intellect']}")
+        else:
+            txt_card = (f"🛑 Вам попалась повторная карта! Вы получаете {krw_earn} 💴 KRW\n\n"
+                        f"🎴 Персонаж: {c['name']}\n"
+                        f"🔮 Редкость: {c['rarity']}\n"
+                        f"👊 Стиль боя: {c['style']}\n"
+                        f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+                        f"⚡️ Скорость: {c['speed']}\n"
+                        f"💪 Сила: {c['strength']}\n"
+                        f"🧠 Интеллект: {c['intellect']}")
+        try:
+            if "Божественная" in c.get("rarity", "") and c.get("video"):
+                await cq.message.answer_video(
+                    video=FSInputFile(f"images/cards/{c['video']}"),
+                    caption=txt_card,
+                    width=c.get("width", 960),
+                    height=c.get("height", 1280),
+                    has_spoiler=True,
+                    supports_streaming=True
+                )
+            else:
+                await cq.message.answer_photo(
+                    photo=FSInputFile(f"images/cards/{c['file']}"),
+                    caption=txt_card, has_spoiler=True
+                )
+        except Exception:
+            await cq.message.answer(txt_card)
+
+    await cq.message.answer(
+        f"👑 Premium активирован до {new_until.strftime('%d.%m.%Y')}!\nСпасибо за покупку!"
+    )
+    await cq.answer("✅ Premium успешно куплен!", show_alert=True)
+
 
 # ===== Крутки =====
 def _spin_kb():

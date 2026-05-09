@@ -5,7 +5,7 @@ import string
 from datetime import datetime, timedelta, timezone
 
 from config import DB_PATH
-from data.cards import CARDS, RARITIES, ROYALE_PASS
+from data.cards import CARDS, RARITIES, PREMIUM_RARITIES, ROYALE_PASS
 
 # ================== ФУНКЦИИ БД ==================
 def db_exec(query, params=(), fetch=False, fetchall=False):
@@ -26,7 +26,8 @@ def init_db():
         rank_points INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, draws INTEGER DEFAULT 0, losses INTEGER DEFAULT 0,
         last_get TEXT DEFAULT '2000-01-01 00:00:00', last_battle TEXT DEFAULT '2000-01-01 00:00:00',
         active_bg TEXT DEFAULT 'default', active_title TEXT, join_date TEXT, royale_pass INTEGER DEFAULT 0,
-        notifications INTEGER DEFAULT 1, referral_code TEXT, referred_by INTEGER, cooldown_notified INTEGER DEFAULT 1
+        notifications INTEGER DEFAULT 1, referral_code TEXT, referred_by INTEGER, cooldown_notified INTEGER DEFAULT 1,
+        premium_until TEXT DEFAULT NULL, battle_cooldown_notified INTEGER DEFAULT 1
     )''')
     db_exec("CREATE TABLE IF NOT EXISTS cards_inv (user_id INTEGER, card_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS decks (user_id INTEGER, card_id TEXT, slot_index INTEGER)")
@@ -46,13 +47,14 @@ def init_db():
         rewarded INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now'))
     )''')
-
     # Миграция: добавляем новые колонки, если их ещё нет (для существующих БД)
     for col, col_def in [
         ('notifications', 'INTEGER DEFAULT 1'),
         ('referral_code', 'TEXT'),
         ('referred_by', 'INTEGER'),
         ('cooldown_notified', 'INTEGER DEFAULT 1'),
+        ('premium_until', 'TEXT DEFAULT NULL'),
+        ('battle_cooldown_notified', 'INTEGER DEFAULT 1'),
     ]:
         try:
             db_exec(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
@@ -65,6 +67,7 @@ def init_db():
         for (uid,) in users_no_code:
             code = generate_unique_ref_code()
             db_exec("UPDATE users SET referral_code = ? WHERE id = ?", (code, uid))
+
 
 def get_user(uid):
     return db_exec("SELECT * FROM users WHERE id = ?", (uid,), fetch=True)
@@ -142,24 +145,40 @@ def get_referral_count(uid):
 
 
 # ================== УВЕДОМЛЕНИЯ ==================
-def get_users_for_cooldown_notify(cooldown_seconds):
-    """Возвращает пользователей, у которых истёк кулдаун и ещё не было уведомления."""
-    threshold = (datetime.now() - timedelta(seconds=cooldown_seconds)).strftime("%Y-%m-%d %H:%M:%S")
+# ================== УВЕДОМЛЕНИЯ ==================
+def get_users_for_cooldown_notify():
+    """Возвращает (id, last_get, premium_until) всех кандидатов на уведомление о крутках."""
     return db_exec("""
-        SELECT id FROM users
+        SELECT id, last_get, premium_until FROM users
         WHERE attempts = 0
         AND notifications = 1
         AND cooldown_notified = 0
-        AND last_get <= ?
-    """, (threshold,), fetchall=True)
+    """, fetchall=True)
+
+def get_users_for_battle_cooldown_notify():
+    """Возвращает (id, last_battle, premium_until) — Premium-игроков с истёкшим кулдауном битвы."""
+    return db_exec("""
+        SELECT id, last_battle, premium_until FROM users
+        WHERE notifications = 1
+        AND battle_cooldown_notified = 0
+        AND premium_until IS NOT NULL
+    """, fetchall=True)
 
 def mark_cooldown_notified(uid):
-    """Отмечает, что уведомление о кулдауне отправлено."""
+    """Отмечает, что уведомление о кулдауне крутки отправлено."""
     db_exec("UPDATE users SET cooldown_notified = 1 WHERE id = ?", (uid,))
 
 def reset_cooldown_notified(uid):
-    """Сбрасывает флаг уведомления (при старте нового кулдауна)."""
+    """Сбрасывает флаг уведомления о крутке (при старте нового кулдауна)."""
     db_exec("UPDATE users SET cooldown_notified = 0 WHERE id = ?", (uid,))
+
+def mark_battle_cooldown_notified(uid):
+    """Отмечает, что уведомление о кулдауне битвы отправлено."""
+    db_exec("UPDATE users SET battle_cooldown_notified = 1 WHERE id = ?", (uid,))
+
+def reset_battle_cooldown_notified(uid):
+    """Сбрасывает флаг уведомления о битве (вызывается при старте боя)."""
+    db_exec("UPDATE users SET battle_cooldown_notified = 0 WHERE id = ?", (uid,))
 
 def toggle_notifications(uid):
     """Переключает уведомления и возвращает новое состояние (True = вкл)."""
@@ -170,6 +189,38 @@ def toggle_notifications(uid):
         return bool(new_val)
     return True
 
+# ================== PREMIUM ==================
+def is_premium(uid):
+    """Проверяет, активна ли Premium подписка."""
+    res = db_exec("SELECT premium_until FROM users WHERE id = ?", (uid,), fetch=True)
+    if not res or not res[0]:
+        return False
+    try:
+        until = datetime.strptime(res[0], "%Y-%m-%d %H:%M:%S")
+        return until > datetime.now()
+    except Exception:
+        return False
+
+def get_premium_until(uid):
+    """Возвращает datetime окончания Premium или None."""
+    res = db_exec("SELECT premium_until FROM users WHERE id = ?", (uid,), fetch=True)
+    if not res or not res[0]:
+        return None
+    try:
+        return datetime.strptime(res[0], "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
+def add_premium_months(uid, months=1):
+    """Продлевает Premium на N месяцев. Если уже активен — продлевает от даты окончания.
+    Возвращает новую дату окончания."""
+    current = get_premium_until(uid)
+    base = current if (current and current > datetime.now()) else datetime.now()
+    new_until = base + timedelta(days=30 * months)
+    db_exec("UPDATE users SET premium_until = ? WHERE id = ?",
+            (new_until.strftime("%Y-%m-%d %H:%M:%S"), uid))
+    return new_until
+
+
 # ================== ЛОГИКА ==================
 def get_rank(pts):
     ranks = [(3000, "Безупречная мощь 😈"), (2000, "Сильнейший ☄️"), (1600, "Уровень нулевого 🧬"), (1000, "Уровень короля города 👑"),
@@ -178,16 +229,19 @@ def get_rank(pts):
         if pts >= p:
             return n
 
-def pull_random_card(force_rarity=None):
-    """Возвращает ключ случайной карты или None, если пул пуст."""
+def pull_random_card(force_rarity=None, premium=False):
+    """Возвращает ключ случайной карты или None, если пул пуст.
+    Если premium=True — используется PREMIUM_RARITIES."""
     try:
         if force_rarity:
             pool = [k for k, v in CARDS.items() if v.get('rarity') == force_rarity and not v.get('exclusive')]
         else:
-            roll = random.uniform(0, 100)
+            rarities_dict = PREMIUM_RARITIES if premium else RARITIES
+            total = sum(d.get('chance', 0) for d in rarities_dict.values())
+            roll = random.uniform(0, total)
             cum = 0
-            rolled_r = "Обычная ⚪️"
-            for r, d in RARITIES.items():
+            rolled_r = next(iter(rarities_dict.keys()))
+            for r, d in rarities_dict.items():
                 cum += d.get('chance', 0)
                 if roll <= cum:
                     rolled_r = r
@@ -198,6 +252,7 @@ def pull_random_card(force_rarity=None):
         return random.choice(pool) if pool else None
     except Exception:
         return None
+
 
 def give_card_to_user(uid, card_key):
     """Выдаёт карту игроку. Возвращает (is_new, krw, card_data) или (False, 0, None) при ошибке."""
