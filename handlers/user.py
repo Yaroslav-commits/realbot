@@ -25,7 +25,7 @@ from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user, try_use_promo, grant_retroactive_royale_pass,
                          get_user_by_ref_code, get_referral_count, get_users_for_cooldown_notify,
                          mark_cooldown_notified, reset_cooldown_notified, toggle_notifications,
-                         is_premium, get_premium_until,
+                         is_premium, get_premium_until, add_premium_days,
                          get_users_for_battle_cooldown_notify, mark_battle_cooldown_notified)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
@@ -530,24 +530,11 @@ async def process_broadcast(msg: types.Message, state: FSMContext, bot: Bot):
 
 
 @router.message(
-    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "give_pass", "create_promo"]))
+    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "give_pass", "create_promo", "give_prem"]))
 async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if msg.from_user.id not in ADMIN_IDS: return
     args = msg.text.split()
     cmd = args[0]
-
-    if cmd == "/create_promo":
-        await state.set_state(PromoState.waiting_for_promo_data)
-        await msg.answer(
-            "Отправь данные промокода в формате:\n[КОД] [ТИП: krw/atm/card/dia/pass] [ЗНАЧЕНИЕ] [КОЛ-ВО ИСПОЛЬЗОВАНИЙ]\n"
-            "Пример: LOOKISM krw 500 10\n\n"
-            "Типы:\n"
-            "• krw — KRW 💴\n"
-            "• atm — попытки 💳\n"
-            "• card — карта (ключ)\n"
-            "• dia — алмазы 💎\n"
-            "• pass — Рояль Пасс (значение любое, например 1)")
-        return
 
     # /give_pass — только 2 аргумента
     if cmd == "/give_pass":
@@ -696,79 +683,70 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
             pass
         await msg.answer(f"✅ Фон «{bg_data.get('name', val)}» выдан пользователю {uid}!")
 
-@router.message(PromoState.waiting_for_promo_data)
-async def create_promo(msg: types.Message, state: FSMContext):
-    args = msg.text.split()
-    if len(args) != 4:
-        return await msg.answer("Неверный формат. Нужно: [КОД] [ТИП] [ЗНАЧЕНИЕ] [ИСПОЛЬЗОВАНИЙ]")
-    p_type = args[1]
-    if p_type not in ('krw', 'atm', 'card', 'dia', 'pass'):
-        return await msg.answer("Неверный тип. Допустимые: krw, atm, card, dia, pass")
-    db_exec("INSERT INTO promos (code, p_type, val, uses) VALUES (?, ?, ?, ?)",
-            (args[0], args[1], args[2], int(args[3])))
-    await state.clear()
-    await msg.answer(f"✅ Промокод «{args[0]}» создан!")
+
+@router.message(Command("create_promo"))
+async def create_promo_cmd(msg: types.Message):
+    if msg.from_user.id not in ADMIN_IDS: return
+    parts = msg.text.split()
+    if len(parts) < 5:
+        return await msg.answer("Формат: /create_promo [код] [тип: krw/atm/card/dia/pass/prem] [значение] [лимит]")
+    code, p_type, val, uses = parts[1], parts[2], parts[3], parts[4]
+    try:
+        db_exec("INSERT INTO promos (code, p_type, val, uses) VALUES (?, ?, ?, ?)", (code, p_type, val, int(uses)))
+        await msg.answer(f"✅ Промокод <code>{code}</code> ({p_type}) на {val} создан!", parse_mode="HTML")
+    except Exception as e:
+        await msg.answer(f"❌ Ошибка: {e}")
+
 
 @router.message(Command("promo"))
-async def use_promo(msg: types.Message):
+async def use_promo_cmd(msg: types.Message):
     args = msg.text.split()
-    if len(args) < 2:
-        return await msg.answer("Введи промокод: /promo КОД")
-    code = args[1]
-    uid = msg.from_user.id
+    if len(args) < 2: return await msg.answer("Введи промокод: /promo КОД")
+    success, message = try_use_promo(msg.from_user.id, args[1])
+    await msg.answer(message)
 
-    # 1. Проверяем, существует ли промокод и остались ли использования
-    p = db_exec("SELECT p_type, val, uses FROM promos WHERE code = ?", (code,), fetch=True)
-    if not p or p[2] <= 0:
-        return await msg.answer("❌ Промокод недействителен.")
 
-    # 2. Проверяем, не использовал ли уже этот пользователь данный промокод
-    if not try_use_promo(uid, code):
-        return await msg.answer("❌ Вы уже использовали этот промокод!")
+@router.message(Command("give_prem"))
+async def give_prem_admin(msg: types.Message):
+    if msg.from_user.id not in ADMIN_IDS: return
+    parts = msg.text.split()
+    if len(parts) < 3:
+        return await msg.answer("Использование: /give_prem [user_id] [дней]")
 
-    # 3. Уменьшаем счётчик использований
-    db_exec("UPDATE promos SET uses = uses - 1 WHERE code = ?", (code,))
+    try:
+        target_id, days = int(parts[1]), int(parts[2])
+    except:
+        return await msg.answer("❌ ID и дни должны быть числами.")
 
-    # 4. Выдаём награду
-    if p[0] == 'krw':
-        db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (int(p[1]), uid))
-        await msg.answer(f"✅ Промокод активирован! Вы получаете {p[1]}💴 KRW")
-    elif p[0] == 'atm':
-        db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (int(p[1]), uid))
-        await msg.answer(f"✅ Промокод активирован! Вы получаете {p[1]} попыток 💳")
-    elif p[0] == 'dia':
-        db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (int(p[1]), uid))
-        await msg.answer(f"✅ Промокод активирован! Вы получаете {p[1]}💎 Алмазов")
-    elif p[0] == 'pass':
-        summary = grant_retroactive_royale_pass(uid)
-        await msg.answer(f"✅ Промокод активирован! Вы получаете Рояль Пасс на этот месяц 🌠{summary}")
-    elif p[0] == 'card':
-        c = CARDS.get(p[1])
-        if not c:
-            return await msg.answer("✅ Промокод активирован, но карта не найдена!")
-        is_new, krw_earned, card_data = give_card_to_user(uid, p[1])
-        txt = (f"✅ Промокод активирован!\n\n"
-               f"🃏 Получена новая боевая карта!\n\n"
-               f"🎴 Персонаж: {c['name']}\n"
-               f"🔮 Редкость: {c['rarity']}\n"
-               f"👊 Стиль боя: {c['style']}\n"
-               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
-               f"⚡️ Скорость: {c['speed']}\n"
-               f"💪 Сила: {c['strength']}\n"
-               f"🧠 Интеллект: {c['intellect']}")
+    new_until = add_premium_days(target_id, days)
+
+    # ИСПРАВЛЕННЫЙ ИМПОРТ:
+    try:
+        from .shop import PREMIUM_BONUS_ATTEMPTS, PREMIUM_BONUS_KRW, PREMIUM_CARD_KEY
+    except ImportError:
         try:
-            if "Божественная" in c.get("rarity", "") and c.get("video"):
-                await msg.answer_video(
-                    video=FSInputFile(f"images/cards/{c['video']}"),
-                    caption=txt,
-                    width=c.get("width", 960),
-                    height=c.get("height", 1280),
-                    supports_streaming=True
-                )
-            else:
-                await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt)
-        except Exception:
-            await msg.answer(txt)
+            from shop import PREMIUM_BONUS_ATTEMPTS, PREMIUM_BONUS_KRW, PREMIUM_CARD_KEY
+        except ImportError:
+            # Если файлы не найдены, задаем значения по умолчанию, чтобы бот не падал
+            PREMIUM_BONUS_ATTEMPTS, PREMIUM_BONUS_KRW, PREMIUM_CARD_KEY = 10, 500, "premium_card_1"
+
+    db_exec("UPDATE users SET attempts = attempts + ?, krw = krw + ? WHERE id = ?",
+            (PREMIUM_BONUS_ATTEMPTS, PREMIUM_BONUS_KRW, target_id))
+
+    card_msg = ""
+    if PREMIUM_CARD_KEY in CARDS:
+        is_new, krw_earn, c = give_card_to_user(target_id, PREMIUM_CARD_KEY)
+        card_msg = f"\n🎴 Выдана карта: {c['name']}" if is_new else f"\n💴 Начислено {krw_earn} KRW (повторка)"
+
+    await msg.answer(
+        f"✅ Premium выдан игроку {target_id} на {days} дн. (до {new_until.strftime('%d.%m.%Y')}){card_msg}")
+
+    try:
+        await msg.bot.send_message(target_id,
+                                   f"👑 Администратор выдал вам Premium на {days} дней!\n"
+                                   f"Бонусы ({PREMIUM_BONUS_ATTEMPTS} 💳, {PREMIUM_BONUS_KRW} 💴) и карта начислены.")
+    except:
+        pass
 
 @router.message(Command("update_refs"))
 async def update_refs_cmd(msg: types.Message):
