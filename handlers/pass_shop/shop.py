@@ -202,7 +202,7 @@ async def shop_premium_cb(cq: CallbackQuery):
     await cq.answer()
 @router.callback_query(F.data == "shop:premium_buy")
 async def shop_premium_buy_cb(cq: CallbackQuery):
-    from database.db import add_premium_days
+    from database.db import add_premium_months
     uid = cq.from_user.id
     u = get_user(uid)
     if not u:
@@ -212,7 +212,7 @@ async def shop_premium_buy_cb(cq: CallbackQuery):
 
     # Списываем алмазы и продлеваем Premium на 1 месяц
     db_exec("UPDATE users SET diamond = diamond - ? WHERE id = ?", (PREMIUM_PRICE, uid))
-    new_until = add_premium_days(uid, days=30)
+    new_until = add_premium_months(uid, months=1)
 
     # Молча начисляем крутки и валюту
     db_exec("UPDATE users SET attempts = attempts + ?, krw = krw + ? WHERE id = ?",
