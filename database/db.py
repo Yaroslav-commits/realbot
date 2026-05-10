@@ -210,13 +210,12 @@ def get_premium_until(uid):
         return datetime.strptime(res[0], "%Y-%m-%d %H:%M:%S")
     except Exception:
         return None
-
-def add_premium_days(uid, days=1):
-    """Продлевает Premium на N дней. Если уже активен — суммирует дни.
+def add_premium_months(uid, months=1):
+    """Продлевает Premium на N месяцев. Если уже активен — продлевает от даты окончания.
     Возвращает новую дату окончания."""
     current = get_premium_until(uid)
     base = current if (current and current > datetime.now()) else datetime.now()
-    new_until = base + timedelta(days=days)
+    new_until = base + timedelta(days=30 * months)
     db_exec("UPDATE users SET premium_until = ? WHERE id = ?",
             (new_until.strftime("%Y-%m-%d %H:%M:%S"), uid))
     return new_until
@@ -279,46 +278,14 @@ def give_card_to_user(uid, card_key):
         return False, 0, None
 
 def try_use_promo(uid, code):
-    """Применяет промокод. Возвращает (успех, сообщение)."""
-    already = db_exec("SELECT 1 FROM promo_uses WHERE user_id = ? AND promo_code = ?", (uid, code), fetch=True)
-    if already:
-        return False, "❌ Вы уже использовали этот промокод!"
-
-    p = db_exec("SELECT p_type, val, uses FROM promos WHERE code = ?", (code,), fetch=True)
-    if not p:
-        return False, "❌ Промокод не существует!"
-
-    p_type, val, uses = p
-    if uses <= 0:
-        return False, "❌ Промокод закончился!"
-
-    msg = ""
-    if p_type == "dia":
-        db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (int(val), uid))
-        msg = f"✅ Начислено {val} 💎!"
-    elif p_type == "krw":
-        db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (int(val), uid))
-        msg = f"✅ Начислено {val} 💴!"
-    elif p_type == "atm":
-        db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (int(val), uid))
-        msg = f"✅ Начислено {val} 💳 круток!"
-    elif p_type == "prem":
-        new_date = add_premium_days(uid, int(val))
-        msg = f"👑 Активирован Premium на {val} дн. (до {new_date.strftime('%d.%m.%Y')})"
-    elif p_type == "pass":
-        from database.db import grant_retroactive_royale_pass
-        summary = grant_retroactive_royale_pass(uid)
-        msg = f"✅ Активирован Рояль Пасс! {summary}"
-    elif p_type == "card":
-        from database.db import give_card_to_user
-        is_new, krw, c = give_card_to_user(uid, val)
-        msg = f"✅ Получена карта {c['name']}!" if is_new else f"✅ Повторка! Выдано {krw} 💴"
-    else:
-        return False, "❌ Неизвестный тип промокода!"
-
-    db_exec("UPDATE promos SET uses = uses - 1 WHERE code = ?", (code,))
-    db_exec("INSERT INTO promo_uses (user_id, promo_code) VALUES (?, ?)", (uid, code))
-    return True, msg
+    """Пытается записать использование промокода пользователем.
+    Возвращает True, если промокод ещё не был использован этим пользователем.
+    Возвращает False, если пользователь уже активировал этот промокод."""
+    try:
+        db_exec("INSERT INTO promo_uses (user_id, promo_code) VALUES (?, ?)", (uid, code))
+        return True
+    except sqlite3.IntegrityError:
+        return False
 
 
 def grant_retroactive_royale_pass(uid):
