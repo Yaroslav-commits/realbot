@@ -161,9 +161,10 @@ async def inv_collection_cb(cq: CallbackQuery):
     lines = [
         "📊 Коллекция собранных карт\n",
         f"Всего карт: {owned_total}/{total_cards} ({total_pct}%)\n",
-        "💎 Количество карт по редкостям:"
+        "💎 Количество карт по редкостям:\n<blockquote>"
     ]
 
+    rarity_lines = []
     for db_rarity, disp_name in rarities:
         all_r = [cid for cid, c in CARDS.items() if c.get('rarity') == db_rarity]
         t_r = len(all_r)
@@ -173,10 +174,12 @@ async def inv_collection_cb(cq: CallbackQuery):
         o_t = len(o_r)
         pct = int((o_t / t_r) * 100) if t_r > 0 else 0
 
-        lines.append(f"{disp_name}: {o_t}/{t_r} ({pct}%)")
+        rarity_lines.append(f"{disp_name}: {o_t}/{t_r} ({pct}%)")
+
+    lines.append("\n".join(rarity_lines) + "</blockquote>")
 
     # ---- Вселенные ----
-    lines.append("\n🪐 Собранные вселленные:")
+    lines.append("\n🪐 Собранные вселленные:\n<blockquote>")
 
     series_map = {}
     for cid, c in CARDS.items():
@@ -187,11 +190,14 @@ async def inv_collection_cb(cq: CallbackQuery):
         if cid in user_owned:
             series_map[s]['owned'] += 1
 
-    sorted_series = sorted(series_map.items(), key=lambda x: x[1]['total'])
+    # Сортировка наоборот: от большего к меньшему
+    sorted_series = sorted(series_map.items(), key=lambda x: x[1]['total'], reverse=True)
 
+    series_lines = []
     for s_name, s_data in sorted_series:
-        lines.append(f"{s_name}: {s_data['owned']}/{s_data['total']}")
+        series_lines.append(f"{s_name}: {s_data['owned']}/{s_data['total']}")
 
+    lines.append("\n".join(series_lines) + "</blockquote>")
     txt = "\n".join(lines)
 
     bld = InlineKeyboardBuilder()

@@ -178,23 +178,28 @@ async def get_card_cmd(msg: types.Message):
 
 
 
-# ============ ПРОФИЛЬ ============
+# ======== ПРОФИЛЬ =========
+from aiogram.types import MessageEntity
+
 @router.message(F.text == "👤 Профиль")
 async def profile(msg: types.Message):
     uid = msg.from_user.id
     u = get_user(uid)
+
     if not u:
         add_user(uid, msg.from_user.username, msg.from_user.first_name)
         u = get_user(uid)
 
     pts = u[7]
+
     if u[14] and u[14] in TITLES:
         title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n"
     else:
         title_str = "\n"
 
-    # Эмодзи статуса (Корона для Premium, Пазл для обычных)
+    # Эмодзи статуса
     status_emoji = "👑" if is_premium(uid) else "🧩"
+
     user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
 
     txt = (
@@ -212,30 +217,92 @@ async def profile(msg: types.Message):
         f"{u[8]}/{u[9]}/{u[10]}"
     )
 
+    # Premium emoji
+    emoji_map = {
+        "🆔": "6035070237957693426",
+        "💴": "5258125317129652372",
+        "🏅": "5933982676498254710"
+    }
+
+    entities = []
+
+    for emoji, emoji_id in emoji_map.items():
+        start = txt.find(emoji)
+
+        while start != -1:
+            entities.append(
+                MessageEntity(
+                    type="custom_emoji",
+                    offset=start,
+                    length=len(emoji),
+                    custom_emoji_id=emoji_id
+                )
+            )
+
+            start = txt.find(emoji, start + 1)
+
     bld = InlineKeyboardBuilder()
-    bld.button(text="🔱 Мои титулы", callback_data="my_titles")
-    bld.button(text="🌄 Мои фоны", callback_data="my_bgs")
-    bld.button(text="⚙️ Настройка", callback_data="settings")
+
+    bld.button(
+        text="🔱 Мои титулы",
+        callback_data="my_titles"
+    )
+
+    bld.button(
+        text="🌄 Мои фоны",
+        callback_data="my_bgs"
+    )
+
+    bld.button(
+        text="⚙️ Настройка",
+        callback_data="settings"
+    )
+
     bld.adjust(1)
 
     bg_key = u[13] or 'default'
-    bg_data = BGS.get(bg_key, BGS['default'])
-    bg_file = FSInputFile(f"images/backgrounds/{bg_data.get('file')}")
+
+    bg_data = BGS.get(
+        bg_key,
+        BGS['default']
+    )
+
+    bg_file = FSInputFile(
+        f"images/backgrounds/{bg_data.get('file')}"
+    )
+
     try:
         if bg_key in VIDEO_BGS:
+
             await msg.answer_video(
-                video=bg_file, caption=txt,
-                reply_markup=bld.as_markup(), parse_mode="HTML",
+                video=bg_file,
+                caption=txt,
+                caption_entities=entities,
+                reply_markup=bld.as_markup(),
+                parse_mode="HTML",
                 supports_streaming=True,
                 width=bg_data.get('width'),
                 height=bg_data.get('height')
             )
+
         else:
-            await msg.answer_photo(photo=bg_file, caption=txt,
-                                   reply_markup=bld.as_markup(), parse_mode="HTML")
+
+            await msg.answer_photo(
+                photo=bg_file,
+                caption=txt,
+                caption_entities=entities,
+                reply_markup=bld.as_markup(),
+                parse_mode="HTML"
+            )
+
     except Exception:
-        await msg.answer(f"{txt}\n\n[Фон не загрузился.]",
-                         reply_markup=bld.as_markup(), parse_mode="HTML")
+
+        await msg.answer(
+            f"{txt}\n\n[Фон не загрузился.]",
+            entities=entities,
+            reply_markup=bld.as_markup(),
+            parse_mode="HTML"
+        )
 
 
 # ============ НАСТРОЙКИ ============
