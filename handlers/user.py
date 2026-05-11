@@ -91,91 +91,136 @@ async def start_cmd(msg: types.Message):
 async def gangs(msg: types.Message):
     await msg.answer("В разработке")
 
+# Словарики для анти-спама и защиты от двойного списания попыток
+anti_spam_locks = {}
+user_locks = {}
+
 # ============ ГАЧА ============
 @router.message(F.text == "🎴 Получить карту")
 @router.message(Command("get"))
 async def get_card_cmd(msg: types.Message):
     uid = msg.from_user.id
-    u = get_user(uid)
-    if not u:
-        return
+    now_time = datetime.now()
 
-    attempts = u[6]
-    now = datetime.now()
+    # Инициализация блокировки пользователя
+    if uid not in user_locks:
+        user_locks[uid] = asyncio.Lock()
+    lock = user_locks[uid]
 
-    # Premium = 1 час, обычный = GET_COOLDOWN_HOURS (3 часа)
-    user_is_premium = is_premium(uid)
-    cooldown_hours = 1 if user_is_premium else GET_COOLDOWN_HOURS
+    last_click = anti_spam_locks.get(uid)
 
-    # Сначала проверяем кулдаун (если попыток нет)
-    if attempts <= 0:
-        try:
-            last_get = datetime.strptime(u[11], "%Y-%m-%d %H:%M:%S")
-        except Exception:
-            last_get = datetime.min
-        if (now - last_get).total_seconds() < cooldown_hours * 3600:
-            rem = int(cooldown_hours * 3600 - (now - last_get).total_seconds())
-            return await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
+    # Если уже идет крутка или клик был менее 1.5 секунд назад
+    if lock.locked() or (last_click and (now_time - last_click).total_seconds() < 1.5):
+        anti_spam_locks[uid] = now_time # Обновляем таймер, чтобы спамер продолжал ждать
+        warnings = [
+            "Ах герой, полегче, ты меня заспамил 🥵",
+            "Воу воу воин, куда ты так спешишь, будь медленнее 🛡",
+            "Поспешишь — людей насмешишь, не торопись сплинтер 🐢",
+            "Эй-эй, подожди! Карты нужно вытягивать с чувством, с расстановкой 🧘‍♂️",
+            "Куда гонишь? У нас тут не Формула-1, сбавь обороты 🏎🛑",
+            "Эй, полегче! Ты сейчас кнопку до дыр сотрёшь 😅",
+            "Скорость хорошая, но сервер не успевает за твоим энтузиазмом ⚡️",
+            "Ого, ты кликаешь как будто тебе за это платят 💀",
+            "Подожди секунду, я не робот-бог, я просто бот 🤖",
+            "Ты слишком разогнался, тут не чит-коды 😤",
+            "Успокой пальцы, чемпион 🏆",
+            "Я всё понимаю, но дай системе жить 🧠",
+            "Ты сейчас устроишь мне цифровую мигрень 😵‍💫",
+            "Стоп-стоп, я не резиновый сервер 🧯",
+            "Ещё чуть-чуть и я начну мстить задержками 😈",
+            "Ты точно не автокликер? 👀",
+            "Дай отдышаться, я не марафонец 🏃‍♂️",
+            "Карты не любят давление… они капризные 😌",
+            "Сбавь обороты, ковбой 🤠",
+            "Машина выдачи карт перегрелась от твоей скорости! Дай ей секунду 🔥"
+        ]
+        return await msg.answer(random.choice(warnings))
 
-    # Получаем карту (Premium — повышенный шанс)
-    card_key = pull_random_card(premium=user_is_premium)
-    if not card_key:
-        return await msg.answer("❌ Ошибка: пул карт пуст или произошла ошибка.")
+    anti_spam_locks[uid] = now_time
 
-    is_new, krw, c = give_card_to_user(uid, card_key)
-    # Если карта или данные повреждены — не списываем попытку
-    if c is None:
-        return await msg.answer("❌ Ошибка при получении карты. Попробуйте снова.")
-    # Формируем текст
-    if is_new:
-        txt = (f"🃏 Получена новая боевая карта!\n\n"
-               f"🎴 Персонаж: {c['name']}\n"
-               f"🔮 Редкость: {c['rarity']}\n"
-               f"👊 Стиль боя: {c['style']}\n"
-               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
-               f"⚡️ Скорость: {c['speed']}\n"
-               f"💪 Сила: {c['strength']}\n"
-               f"🧠 Интеллект: {c['intellect']}")
-    else:
-        txt = (f"🛑 Вам попалась повторная карта! Вы получаете {krw} 💴 KRW\n\n"
-               f"🎴 Персонаж: {c['name']}\n"
-               f"🔮 Редкость: {c['rarity']}\n"
-               f"👊 Стиль боя: {c['style']}\n"
-               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
-               f"⚡️ Скорость: {c['speed']}\n"
-               f"💪 Сила: {c['strength']}\n"
-               f"🧠 Интеллект: {c['intellect']}")
+    # Блокируем выполнение для конкретного юзера, пока он не получит карту
+    async with lock:
+        u = get_user(uid)
+        if not u:
+            return
 
-    # Божественные карты приходят видео, остальные — фото.
-    try:
-        if "Божественная" in c.get("rarity", "") and c.get("video"):
-            await msg.answer_video(
-                video=FSInputFile(f"images/cards/{c['video']}"),
-                caption=txt,
-                width=c.get("width", 960),
-                height=c.get("height", 1280),
-                has_spoiler=True,
-                supports_streaming=True
-            )
+        attempts = u[6]
+        now = datetime.now()
+
+        # Premium = 1 час, обычный = GET_COOLDOWN_HOURS (3 часа)
+        user_is_premium = is_premium(uid)
+        cooldown_hours = 1 if user_is_premium else GET_COOLDOWN_HOURS
+
+        # Сначала проверяем кулдаун (если попыток нет)
+        if attempts <= 0:
+            try:
+                last_get = datetime.strptime(u[11], "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                last_get = datetime.min
+            if (now - last_get).total_seconds() < cooldown_hours * 3600:
+                rem = int(cooldown_hours * 3600 - (now - last_get).total_seconds())
+                return await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
+
+        # Получаем карту (Premium — повышенный шанс)
+        card_key = pull_random_card(premium=user_is_premium)
+        if not card_key:
+            return await msg.answer("❌ Ошибка: пул карт пуст или произошла ошибка.")
+        is_new, krw, c = give_card_to_user(uid, card_key)
+        # Если карта или данные повреждены — не списываем попытку
+        if c is None:
+            return await msg.answer("❌ Ошибка при получении карты. Попробуйте снова.")
+
+        # Формируем текст
+        if is_new:
+            txt = (f"🃏 Получена новая боевая карта!\n\n"
+                   f"🎴 Персонаж: {c['name']}\n"
+                   f"🔮 Редкость: {c['rarity']}\n"
+                   f"👊 Стиль боя: {c['style']}\n"
+                   f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+                   f"⚡️ Скорость: {c['speed']}\n"
+                   f"💪 Сила: {c['strength']}\n"
+                   f"🧠 Интеллект: {c['intellect']}")
         else:
-            await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True)
-    except Exception:
-        try: await msg.answer(txt)
-        except: return await msg.answer("❌ Не удалось открутить.")
+            txt = (f"🛑 Вам попалась повторная карта! Вы получаете {krw} 💴 KRW\n\n"
+                   f"🎴 Персонаж: {c['name']}\n"
+                   f"🔮 Редкость: {c['rarity']}\n"
+                   f"👊 Стиль боя: {c['style']}\n"
+                   f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+                   f"⚡️ Скорость: {c['speed']}\n"
+                   f"💪 Сила: {c['strength']}\n"
+                   f"🧠 Интеллект: {c['intellect']}")
 
-    # Списываем попытку ТОЛЬКО после успешной отправки
-    if attempts > 0:
-        new_attempts = attempts - 1
-        db_exec("UPDATE users SET attempts = ? WHERE id = ?", (new_attempts, uid))
-        if new_attempts == 0:
-            # Последняя попытка использована — запускаем кулдаун и сбрасываем флаг уведомления
+        # Божественные карты приходят видео, остальные — фото.
+        try:
+            if "Божественная" in c.get("rarity", "") and c.get("video"):
+                await msg.answer_video(
+                    video=FSInputFile(f"images/cards/{c['video']}"),
+                    caption=txt,
+                    width=c.get("width", 960),
+                    height=c.get("height", 1280),
+                    has_spoiler=True,
+                    supports_streaming=True
+                )
+            else:
+                await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True)
+        except Exception:
+            try:
+                await msg.answer(txt)
+            except:
+                return await msg.answer("❌ Не удалось открутить.")
+
+        # Списываем попытку ТОЛЬКО после успешной отправки
+        if attempts > 0:
+            new_attempts = attempts - 1
+            db_exec("UPDATE users SET attempts = ? WHERE id = ?", (new_attempts, uid))
+            if new_attempts == 0:
+                # Последняя попытка использована — запускаем кулдаун и сбрасываем флаг уведомления
+                db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
+                        (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
+        else:
+            # Попыток 0 — кулдаун уже идёт, обновляем last_get и сбрасываем флаг
             db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
                     (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
-    else:
-        # Попыток 0 — кулдаун уже идёт, обновляем last_get и сбрасываем флаг
-        db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
-                (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
-
 
 
 # ======== ПРОФИЛЬ =========
