@@ -354,6 +354,88 @@ async def profile(msg: types.Message):
         )
 
 
+@router.message(Command("profile"))
+async def cmd_profile(msg: types.Message):
+    is_admin = msg.from_user.id in ADMIN_IDS
+    target_id = None
+
+    args = msg.text.split()
+    if len(args) > 1 and is_admin:
+        try:
+            target_id = int(args[1])
+        except ValueError:
+            return await msg.answer("❌ Неверный формат ID. Использование: /profile <id>")
+    elif msg.reply_to_message:
+        target_id = msg.reply_to_message.from_user.id
+    else:
+        return await msg.answer(
+            "❌ Ответьте на сообщение игрока командой /profile, чтобы посмотреть его профиль." +
+            (" Или используйте /profile <id>." if is_admin else "")
+        )
+
+    u = get_user(target_id)
+    if not u:
+        return await msg.answer("❌ Игрок не найден в базе данных.")
+    pts = u[7]
+    title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n" if u[14] and u[14] in TITLES else "\n"
+    status_emoji = "👑" if is_premium(target_id) else "🧩"
+    user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
+
+    if is_admin:
+        # Полный профиль для админа
+        txt = (
+            f" {status_emoji} Профиль - {user_link}\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f'🆔 ID: <code>{u[0]}</code>\n'
+            f"{title_str}"
+            f"💰 Баланс:\n"
+            f"┌ 💎 Diamond — {u[3]}\n"
+            f'├ 💴 KRW — {u[4]}\n'
+            f"└ 🪙 BattleCoin — {u[5]}\n\n"
+            f"🎟 Попытки:\n"
+            f"└ 💳 {u[6]}\n\n"
+            f"🏆 Ранг:\n"
+            f'✨ {get_rank(pts)} • {pts}🏅\n\n'
+            f"⚔️ Статистика боёв:\n"
+            f"├ 🏆 Побед — {u[8]}\n"
+            f"├ ⚔️ Ничьих — {u[9]}\n"
+            f"└ ☠️ Поражений — {u[10]}"
+        )
+    else:
+        # Урезанный профиль для обычных игроков (с красивой цитатой)
+        txt = (
+            f"{user_link} {status_emoji}\n"
+            f"🆔 ID: <code>{u[0]}</code>\n"
+            f"{title_str}"
+            f"<blockquote>"
+            f"💰 Баланс:\n"
+            f"┌ 💎 Diamond — {u[3]}\n"
+            f"├ 💴 KRW — {u[4]}\n"
+            f"└ 🪙 BattleCoin — {u[5]}\n\n"
+            f"🏆 Ранг:\n"
+            f"✨ {get_rank(pts)} • {pts}🏅\n"
+            f"</blockquote>"
+        )
+
+    # Превращаем обычные символы в кастомные HTML эмодзи, как в стандартном профиле
+    txt = txt.replace("🆔", '🆔')
+    txt = txt.replace("💴", '💴')
+    txt = txt.replace("🏅", '🏅')
+
+    bg_key = u[13] or 'default'
+    bg_data = BGS.get(bg_key, BGS['default'])
+    bg_file = FSInputFile(f"images/backgrounds/{bg_data.get('file')}")
+
+    try:
+        # Проверяем, видео фон или фото
+        if bg_key in VIDEO_BGS:
+            await msg.answer_video(video=bg_file, caption=txt, parse_mode="HTML")
+        else:
+            await msg.answer_photo(photo=bg_file, caption=txt, parse_mode="HTML")
+    except Exception:
+        await msg.answer(f"{txt}\n\n[Фон не загрузился.]", parse_mode="HTML")
+
+
 # ============ НАСТРОЙКИ ============
 @router.callback_query(F.data == "settings")
 async def settings_cq(cq: CallbackQuery):
@@ -644,7 +726,7 @@ async def process_broadcast(msg: types.Message, state: FSMContext, bot: Bot):
     )
 
 @router.message(
-    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "give_pass", "give_prem", "create_promo"]))
+    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "delete_diamond", "give_pass", "give_prem", "create_promo"]))
 async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if msg.from_user.id not in ADMIN_IDS: return
     args = msg.text.split()
@@ -698,13 +780,37 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
             pass
         await msg.answer(f"✅ Выдано пользователю {uid}!")
 
+
     elif cmd == "/give_diamond":
+
         db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (int(val), uid))
+
         try:
+
             await bot.send_message(uid, f"Получено {val}💎 Алмазов от администратора ✅")
+
         except Exception:
+
             pass
+
         await msg.answer(f"✅ Выдано пользователю {uid}!")
+
+
+    elif cmd == "/delete_diamond":
+
+        # Списываем алмазы, но не даем уйти в минус (MAX(0, ...))
+
+        db_exec("UPDATE users SET diamond = MAX(0, diamond - ?) WHERE id = ?", (int(val), uid))
+
+        try:
+
+            await bot.send_message(uid, f"Администратор списал у вас {val}💎 Алмазов ❌")
+
+        except Exception:
+
+            pass
+
+        await msg.answer(f"✅ Списано {val}💎 у пользователя {uid}!")
     elif cmd == "/give_prem":
         try:
             days = int(val)
