@@ -692,7 +692,7 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         bg_file1 = FSInputFile(f"images/backgrounds/{bg_data1.get('file')}")
         try:
             if bg_key1 in VIDEO_BGS:
-                await bot.send_video(p2, video=bg_file1, caption=txt2, parse_mode="HTML", supports_streaming=True)
+                await bot.send_video(p2, video=bg_file1, caption=txt2, parse_mode="HTML", supports_streaming=True, width=bg_data1.get('width'), height=bg_data1.get('height'))
             else:
                 await bot.send_photo(p2, photo=bg_file1, caption=txt2, parse_mode="HTML")
         except:

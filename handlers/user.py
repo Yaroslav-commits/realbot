@@ -110,7 +110,7 @@ async def get_card_cmd(msg: types.Message):
     last_click = anti_spam_locks.get(uid)
 
     # Если уже идет крутка или клик был менее 1.5 секунд назад
-    if lock.locked() or (last_click and (now_time - last_click).total_seconds() < 0.8):
+    if lock.locked() or (last_click and (now_time - last_click).total_seconds() < 0.6):
         anti_spam_locks[uid] = now_time # Обновляем таймер, чтобы спамер продолжал ждать
         warnings = [
             "Ах герой, полегче, ты меня заспамил 🥵",
@@ -429,7 +429,9 @@ async def cmd_profile(msg: types.Message):
     try:
         # Проверяем, видео фон или фото
         if bg_key in VIDEO_BGS:
-            await msg.answer_video(video=bg_file, caption=txt, parse_mode="HTML")
+            await msg.answer_video(video=bg_file, caption=txt, parse_mode="HTML", supports_streaming=True,
+                width=bg_data.get('width'),
+                height=bg_data.get('height'))
         else:
             await msg.answer_photo(photo=bg_file, caption=txt, parse_mode="HTML")
     except Exception:
