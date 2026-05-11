@@ -42,7 +42,6 @@ def check_advantage(style1, style2):
     return -1
 
 from aiogram.types import MessageEntity
-
 @router.message(F.text == "⚔️ Поле битвы")
 async def battle_menu(msg: types.Message):
 
@@ -107,12 +106,10 @@ async def battle_menu(msg: types.Message):
         text="Найти противника 👁️",
         callback_data="find_match"
     )
-
     bld.button(
         text="Дружеский бой 🔪",
         callback_data="friendly_match_start"
     )
-
     bld.button(
         text="Моя колода 🗂",
         callback_data="my_deck"
@@ -127,8 +124,7 @@ async def battle_menu(msg: types.Message):
             caption=txt,
             caption_entities=entities,
             reply_markup=bld.as_markup(),
-            parse_mode="HTML",
-            show_caption_above_media=False
+            parse_mode="HTML"
         )
 
     else:
