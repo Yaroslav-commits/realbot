@@ -65,14 +65,14 @@ async def battle_menu(msg: types.Message):
         f"▶️ РЕЖИМ: АКТИВЕН\n"
         f"▶️ СТАТУС: БОЕВАЯ СИСТЕМА ОНЛАЙН И ОФЛАЙН\n\n"
 
-        f"━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━\n"
 
         f"🏅 {u[7]} Очков | Ранг {get_rank(u[7])}\n"
 
         f"Победа / Ничья / Поражение :\n"
         f"{u[8]} / {u[9]} / {u[10]}\n"
 
-        f"━━━━━━━━━━━━━━━━\n\n"
+        f"━━━━━━━━━━━━━━━\n\n"
 
         f"Каждое сражение фиксируется в хронике данных."
     )
@@ -128,7 +128,7 @@ async def battle_menu(msg: types.Message):
             caption_entities=entities,
             reply_markup=bld.as_markup(),
             parse_mode="HTML",
-            show_caption_above_media=True
+            show_caption_above_media=False
         )
 
     else:
