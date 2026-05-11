@@ -41,100 +41,33 @@ def check_advantage(style1, style2):
     if style1 == 'spd' and style2 == 'int': return 1
     return -1
 
-from aiogram.types import MessageEntity
 @router.message(F.text == "⚔️ Поле битвы")
 async def battle_menu(msg: types.Message):
-
     u = get_user(msg.from_user.id)
-
-    txt = (
-        f"⚔️ BATTLE FIELD ACCESS\n\n"
-
-        f"Добро пожаловать на поле битвы, Игрок.\n\n"
-
-        f"Вы входите в зону PvP-испытаний. "
-        f"Здесь формируется сила через сражения, "
-        f"а каждый бой влияет на ваш ранг 📊\n\n"
-
-        f"<blockquote>"
-        f"🔓 Условия доступа к «Битвам ⚔️»:\n"
-        f"→ Необходимо собрать 10 боевых карт 🃏"
-        f"</blockquote>\n\n"
-
-        f"▶️ РЕЖИМ: АКТИВЕН\n"
-        f"▶️ СТАТУС: БОЕВАЯ СИСТЕМА ОНЛАЙН И ОФЛАЙН\n\n"
-
-        f"━━━━━━━━━━━━━━━\n"
-
-        f"🏅 {u[7]} Очков | Ранг {get_rank(u[7])}\n"
-
-        f"Победа / Ничья / Поражение :\n"
-        f"{u[8]} / {u[9]} / {u[10]}\n"
-
-        f"━━━━━━━━━━━━━━━\n\n"
-
-        f"Каждое сражение фиксируется в хронике данных."
-    )
-
-    # Premium emoji
-    emoji_map = {
-        "🏅": "5933982676498254710"
-    }
-
-    entities = []
-
-    for emoji, emoji_id in emoji_map.items():
-
-        start = txt.find(emoji)
-
-        while start != -1:
-
-            entities.append(
-                MessageEntity(
-                    type="custom_emoji",
-                    offset=start,
-                    length=len(emoji),
-                    custom_emoji_id=emoji_id
-                )
-            )
-
-            start = txt.find(emoji, start + 1)
+    txt = (f"⚔️ BATTLE FIELD ACCESS\n\n"
+           f"Добро пожаловать на поле битвы, Игрок.\n\n"
+           f"Вы входите в зону PvP-испытаний. Здесь формируется сила через сражения, а каждый бой влияет на ваш ранг 📊\n\n"
+           f"<blockquote>🔓 Условия доступа к «Битвам ⚔️»:\n"
+           f"→ Необходимо собрать 10 боевых карт 🃏</blockquote>\n\n"
+           f"▶️ РЕЖИМ: АКТИВЕН\n"
+           f"▶️ СТАТУС: БОЕВАЯ СИСТЕМА ОНЛАЙН И ОФЛАЙН\n\n"
+           f"━━━━━━━━━━━━━━━━\n"
+           f'🏅 {u[7]} Очков | Ранг {get_rank(u[7])}\n'
+           f"Победа / Ничья / Поражение :\n"
+           f"{u[8]} / {u[9]} / {u[10]}\n"
+           f"━━━━━━━━━━━━━━━━\n\n"
+           f"Каждое сражение фиксируется в хронике данных.")
 
     bld = InlineKeyboardBuilder()
-
-    bld.button(
-        text="Найти противника 👁️",
-        callback_data="find_match"
-    )
-    bld.button(
-        text="Дружеский бой 🔪",
-        callback_data="friendly_match_start"
-    )
-    bld.button(
-        text="Моя колода 🗂",
-        callback_data="my_deck"
-    )
-
+    bld.button(text="Найти противника 👁️", callback_data="find_match")
+    bld.button(text="Дружеский бой 🔪", callback_data="friendly_match_start")
+    bld.button(text="Моя колода 🗂", callback_data="my_deck")
     bld.adjust(1)
 
     if os.path.exists("images/shop/battle.jpeg"):
-
-        await msg.answer_photo(
-            photo=FSInputFile("images/shop/battle.jpeg"),
-            caption=txt,
-            caption_entities=entities,
-            reply_markup=bld.as_markup(),
-            parse_mode="HTML"
-        )
-
+        await msg.answer_photo(photo=FSInputFile("images/shop/battle.jpeg"), caption=txt, reply_markup=bld.as_markup())
     else:
-
-        await msg.answer(
-            txt,
-            entities=entities,
-            reply_markup=bld.as_markup(),
-            parse_mode="HTML"
-        )
+        await msg.answer(txt, reply_markup=bld.as_markup())
 
 
 @router.callback_query(F.data == "friendly_match_start")
