@@ -194,7 +194,19 @@ async def my_deck_menu(cq: CallbackQuery):
     bld.button(text="Автосбор 🔁", callback_data="auto_deck")
     bld.button(text="Собрать колоду 🆕", callback_data="manual_deck_start")
     bld.adjust(1)
-    await cq.message.edit_text("🗂 Меню колоды:\nВыберите действие:", reply_markup=bld.as_markup())
+
+    text = "🗂 Меню колоды:\nВыберите действие:"
+    # сообщение из «⚔️ Поле битвы» приходит как фото — edit_text на фото падает,
+    # из-за этого кнопка «Моя колода 🗂️» казалась неактивной. Делаем безопасно.
+    try:
+        await cq.message.edit_text(text, reply_markup=bld.as_markup())
+    except Exception:
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+        await cq.message.answer(text, reply_markup=bld.as_markup())
+    await cq.answer()
 
 
 @router.callback_query(F.data == "view_deck")
@@ -751,41 +763,49 @@ async def process_card_choice(gid, uid, card, bot):
 
     txt = f"Выбрана карта: {CARDS[card]['name']}\nВыберите ⚔️ Атаку \nСтили: ⚡️ Скорость, 💪 Сила, 🧠 Интеллект.\n\nНа выбор дается 30 секунд"
     card_data = CARDS[card]
+    msg = None
+    try:
+        if is_divine(card_data) and card_data.get("video"):
+            msg = await bot.send_video(
+                uid,
+                video=FSInputFile(f"images/cards/{card_data['video']}"),
+                caption=txt,
+                width=card_data.get("width", 960),
+                height=card_data.get("height", 1280),
+                reply_markup=bld.as_markup(),
+                supports_streaming=True
+            )
+            opponent_id = g['p2'] if uid == g['p1'] else g['p1']
+            if opponent_id != -1:
+                try:
+                    await bot.send_video(
+                        opponent_id,
+                        video=FSInputFile(f"images/cards/{card_data['video']}"),
+                        caption=f"⚫️ Противник выбрасывает Божественную карту: {card_data['name']}!",
+                        width=card_data.get("width", 960),
+                        height=card_data.get("height", 1280),
+                        supports_streaming=True
+                    )
+                except Exception:
+                    pass
+        else:
+            msg = await bot.send_photo(
+                uid,
+                photo=FSInputFile(f"images/cards/{card_data['file']}"),
+                caption=txt,
+                reply_markup=bld.as_markup()
+            )
+    except Exception as e:
+        # критично: если медиа карты упало, игра НЕ должна виснуть — шлём fallback с кнопками
+        logging.error(f"send card media failed for {uid}, card={card}: {e}")
+        try:
+            msg = await bot.send_message(uid, txt, reply_markup=bld.as_markup())
+        except Exception as e2:
+            logging.error(f"fallback send_message failed for {uid}: {e2}")
 
-    if is_divine(card_data) and card_data.get("video"):
-        msg = await bot.send_video(
-            uid,
-            video=FSInputFile(f"images/cards/{card_data['video']}"),
-            caption=txt,
-            width=card_data.get("width", 960),
-            height=card_data.get("height", 1280),
-            reply_markup=bld.as_markup(),
-            supports_streaming=True
-        )
-        opponent_id = g['p2'] if uid == g['p1'] else g['p1']
-        if opponent_id != -1:
-            try:
-                await bot.send_video(
-                    opponent_id,
-                    video=FSInputFile(f"images/cards/{card_data['video']}"),
-                    caption=f"⚫️ Противник выбрасывает Божественную карту: {card_data['name']}!",
-                    width=card_data.get("width", 960),
-                    height=card_data.get("height", 1280),
-                    supports_streaming=True
-                )
-            except Exception:
-                pass
-    else:
-        msg = await bot.send_photo(
-            uid,
-            photo=FSInputFile(f"images/cards/{card_data['file']}"),
-            caption=txt,
-            reply_markup=bld.as_markup()
-        )
-
-    current_round = g['round']
-    asyncio.create_task(auto_style_choice(gid, uid, current_round, msg.message_id, bot))
-
+    if msg is not None:
+        current_round = g['round']
+        asyncio.create_task(auto_style_choice(gid, uid, current_round, msg.message_id, bot))
 
     if g['p2'] == -1 and g['p2_c'] is None:
         bot_c = random.choice(g['d2'])
@@ -795,7 +815,10 @@ async def process_card_choice(gid, uid, card, bot):
 
         if g['p1_s'] and g['p2_s']:
             g['resolving'] = True
-            await resolve_round(gid, bot)
+            try:
+                await resolve_round(gid, bot)
+            except Exception as e:
+                logging.error(f"resolve_round failed (bot path): {e}")
             if gid in GAMES: GAMES[gid]['resolving'] = False
 
 
@@ -899,21 +922,27 @@ async def b_card(cq: CallbackQuery):
     deck = g['d1'] if is_p1 else g['d2']
     if card not in deck: return await cq.answer("Эта карта уже использована!", show_alert=True)
 
-    await cq.message.delete()
+    await cq.answer()
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
     await process_card_choice(gid, cq.from_user.id, card, cq.bot)
-
 
 @router.callback_query(F.data.startswith("b_style:"))
 async def b_style(cq: CallbackQuery):
     _, gid, style = cq.data.split(":")
     g = GAMES.get(gid)
     if not g: return await cq.answer("Игра окончена.", show_alert=True)
-
     is_p1 = (cq.from_user.id == g['p1'])
     if (is_p1 and g['p1_s'] is not None) or (not is_p1 and g['p2_s'] is not None):
         return await cq.answer("Вы уже выбрали стиль!", show_alert=True)
 
-    await cq.message.delete()
+    await cq.answer()
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
     await process_style_choice(gid, cq.from_user.id, style, cq.bot)
 
 

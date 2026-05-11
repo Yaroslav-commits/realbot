@@ -47,12 +47,29 @@ DIAMOND_PACKS = [
     (1000, 5000),
 ]
 
-# Крутки: (алмазы, попытки)
-SPIN_PACKS = [
+# Крутки за алмазы: (алмазы, попытки)
+SPIN_PACKS_DIA = [
     (50, 10),
     (100, 22),
     (250, 60),
     (500, 140),
+    (1000, 300),
+]
+
+# Крутки за BattleCoin: (бк, попытки)
+SPIN_PACKS_BC = [
+    (35, 1),
+    (350, 10),
+    (3500, 110),
+]
+
+# Крутки за KRW: (krw, попытки)
+SPIN_PACKS_KRW = [
+    (75, 1),
+    (375, 6),
+    (750, 13),
+    (1500, 28),
+    (3750, 75),
 ]
 
 # Фоны в магазине: ключ, цена, валюта: bc = BattleCoin, krw = KRW, dia = Diamond
@@ -264,32 +281,74 @@ async def shop_premium_buy_cb(cq: CallbackQuery):
 
 
 # ===== Крутки =====
-def _spin_kb():
+SPIN_PAGES = ["dia", "bc", "krw"]
+SPIN_DATA = {
+    "dia": {"packs": SPIN_PACKS_DIA, "icon": "💎", "col": "diamond",    "col_idx": 3, "name": "алмазов"},
+    "bc":  {"packs": SPIN_PACKS_BC,  "icon": "🪙", "col": "battlecoin", "col_idx": 5, "name": "BattleCoin"},
+    "krw": {"packs": SPIN_PACKS_KRW, "icon": "💴", "col": "krw",        "col_idx": 4, "name": "KRW"},
+}
+
+def _spin_kb(page: int = 0):
+    page = max(0, min(page, len(SPIN_PAGES) - 1))
+    cur = SPIN_PAGES[page]
+    info = SPIN_DATA[cur]
+
     bld = InlineKeyboardBuilder()
-    for dia, att in SPIN_PACKS:
-        bld.button(text=f"{dia}💎 = {att}💳", callback_data=f"shop:spin_buy:{dia}:{att}")
-    bld.button(text="Назад 🔙", callback_data="shop:main")
-    bld.adjust(1)
+    for cost, att in info["packs"]:
+        bld.row(InlineKeyboardButton(
+            text=f"{cost}{info['icon']} = {att}💳",
+            callback_data=f"shop:spin_buy:{cur}:{cost}:{att}",
+        ))
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"shop:spins:{page - 1}"))
+    if page < len(SPIN_PAGES) - 1:
+        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"shop:spins:{page + 1}"))
+    if nav:
+        bld.row(*nav)
+
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="shop:main"))
     return bld.as_markup()
 
-@router.callback_query(F.data == "shop:spins")
+@router.callback_query(F.data.startswith("shop:spins"))
 async def shop_spins_cb(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    page = int(parts[2]) if len(parts) > 2 and parts[2].lstrip("-").isdigit() else 0
     try:
-        await cq.message.edit_reply_markup(reply_markup=_spin_kb())
+        await cq.message.edit_reply_markup(reply_markup=_spin_kb(page))
     except Exception:
         pass
     await cq.answer()
-
 @router.callback_query(F.data.startswith("shop:spin_buy:"))
 async def shop_spin_buy_cb(cq: CallbackQuery):
-    _, _, dia, att = cq.data.split(":")
-    dia = int(dia); att = int(att)
+    parts = cq.data.split(":")
+    # формат: shop:spin_buy:<cur>:<cost>:<att>
+    if len(parts) != 5:
+        return await cq.answer("Ошибка покупки.", show_alert=True)
+    cur, cost_s, att_s = parts[2], parts[3], parts[4]
+    info = SPIN_DATA.get(cur)
+    if not info:
+        return await cq.answer("Неизвестная валюта.", show_alert=True)
+    try:
+        cost, att = int(cost_s), int(att_s)
+    except ValueError:
+        return await cq.answer("Ошибка покупки.", show_alert=True)
     u = get_user(cq.from_user.id)
-    if u[3] < dia:
-        return await cq.answer(f"❌ Недостаточно алмазов! Нужно: {dia} 💎", show_alert=True)
-    db_exec("UPDATE users SET diamond = diamond - ?, attempts = attempts + ? WHERE id = ?",
-            (dia, att, cq.from_user.id))
+    if not u:
+        return await cq.answer("Пользователь не найден.", show_alert=True)
+    if u[info["col_idx"]] < cost:
+        return await cq.answer(
+            f"❌ Недостаточно средств! Нужно: {cost}{info['icon']}",
+            show_alert=True,
+        )
+
+    db_exec(
+        f"UPDATE users SET {info['col']} = {info['col']} - ?, attempts = attempts + ? WHERE id = ?",
+        (cost, att, cq.from_user.id),
+    )
     await cq.answer(f"✅ Куплено {att} попыток!", show_alert=True)
+
 
 # ===== Фоны (с листалкой) =====
 @router.callback_query(F.data.startswith("shop:bgs:"))
