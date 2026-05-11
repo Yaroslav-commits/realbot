@@ -90,7 +90,7 @@ CARDS = {
 "park_hyeonsok_vt": {"name": "Пак Хёнсок ВТ", "rarity": "Мифическая 🔴", "style": "Универсал", "series": "Лукизм", "speed": 99, "strength": 96, "intellect": 95, "file": "park_hyeonsok_vt.jpeg", "exclusive": False},
 "kang_dagyeom": {"name": "Кан Дагём", "rarity": "Мифическая 🔴", "style": "Универсал", "series": "Лукизм", "speed": 98, "strength": 93, "intellect": 100, "file": "kang_dagyeom.jpeg", "exclusive": False},
 "shintaro_yamazaki": {"name": "Шинтаро Ямадзаки", "rarity": "Мифическая 🔴", "style": "Каратэ", "series": "Лукизм", "speed": 96, "strength": 97, "intellect": 95, "file": "shintaro_yamazaki.jpeg", "exclusive": False},
-"baekcheon": {"name": "Пэчхон", "rarity": "Мифическая 🔴", "style": "Уличный", "series": "Лукизм", "speed": 92, "strength": 98, "intellect": 91, "file": "baekcheon.jpeg", "exclusive": False},
+"beakcheon": {"name": "Пэчхон", "rarity": "Мифическая 🔴", "style": "Уличный", "series": "Лукизм", "speed": 92, "strength": 98, "intellect": 91, "file": "beakcheon.jpeg", "exclusive": False},
 "choi_dongsu": {"name": "Чхве Донсу", "rarity": "Мифическая 🔴", "style": "Универсал", "series": "Лукизм", "speed": 91, "strength": 91, "intellect": 99, "file": "choi_dongsu.jpeg", "exclusive": False},
 "roy_kwon": {"name": "Рой Квон", "rarity": "Редкая 🟡", "style": "Уличный", "series": "Лукизм", "speed": 51, "strength": 53, "intellect": 53, "file": "roy_kwon.jpeg", "exclusive": False},
 "sung_jegal": {"name": "Сун Джегал", "rarity": "Редкая 🟡", "style": "Уличный", "series": "Лукизм", "speed": 52, "strength": 52, "intellect": 53, "file": "sung_jegal.jpeg", "exclusive": False},

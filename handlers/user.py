@@ -110,7 +110,7 @@ async def get_card_cmd(msg: types.Message):
     last_click = anti_spam_locks.get(uid)
 
     # Если уже идет крутка или клик был менее 1.5 секунд назад
-    if lock.locked() or (last_click and (now_time - last_click).total_seconds() < 1.5):
+    if lock.locked() or (last_click and (now_time - last_click).total_seconds() < 0.8):
         anti_spam_locks[uid] = now_time # Обновляем таймер, чтобы спамер продолжал ждать
         warnings = [
             "Ах герой, полегче, ты меня заспамил 🥵",
