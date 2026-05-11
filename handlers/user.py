@@ -203,18 +203,22 @@ async def profile(msg: types.Message):
     user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
 
     txt = (
-        f"👤 Профиль {user_link} {status_emoji}\n"
-        f"🆔 Id: <code>{u[0]}</code>\n"
-        f"{title_str}"
-        f"Баланс:\n"
-        f"• 💎 Diamond - {u[3]}\n"
-        f"• 💴 KRW - {u[4]}\n"
-        f"• 🪙 BattleCoin - {u[5]}\n\n"
-        f"Попытки:\n"
-        f"• 💳 - {u[6]}\n\n"
-        f"Ранг: {get_rank(pts)} ({pts}🏅)\n"
-        f"Победы/ничьи/поражения\n"
-        f"{u[8]}/{u[9]}/{u[10]}"
+        f" {status_emoji} Профиль - {user_link}\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f'🆔 ID: <code>{u[0]}</code>\n'
+        f"{title_str}\n"
+        f"💰 Баланс:\n"
+        f"┌ 💎 Diamond — {u[3]}\n"
+        f'├ 💴 KRW — {u[4]}\n'
+        f"└ 🪙 BattleCoin — {u[5]}\n\n"
+        f"🎟 Попытки:\n"
+        f"└ 💳 {u[6]}\n\n"
+        f"🏆 Ранг:\n"
+        f'✨ {get_rank(pts)} • {pts}🏅\n\n'
+        f"⚔️ Статистика боёв:\n"
+        f"├ 🏆 Побед — {u[8]}\n"
+        f"├ ⚔️ Ничьих — {u[9]}\n"
+        f"└ ☠️ Поражений — {u[10]}"
     )
 
     # Premium emoji
