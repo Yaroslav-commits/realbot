@@ -24,6 +24,8 @@ from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user, is_premium)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
+from media_cache import send_cached_video
+import handlers as _handlers
 
 
 # ============ БОЕВКА ============
@@ -51,11 +53,11 @@ async def battle_menu(msg: types.Message):
            f"→ Необходимо собрать 10 боевых карт 🃏</blockquote>\n\n"
            f"▶️ РЕЖИМ: АКТИВЕН\n"
            f"▶️ СТАТУС: БОЕВАЯ СИСТЕМА ОНЛАЙН И ОФЛАЙН\n\n"
-           f"━━━━━━━━━━━━━━━━\n"
+           f"━━━━━━━━━━━━━━━\n"
            f'🏅 {u[7]} Очков | Ранг {get_rank(u[7])}\n'
            f"Победа / Ничья / Поражение :\n"
            f"{u[8]} / {u[9]} / {u[10]}\n"
-           f"━━━━━━━━━━━━━━━━\n\n"
+           f"━━━━━━━━━━━━━━━\n\n"
            f"Каждое сражение фиксируется в хронике данных.")
 
     bld = InlineKeyboardBuilder()
@@ -69,6 +71,13 @@ async def battle_menu(msg: types.Message):
     else:
         await msg.answer(txt, reply_markup=bld.as_markup())
 
+@router.message(Command("pause"))
+async def pause_cmd(msg: types.Message):
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+    _handlers.BATTLE_PAUSED = not _handlers.BATTLE_PAUSED
+    state_text = "приостановлен ⏸️" if _handlers.BATTLE_PAUSED else "возобновлён ▶️"
+    await msg.answer(f"⚙️ Поиск боёв {state_text}.")
 
 @router.callback_query(F.data == "friendly_match_start")
 async def friendly_match_start(cq: CallbackQuery, state: FSMContext):
@@ -594,6 +603,11 @@ async def mdeck_set_cb(cq: CallbackQuery):
 
 @router.callback_query(F.data == "find_match")
 async def find_match(cq: CallbackQuery):
+    if _handlers.BATTLE_PAUSED:
+        return await cq.answer(
+            "В боте проводится тех. работа, игра на короткое время недоступна.",
+            show_alert=True
+        )
     uid = cq.from_user.id
     deck = db_exec("SELECT card_id FROM decks WHERE user_id = ?", (uid,), fetchall=True)
     if len(deck) != 6: return await cq.answer("Соберите колоду из 6 карт!", show_alert=True)
@@ -677,7 +691,16 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         bg_file2 = FSInputFile(f"images/backgrounds/{bg_data2.get('file')}")
         try:
             if bg_key2 in VIDEO_BGS:
-                await bot.send_video(p1, video=bg_file2, caption=txt1, parse_mode="HTML", supports_streaming=True)
+                await send_cached_video(
+                    bot,
+                    chat_id=p1,
+                    file_path=f"images/backgrounds/{bg_data2.get('file')}",
+                    caption=txt1,
+                    parse_mode="HTML",
+                    supports_streaming=True,
+                    width=bg_data2.get('width'),
+                    height=bg_data2.get('height')
+                )
             else:
                 await bot.send_photo(p1, photo=bg_file2, caption=txt1, parse_mode="HTML")
         except:
@@ -692,7 +715,16 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         bg_file1 = FSInputFile(f"images/backgrounds/{bg_data1.get('file')}")
         try:
             if bg_key1 in VIDEO_BGS:
-                await bot.send_video(p2, video=bg_file1, caption=txt2, parse_mode="HTML", supports_streaming=True, width=bg_data1.get('width'), height=bg_data1.get('height'))
+                await send_cached_video(
+                    bot,
+                    chat_id=p2,
+                    file_path=f"images/backgrounds/{bg_data1.get('file')}",
+                    caption=txt2,
+                    parse_mode="HTML",
+                    supports_streaming=True,
+                    width=bg_data1.get('width'),
+                    height=bg_data1.get('height')
+                )
             else:
                 await bot.send_photo(p2, photo=bg_file1, caption=txt2, parse_mode="HTML")
         except:
@@ -766,9 +798,10 @@ async def process_card_choice(gid, uid, card, bot):
     msg = None
     try:
         if is_divine(card_data) and card_data.get("video"):
-            msg = await bot.send_video(
-                uid,
-                video=FSInputFile(f"images/cards/{card_data['video']}"),
+            msg = await send_cached_video(
+                bot,
+                chat_id=uid,
+                file_path=f"images/cards/{card_data['video']}",
                 caption=txt,
                 width=card_data.get("width", 960),
                 height=card_data.get("height", 1280),
@@ -778,9 +811,10 @@ async def process_card_choice(gid, uid, card, bot):
             opponent_id = g['p2'] if uid == g['p1'] else g['p1']
             if opponent_id != -1:
                 try:
-                    await bot.send_video(
-                        opponent_id,
-                        video=FSInputFile(f"images/cards/{card_data['video']}"),
+                    await send_cached_video(
+                        bot,
+                        chat_id=opponent_id,
+                        file_path=f"images/cards/{card_data['video']}",
                         caption=f"⚫️ Противник выбрасывает Божественную карту: {card_data['name']}!",
                         width=card_data.get("width", 960),
                         height=card_data.get("height", 1280),

@@ -206,7 +206,7 @@ async def shop_premium_cb(cq: CallbackQuery):
         "При покупке Premium подписки на 1 месяц вы получаете сразу:\n"
         "10 круток 💳\n"
         "500 KRW 💴\n"
-        "Лимитированная премиум карточка 🎴👑"
+        "Лимитированная карточка 🎴👑"
     )
     try:
         await cq.message.edit_caption(caption=txt, reply_markup=_premium_kb())

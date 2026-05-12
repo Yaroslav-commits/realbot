@@ -25,6 +25,7 @@ from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
+from media_cache import send_cached_video
 
 
 # ============ ИНВЕНТАРЬ И ТРЕЙД ============
@@ -239,8 +240,10 @@ async def view_card(cq: CallbackQuery):
     await cq.message.delete()
 
     if is_divine(cid) and c.get("video"):
-        await cq.message.answer_video(
-            video=FSInputFile(f"images/cards/{c['video']}"),
+        await send_cached_video(
+            cq.bot,
+            chat_id=cq.message.chat.id,
+            file_path=f"images/cards/{c['video']}",
             caption=txt,
             width=c.get("width", 960),
             height=c.get("height", 1280),
@@ -296,8 +299,10 @@ async def divine_toggle(cq: CallbackQuery):
             reply_markup=bld.as_markup()
         )
     else:
-        await cq.message.answer_video(
-            video=FSInputFile(f"images/cards/{c['video']}"),
+        await send_cached_video(
+            cq.bot,
+            chat_id=cq.message.chat.id,
+            file_path=f"images/cards/{c['video']}",
             caption=txt,
             width=c.get("width", 960),
             height=c.get("height", 1280),

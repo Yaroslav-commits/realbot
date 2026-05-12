@@ -14,6 +14,7 @@ class PromoState(StatesGroup):
 MATCH_QUEUE = []
 GAMES = {}
 PENDING_TRADES = {}
+BATTLE_PAUSED = False
 
 def kb_main():
     kb = [

@@ -29,6 +29,7 @@ from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          get_users_for_battle_cooldown_notify, mark_battle_cooldown_notified)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
+from media_cache import send_cached_video
 
 # Регулярка для эмодзи в нике (запрет для не-Premium)
 EMOJI_RE = re.compile(
@@ -49,7 +50,6 @@ EMOJI_RE = re.compile(
     "]+",
     flags=re.UNICODE
 )
-
 
 class BroadcastState(StatesGroup):
     waiting_for_message = State()
@@ -193,8 +193,10 @@ async def get_card_cmd(msg: types.Message):
         # Божественные карты приходят видео, остальные — фото.
         try:
             if "Божественная" in c.get("rarity", "") and c.get("video"):
-                await msg.answer_video(
-                    video=FSInputFile(f"images/cards/{c['video']}"),
+                await send_cached_video(
+                    msg.bot,
+                    chat_id=uid,
+                    file_path=f"images/cards/{c['video']}",
                     caption=txt,
                     width=c.get("width", 960),
                     height=c.get("height", 1280),
@@ -323,8 +325,10 @@ async def profile(msg: types.Message):
     try:
         if bg_key in VIDEO_BGS:
 
-            await msg.answer_video(
-                video=bg_file,
+            await send_cached_video(
+                msg.bot,
+                chat_id=msg.chat.id,
+                file_path=f"images/backgrounds/{bg_data.get('file')}",
                 caption=txt,
                 caption_entities=entities,
                 reply_markup=bld.as_markup(),
@@ -429,9 +433,16 @@ async def cmd_profile(msg: types.Message):
     try:
         # Проверяем, видео фон или фото
         if bg_key in VIDEO_BGS:
-            await msg.answer_video(video=bg_file, caption=txt, parse_mode="HTML", supports_streaming=True,
+            await send_cached_video(
+                msg.bot,
+                chat_id=msg.chat.id,
+                file_path=f"images/backgrounds/{bg_data.get('file')}",
+                caption=txt,
+                parse_mode="HTML",
+                supports_streaming=True,
                 width=bg_data.get('width'),
-                height=bg_data.get('height'))
+                height=bg_data.get('height')
+            )
         else:
             await msg.answer_photo(photo=bg_file, caption=txt, parse_mode="HTML")
     except Exception:
@@ -617,8 +628,10 @@ async def preview_cq(cq: CallbackQuery):
         caption = f"🌄 Предпросмотр фона: {name}"
         if itm in VIDEO_BGS:
             bg_data = BGS.get(itm, BGS['default'])
-            await cq.message.answer_video(
-                video=FSInputFile(f"images/backgrounds/{bg_file}"),
+            await send_cached_video(
+                cq.bot,
+                chat_id=cq.message.chat.id,
+                file_path=f"images/backgrounds/{bg_file}",
                 caption=caption,
                 reply_markup=bld.as_markup(),
                 supports_streaming=True,
@@ -875,9 +888,10 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
                f"🧠 Интеллект: {c['intellect']}")
         try:
             if "Божественная" in c.get("rarity", "") and c.get("video"):
-                await bot.send_video(
-                    uid,
-                    video=FSInputFile(f"images/cards/{c['video']}"),
+                await send_cached_video(
+                    bot,
+                    chat_id=uid,
+                    file_path=f"images/cards/{c['video']}",
                     caption=txt,
                     width=c.get("width", 960),
                     height=c.get("height", 1280),
@@ -926,11 +940,15 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, val))
         is_video = val in VIDEO_BGS
         try:
-            bg_file = FSInputFile(f"images/backgrounds/{bg_data['file']}")
+            bg_file = FSInputFile(f"images/backgrounds/{bg_data['file']}")  # Оставляем для фото
             if is_video:
-                await bot.send_video(uid, video=bg_file,
-                                     caption="Получен фон от администратора ✅",
-                                     supports_streaming=True)
+                await send_cached_video(
+                    bot,
+                    chat_id=uid,
+                    file_path=f"images/backgrounds/{bg_data['file']}",
+                    caption="Получен фон от администратора ✅",
+                    supports_streaming=True
+                )
             else:
                 await bot.send_photo(uid, photo=bg_file,
                                      caption="Получен фон от администратора ✅")
@@ -956,9 +974,13 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         try:
             bg_file = FSInputFile(f"images/backgrounds/{bg_data['file']}")
             if is_video:
-                await bot.send_video(uid, video=bg_file,
-                                     caption="Получен фон от администратора ✅",
-                                     supports_streaming=True)
+                await send_cached_video(
+                    bot,
+                    chat_id=uid,
+                    file_path=f"images/backgrounds/{bg_data['file']}",
+                    caption="Получен фон от администратора ✅",
+                    supports_streaming=True
+                )
             else:
                 await bot.send_photo(uid, photo=bg_file,
                                      caption="Получен фон от администратора ✅")
@@ -1056,8 +1078,10 @@ async def use_promo(msg: types.Message):
                f"🧠 Интеллект: {c['intellect']}")
         try:
             if "Божественная" in c.get("rarity", "") and c.get("video"):
-                await msg.answer_video(
-                    video=FSInputFile(f"images/cards/{c['video']}"),
+                await send_cached_video(
+                    msg.bot,
+                    chat_id=uid,
+                    file_path=f"images/cards/{c['video']}",
                     caption=txt,
                     width=c.get("width", 960),
                     height=c.get("height", 1280),
