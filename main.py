@@ -1,8 +1,7 @@
 import asyncio
 import logging
 
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
-from aiogram.filters import CommandStart
+from aiogram.types import WebAppInfo, MenuButtonWebApp
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -30,15 +29,9 @@ async def main():
     dp = Dispatcher()
     dp.include_router(router)
 
-    @dp.message(CommandStart())
-    async def cmd_start(message: Message):
-        kb = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="🃏 Открыть каталог", web_app=WebAppInfo(url=WEBAPP_URL))]
-            ],
-            resize_keyboard=True
-        )
-        await message.answer("Привет! Нажми на кнопку ниже, чтобы открыть каталог карт:", reply_markup=kb)
+    await bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(text="🃏 Каталог", web_app=WebAppInfo(url=WEBAPP_URL))
+    )
 
     # Удаляем зависшие вебхуки и старые апдейты
     await bot.delete_webhook(drop_pending_updates=True)
