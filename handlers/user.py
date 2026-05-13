@@ -172,23 +172,23 @@ async def get_card_cmd(msg: types.Message):
 
         # Формируем текст
         if is_new:
-            txt = (f"🃏 Получена новая боевая карта!\n\n"
-                   f"🎴 Персонаж: {c['name']}\n"
-                   f"🔮 Редкость: {c['rarity']}\n"
-                   f"👊 Стиль боя: {c['style']}\n"
-                   f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
-                   f"⚡️ Скорость: {c['speed']}\n"
-                   f"💪 Сила: {c['strength']}\n"
-                   f"🧠 Интеллект: {c['intellect']}")
+            txt = (f"<b>🃏 Получена новая боевая карта!</b>\n\n"
+                   f"<b>🎴 Персонаж:</b> {c['name']}\n"
+                   f"<b>🔮 Редкость:</b> {c['rarity']}\n"
+                   f"<b>👊 Стиль боя:</b> {c['style']}\n"
+                   f"<b>🪐 Вселенная:</b> {c.get('series', 'Неизвестно')}\n\n"
+                   f"<b>⚡️ Скорость:</b> {c['speed']}\n"
+                   f"<b>💪 Сила:</b> {c['strength']}\n"
+                   f"<b>🧠 Интеллект:</b> {c['intellect']}")
         else:
             txt = (f"🛑 Вам попалась повторная карта! Вы получаете {krw} 💴 KRW\n\n"
-                   f"🎴 Персонаж: {c['name']}\n"
-                   f"🔮 Редкость: {c['rarity']}\n"
-                   f"👊 Стиль боя: {c['style']}\n"
-                   f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
-                   f"⚡️ Скорость: {c['speed']}\n"
-                   f"💪 Сила: {c['strength']}\n"
-                   f"🧠 Интеллект: {c['intellect']}")
+                   f"<b>🎴 Персонаж:</b> {c['name']}\n"
+                   f"<b>🔮 Редкость:</b> {c['rarity']}\n"
+                   f"👊 <b>Стиль боя:</b> {c['style']}\n"
+                   f"<b>🪐 Вселенная:</b> {c.get('series', 'Неизвестно')}\n\n"
+                   f"<b>⚡️ Скорость:</b> {c['speed']}\n"
+                   f"<b>💪 Сила:</b> {c['strength']}\n"
+                   f"<b>🧠 Интеллект:</b> {c['intellect']}")
 
         # Божественные карты приходят видео, остальные — фото.
         try:
@@ -204,10 +204,10 @@ async def get_card_cmd(msg: types.Message):
                     supports_streaming=True
                 )
             else:
-                await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True)
+                await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True, parse_mode="HTML")
         except Exception:
             try:
-                await msg.answer(txt)
+                await msg.answer(txt, parse_mode="HTML")
             except:
                 return await msg.answer("❌ Не удалось открутить.")
 
@@ -254,15 +254,15 @@ async def profile(msg: types.Message):
         f"━━━━━━━━━━━━━━━\n"
         f'🆔 ID: <code>{u[0]}</code>\n'
         f"{title_str}\n"
-        f"💰 Баланс:\n"
+        f"<b>💰 Баланс:</b>\n"
         f"┌ 💎 Diamond — {u[3]}\n"
         f'├ 💴 KRW — {u[4]}\n'
         f"└ 🪙 BattleCoin — {u[5]}\n\n"
-        f"🎟 Попытки:\n"
+        f"<b>🎟 Попытки:</b>\n"
         f"└ 💳 {u[6]}\n\n"
-        f"🏆 Ранг:\n"
+        f"<b>🏆 Ранг:</b>\n"
         f'✨ {get_rank(pts)} • {pts}🏅\n\n'
-        f"⚔️ Статистика боёв:\n"
+        f"<b>⚔️ Статистика боёв:</b>\n"
         f"├ 🏆 Побед — {u[8]}\n"
         f"├ ⚔️ Ничьих — {u[9]}\n"
         f"└ ☠️ Поражений — {u[10]}"
@@ -392,15 +392,15 @@ async def cmd_profile(msg: types.Message):
             f"━━━━━━━━━━━━━━━\n"
             f'🆔 ID: <code>{u[0]}</code>\n'
             f"{title_str}"
-            f"💰 Баланс:\n"
+            f"<b>💰 Баланс:</b>\n"
             f"┌ 💎 Diamond — {u[3]}\n"
             f'├ 💴 KRW — {u[4]}\n'
             f"└ 🪙 BattleCoin — {u[5]}\n\n"
-            f"🎟 Попытки:\n"
+            f"<b>🎟 Попытки:</b>\n"
             f"└ 💳 {u[6]}\n\n"
-            f"🏆 Ранг:\n"
+            f"<b>🏆 Ранг:</b>\n"
             f'✨ {get_rank(pts)} • {pts}🏅\n\n'
-            f"⚔️ Статистика боёв:\n"
+            f"<b>⚔️ Статистика боёв:</b>\n"
             f"├ 🏆 Побед — {u[8]}\n"
             f"├ ⚔️ Ничьих — {u[9]}\n"
             f"└ ☠️ Поражений — {u[10]}"
@@ -878,14 +878,14 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
             return await msg.answer(f"❌ Карта с ключом «{val}» не найдена!")
         # Прямая выдача
         db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (uid, val))
-        txt = (f"🃏 Получена новая боевая карта от администратора ✅\n\n"
-               f"🎴 Персонаж: {c['name']}\n"
-               f"🔮 Редкость: {c['rarity']}\n"
-               f"👊 Стиль боя: {c['style']}\n"
-               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
-               f"⚡️ Скорость: {c['speed']}\n"
-               f"💪 Сила: {c['strength']}\n"
-               f"🧠 Интеллект: {c['intellect']}")
+        txt = (f"<b>🃏 Получена новая боевая карта от администратора ✅</b>\n\n"
+               f"<b>🎴 Персонаж:</b> {c['name']}\n"
+               f"<b>🔮 Редкость:</b> {c['rarity']}\n"
+               f"<b>👊 Стиль боя:</b> {c['style']}\n"
+               f"<b>🪐 Вселенная:</b> {c.get('series', 'Неизвестно')}\n\n"
+               f"<b>⚡️ Скорость:</b> {c['speed']}\n"
+               f"<b>💪 Сила:</b> {c['strength']}\n"
+               f"<b>🧠 Интеллект:</b> {c['intellect']}")
         try:
             if "Божественная" in c.get("rarity", "") and c.get("video"):
                 await send_cached_video(
@@ -898,7 +898,7 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
                     supports_streaming=True
                 )
             else:
-                await bot.send_photo(uid, photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt)
+                await bot.send_photo(uid, photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, parse_mode="HTML")
         except Exception:
             pass
         await msg.answer(f"✅ Карта «{c['name']}» выдана пользователю {uid}!")
