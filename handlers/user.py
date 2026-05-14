@@ -50,7 +50,6 @@ EMOJI_RE = re.compile(
     "]+",
     flags=re.UNICODE
 )
-# ВСТАВИТЬ ПОСЛЕ СТРОКИ 50
 def get_title_str(title_key: str, html: bool = True) -> str:
     """Возвращает титул. html=True для текста (с эмодзи), False для кнопок (без HTML)."""
     data = TITLES.get(title_key)
@@ -58,7 +57,8 @@ def get_title_str(title_key: str, html: bool = True) -> str:
     name = data.get("name", "Без названия")
     emoji_id = data.get("emoji")
     if html and emoji_id:
-        return f'🔱 {name}'
+        # Используем emoji-id из cards.py
+        return f'{name} ✨'
     return name
 
 class BroadcastState(StatesGroup):
@@ -247,8 +247,8 @@ async def profile(msg: types.Message):
 
     pts = u[7]
 
-    if u[14] and u[14] in TITLES:
-        title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n"
+    if u[14]:
+        title_str = f"🔱 Титул: {get_title_str(u[14])}\n\n"
     else:
         title_str = "\n"
 
@@ -364,7 +364,7 @@ async def cmd_profile(msg: types.Message):
     if not u:
         return await msg.answer("❌ Игрок не найден в базе данных.")
     pts = u[7]
-    title_str = f"Титул: {get_title_str(u[14])}\n\n" if u[14] else "\n"
+    title_str = f"🔱 Титул: {get_title_str(u[14])}\n\n" if u[14] else "\n"
     status_emoji = "👑" if is_premium(target_id) else "🧩"
     user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
 
