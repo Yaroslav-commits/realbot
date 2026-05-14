@@ -53,12 +53,16 @@ EMOJI_RE = re.compile(
 def get_title_str(title_key: str, html: bool = True) -> str:
     """Возвращает титул. html=True для текста (с эмодзи), False для кнопок (без HTML)."""
     data = TITLES.get(title_key)
-    if not data: return "Отсутствует"
+    if not data:
+        return "Отсутствует"
+
     name = data.get("name", "Без названия")
     emoji_id = data.get("emoji")
+
     if html and emoji_id:
-        # Используем emoji-id из cards.py
+        # Это специальный тег Телеграма для премиум-эмодзи
         return f'{name} ✨'
+
     return name
 
 class BroadcastState(StatesGroup):
@@ -250,7 +254,7 @@ async def profile(msg: types.Message):
     if u[14]:
         title_str = f"🔱 Титул: {get_title_str(u[14])}\n\n"
     else:
-        title_str = "\n"
+        title_str = ""
 
     # Эмодзи статуса
     status_emoji = "👑" if is_premium(uid) else "🧩"
