@@ -85,7 +85,7 @@ async def start_cmd(msg: types.Message):
         try:
             await msg.bot.send_message(
                 referred_by,
-                f"🤝 По твоей ссылке зашёл новый игрок!\nТебе начислено: <b>{reward_amount}💴</b> и <b>5💳</b>"
+                f"🤝 По твоей ссылке зашёл новый игрок!\nТебе начислено: <b>{reward_amount}💴</b> и <b>5💳</b>", parse_mode="HTML"
             )
         except Exception:
             pass  # Если у владельца бот заблокирован
@@ -278,8 +278,6 @@ async def profile(msg: types.Message):
         f"├ ⚔️ Ничьих — {u[9]}\n"
         f"└ ☠️ Поражений — {u[10]}"
     )
-
-
 
     bld = InlineKeyboardBuilder()
 
