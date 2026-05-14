@@ -50,6 +50,16 @@ EMOJI_RE = re.compile(
     "]+",
     flags=re.UNICODE
 )
+# ВСТАВИТЬ ПОСЛЕ СТРОКИ 50
+def get_title_str(title_key: str, html: bool = True) -> str:
+    """Возвращает титул. html=True для текста (с эмодзи), False для кнопок (без HTML)."""
+    data = TITLES.get(title_key)
+    if not data: return "Отсутствует"
+    name = data.get("name", "Без названия")
+    emoji_id = data.get("emoji")
+    if html and emoji_id:
+        return f'🔱 {name}'
+    return name
 
 class BroadcastState(StatesGroup):
     waiting_for_message = State()
@@ -226,8 +236,6 @@ async def get_card_cmd(msg: types.Message):
 
 
 # ======== ПРОФИЛЬ =========
-from aiogram.types import MessageEntity
-
 @router.message(F.text == "👤 Профиль")
 async def profile(msg: types.Message):
     uid = msg.from_user.id
@@ -268,29 +276,7 @@ async def profile(msg: types.Message):
         f"└ ☠️ Поражений — {u[10]}"
     )
 
-    # Premium emoji
-    emoji_map = {
-        "🆔": "6035070237957693426",
-        "💴": "5258125317129652372",
-        "🏅": "5933982676498254710"
-    }
 
-    entities = []
-
-    for emoji, emoji_id in emoji_map.items():
-        start = txt.find(emoji)
-
-        while start != -1:
-            entities.append(
-                MessageEntity(
-                    type="custom_emoji",
-                    offset=start,
-                    length=len(emoji),
-                    custom_emoji_id=emoji_id
-                )
-            )
-
-            start = txt.find(emoji, start + 1)
 
     bld = InlineKeyboardBuilder()
 
@@ -330,7 +316,6 @@ async def profile(msg: types.Message):
                 chat_id=msg.chat.id,
                 file_path=f"images/backgrounds/{bg_data.get('file')}",
                 caption=txt,
-                caption_entities=entities,
                 reply_markup=bld.as_markup(),
                 parse_mode="HTML",
                 supports_streaming=True,
@@ -343,7 +328,6 @@ async def profile(msg: types.Message):
             await msg.answer_photo(
                 photo=bg_file,
                 caption=txt,
-                caption_entities=entities,
                 reply_markup=bld.as_markup(),
                 parse_mode="HTML"
             )
@@ -352,7 +336,6 @@ async def profile(msg: types.Message):
 
         await msg.answer(
             f"{txt}\n\n[Фон не загрузился.]",
-            entities=entities,
             reply_markup=bld.as_markup(),
             parse_mode="HTML"
         )
@@ -381,7 +364,7 @@ async def cmd_profile(msg: types.Message):
     if not u:
         return await msg.answer("❌ Игрок не найден в базе данных.")
     pts = u[7]
-    title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n" if u[14] and u[14] in TITLES else "\n"
+    title_str = f"Титул: {get_title_str(u[14])}\n\n" if u[14] else "\n"
     status_emoji = "👑" if is_premium(target_id) else "🧩"
     user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
 
@@ -593,7 +576,7 @@ async def bgs_titles_cq(cq: CallbackQuery):
         if is_bg:
             name = BGS.get(itm, {}).get('name', 'Неизвестный фон')
         else:
-            name = TITLES.get(itm, 'Неизвестный титул')
+            name = get_title_str(itm, html=False)
         bld.button(text=name, callback_data=f"preview_{'bg' if is_bg else 'title'}:{itm}")
 
     bld.adjust(1)
@@ -641,8 +624,8 @@ async def preview_cq(cq: CallbackQuery):
         else:
             await cq.message.answer_photo(photo=FSInputFile(f"images/backgrounds/{bg_file}"), caption=caption, reply_markup=bld.as_markup())
     else:
-        name = TITLES.get(itm, 'Титул')
-        await cq.message.answer(f"🔱 Предпросмотр титула: {name}", reply_markup=bld.as_markup())
+        name = get_title_str(itm, html=True)
+        await cq.message.answer(f"🔱 Предпросмотр титула:\n{name}", reply_markup=bld.as_markup(), parse_mode="HTML")
 
     await cq.answer()
 
@@ -925,10 +908,10 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         await msg.answer(f"✅ Карта «{c['name']}» успешно удалена у пользователя {uid}!")
 
     elif cmd == "/give_title":
-        title_name = TITLES.get(val, val)
+        title_display = get_title_str(val, html=True)
         db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, val))
         try:
-            await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅")
+            await bot.send_message(uid, f"Вам выдан титул: {title_display} от админа ✅", parse_mode="HTML")
         except Exception:
             pass
         await msg.answer(f"✅ Титул выдан пользователю {uid}!")
@@ -957,10 +940,10 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         await msg.answer(f"✅ Фон «{bg_data.get('name', val)}» выдан пользователю {uid}!")
 
     elif cmd == "/give_title":
-        title_name = TITLES.get(val, val)
+        title_display = get_title_str(val, html=True)
         db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, val))
         try:
-            await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅")
+            await bot.send_message(uid, f"Вам выдан титул: {title_display} от админа ✅", parse_mode="HTML")
         except Exception:
             pass
         await msg.answer(f"✅ Титул выдан пользователю {uid}!")

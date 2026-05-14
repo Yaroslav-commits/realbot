@@ -6,6 +6,7 @@ import random
 import calendar
 from datetime import datetime, timedelta
 
+from media_cache import send_cached_video
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
@@ -71,14 +72,11 @@ SPIN_PACKS_KRW = [
     (1500, 28),
     (3750, 75),
 ]
-
-# Фоны в магазине: ключ, цена, валюта: bc = BattleCoin, krw = KRW, dia = Diamond
+# Фоны в магазине: ключ, цена, валюта, дата окончания (ГГГГ-ММ-ДД), текст даты
 SHOP_BG_LIST = [
-    {"id": "lookism_1", "price": 500,  "currency": "bc",  "icon": "🪙"},
-    {"id": "adminn",      "price": 99999, "currency": "krw", "icon": "💴"},
-    {"id": "zero",      "price": 2500, "currency": "krw", "icon": "💴"},
+    {"id": "veliki", "price": 500,  "currency": "bc", "icon": "💴", "ends_at": "2026-06-01", "date_str": "1-го Июня"},
+    {"id": "yamzaki_clan", "price": 8500, "currency": "krw", "icon": "💴", "ends_at": "2026-06-01", "date_str": "1-го Июня"},
 ]
-
 # ВИДЕО-ФОНЫ. Сюда кидаешь ключи тех фонов, которые у тебя загружены как видео.
 VIDEO_BGS = {"zero"}, {"adminn"}
 
@@ -194,7 +192,7 @@ def _premium_kb():
 @router.callback_query(F.data == "shop:premium")
 async def shop_premium_cb(cq: CallbackQuery):
     txt = (
-        "Список бонусов на месяц, что вы получите при покупке Premium 👑\n\n"
+        "<b>Список бонусов на месяц, что вы получите при покупке Premium 👑</b>\n\n"
         "👑 Вы будете отображаться как премиум пользователь;\n"
         "📞 Уведомление о сбросе кулдауна в ⚔️ Поле Битвы;\n"
         "⌛️ Возможность получать карточки каждый 1 час вместо 3;\n"
@@ -311,14 +309,33 @@ def _spin_kb(page: int = 0):
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="shop:main"))
     return bld.as_markup()
 
+
 @router.callback_query(F.data.startswith("shop:spins"))
 async def shop_spins_cb(cq: CallbackQuery):
     parts = cq.data.split(":")
     page = int(parts[2]) if len(parts) > 2 and parts[2].lstrip("-").isdigit() else 0
+
+    # Тексты для разных страниц круток
+    descriptions = {
+        0: "Здесь вы можете приобрести крутки за валюту <b>Алмазы 💎</b>",
+        1: "Здесь вы можете приобрести крутки за валюту <b>BattleCoin 🪙</b>",
+        2: "Здесь вы можете приобрести крутки за валюту <b>KRW 💴</b>"
+    }
+    caption_text = descriptions.get(page, "Здесь вы можете приобрести крутки")
+
     try:
-        await cq.message.edit_reply_markup(reply_markup=_spin_kb(page))
+        await cq.message.edit_caption(
+            caption=caption_text,
+            reply_markup=_spin_kb(page),
+            parse_mode="HTML"
+        )
     except Exception:
-        pass
+        # На случай если текст не изменился, просто обновим кнопки
+        try:
+            await cq.message.edit_reply_markup(reply_markup=_spin_kb(page))
+        except:
+            pass
+
     await cq.answer()
 @router.callback_query(F.data.startswith("shop:spin_buy:"))
 async def shop_spin_buy_cb(cq: CallbackQuery):
@@ -353,61 +370,80 @@ async def shop_spin_buy_cb(cq: CallbackQuery):
 # ===== Фоны (с листалкой) =====
 @router.callback_query(F.data.startswith("shop:bgs:"))
 async def shop_bgs_cb(cq: CallbackQuery):
-    idx = int(cq.data.split(":")[2]) % len(SHOP_BG_LIST)
-    item = SHOP_BG_LIST[idx]
-    bg = BGS.get(item["id"])
-    if not bg:
-        return await cq.answer("Фон не найден", show_alert=True)
+    # Фильтруем список: показываем только те, чья дата окончания еще не наступила
+    now_str = datetime.now().strftime("%Y-%m-%d")
+    available_bgs = [bg for bg in SHOP_BG_LIST if bg.get("ends_at", "9999-12-31") >= now_str]
 
-    caption = f"🌄 Фон: {bg['name']}\n💰 Цена: {item['price']}{item['icon']}"
+    if not available_bgs:
+        return await cq.answer("К сожалению, лимитированные фоны закончились! 😔", show_alert=True)
 
-    left_idx  = (idx - 1) % len(SHOP_BG_LIST)
-    right_idx = (idx + 1) % len(SHOP_BG_LIST)
+    idx = int(cq.data.split(":")[2]) % len(available_bgs)
+    item = available_bgs[idx]
+    bg_data = BGS.get(item["id"])
+
+    if not bg_data:
+        return await cq.answer("Фон не найден в базе.", show_alert=True)
+
+    # Формируем текст с названием, датой и цитатой цены
+    caption = (
+        f"🌄 Фон: {bg_data['name']}\n\n"
+        f"🗓️ До {item.get('date_str', '1-го Июня')}\n"
+        f"<blockquote>💰 Цена: {item['price']}{item['icon']}</blockquote>"
+    )
+    # Навигация
+    left_idx = (idx - 1) % len(available_bgs)
+    right_idx = (idx + 1) % len(available_bgs)
 
     bld = InlineKeyboardBuilder()
-    if idx == 0:
+    if len(available_bgs) > 1:
+        # Кнопки влево/вправо только если фонов больше одного
         bld.row(
+            InlineKeyboardButton(text="<——", callback_data=f"shop:bgs:{left_idx}"),
             InlineKeyboardButton(text="🛍️ Купить", callback_data=f"shop:bg_buy:{item['id']}"),
-            InlineKeyboardButton(text="——>",       callback_data=f"shop:bgs:{right_idx}")
-        )
-    elif idx == len(SHOP_BG_LIST) - 1:
-        bld.row(
-            InlineKeyboardButton(text="<——",       callback_data=f"shop:bgs:{left_idx}"),
-            InlineKeyboardButton(text="🛍️ Купить", callback_data=f"shop:bg_buy:{item['id']}")
+            InlineKeyboardButton(text="——>", callback_data=f"shop:bgs:{right_idx}")
         )
     else:
-        bld.row(
-            InlineKeyboardButton(text="<——",       callback_data=f"shop:bgs:{left_idx}"),
-            InlineKeyboardButton(text="🛍️ Купить", callback_data=f"shop:bg_buy:{item['id']}"),
-            InlineKeyboardButton(text="——>",       callback_data=f"shop:bgs:{right_idx}")
-        )
+        bld.row(InlineKeyboardButton(text="🛍️ Купить", callback_data=f"shop:bg_buy:{item['id']}"))
+
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="shop:main"))
+
+    # Видео или фото
     is_video = item["id"] in VIDEO_BGS
-    file_path = bg['file']
+    file_path = f"images/backgrounds/{bg_data['file']}"
+
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+
     try:
         if is_video:
-            await cq.message.edit_media(
-                media=types.InputMediaVideo(media=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption,
-                                            supports_streaming=True),
-                reply_markup=bld.as_markup()
+            await send_cached_video(
+                cq.bot,
+                chat_id=cq.message.chat.id,
+                file_path=file_path,
+                caption=caption,
+                reply_markup=bld.as_markup(),
+                parse_mode="HTML",
+                supports_streaming=True,
+                width=bg_data.get('width'),
+                height=bg_data.get('height')
             )
         else:
-            await cq.message.edit_media(
-                media=types.InputMediaPhoto(media=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption),
-                reply_markup=bld.as_markup()
+            await cq.message.answer_photo(
+                photo=FSInputFile(file_path),
+                caption=caption,
+                reply_markup=bld.as_markup(),
+                parse_mode="HTML"
             )
     except Exception:
-        try:
-            await cq.message.delete()
-        except Exception:
-            pass
-        if is_video:
-            await cq.message.answer_video(video=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption,
-                                          reply_markup=bld.as_markup(), supports_streaming=True)
-        else:
-            await cq.message.answer_photo(photo=FSInputFile(f"images/backgrounds/{file_path}"), caption=caption, reply_markup=bld.as_markup())
-    await cq.answer()
+        await cq.message.answer(
+            f"{caption}\n\n[Фон не загрузился.]",
+            reply_markup=bld.as_markup(),
+            parse_mode="HTML"
+        )
 
+    await cq.answer()
 
 @router.callback_query(F.data.startswith("shop:bg_buy:"))
 async def shop_bg_buy_cb(cq: CallbackQuery):

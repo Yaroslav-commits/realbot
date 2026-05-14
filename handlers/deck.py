@@ -584,8 +584,16 @@ async def trade_p1_final(cq: CallbackQuery):
         return
 
     # Удаляем отданные карты из инвентаря
+    # Удаляем отданные карты из инвентаря и из всех возможных колод (активной и дополнительных)
+    # Для инициатора трейда (sender_id)
     db_exec("DELETE FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
+    db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
+    db_exec("DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)", (c1_id, sender_id))
+
+    # Для того, кто принял трейд (p2_id)
     db_exec("DELETE FROM cards_inv WHERE user_id = ? AND card_id = ?", (p2_id, c2_id))
+    db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (p2_id, c2_id))
+    db_exec("DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)", (c2_id, p2_id))
 
     # Проверка на наличие карты, которую они сейчас получают
     p1_has_c2 = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, c2_id), fetch=True)
