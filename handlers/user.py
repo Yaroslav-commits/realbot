@@ -50,19 +50,6 @@ EMOJI_RE = re.compile(
     "]+",
     flags=re.UNICODE
 )
-def get_title_str(title_key: str, html: bool = True) -> str:
-    data = TITLES.get(title_key)
-
-    if not data:
-        return "Отсутствует"
-
-    name = data.get("name", "Без названия")
-    emoji_id = data.get("emoji")
-
-    if html and emoji_id:
-        return f'{name} <tg-emoji emoji-id="{emoji_id}">✨</tg-emoji>'
-
-    return name
 
 class BroadcastState(StatesGroup):
     waiting_for_message = State()
@@ -85,7 +72,7 @@ async def start_cmd(msg: types.Message):
         try:
             await msg.bot.send_message(
                 referred_by,
-                f"🤝 По твоей ссылке зашёл новый игрок!\nТебе начислено: <b>{reward_amount}💴</b> и <b>5💳</b>", parse_mode="HTML"
+                f"🤝 По твоей ссылке зашёл новый игрок!\nТебе начислено: <b>{reward_amount}💴</b> и <b>5💳</b>"
             )
         except Exception:
             pass  # Если у владельца бот заблокирован
@@ -250,10 +237,10 @@ async def profile(msg: types.Message):
 
     pts = u[7]
 
-    if u[14]:
-        title_str = f"🔱 Титул: {get_title_str(u[14])}\n\n"
+    if u[14] and u[14] in TITLES:
+        title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n"
     else:
-        title_str = ""
+        title_str = "\n"
 
     # Эмодзи статуса
     status_emoji = "👑" if is_premium(uid) else "🧩"
@@ -278,6 +265,8 @@ async def profile(msg: types.Message):
         f"├ ⚔️ Ничьих — {u[9]}\n"
         f"└ ☠️ Поражений — {u[10]}"
     )
+
+
 
     bld = InlineKeyboardBuilder()
 
@@ -365,7 +354,7 @@ async def cmd_profile(msg: types.Message):
     if not u:
         return await msg.answer("❌ Игрок не найден в базе данных.")
     pts = u[7]
-    title_str = f"🔱 Титул: {get_title_str(u[14])}\n\n" if u[14] else "\n"
+    title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n" if u[14] and u[14] in TITLES else "\n"
     status_emoji = "👑" if is_premium(target_id) else "🧩"
     user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
 
@@ -577,7 +566,7 @@ async def bgs_titles_cq(cq: CallbackQuery):
         if is_bg:
             name = BGS.get(itm, {}).get('name', 'Неизвестный фон')
         else:
-            name = get_title_str(itm, html=False)
+            name = TITLES.get(itm, 'Неизвестный титул')
         bld.button(text=name, callback_data=f"preview_{'bg' if is_bg else 'title'}:{itm}")
 
     bld.adjust(1)
@@ -625,8 +614,8 @@ async def preview_cq(cq: CallbackQuery):
         else:
             await cq.message.answer_photo(photo=FSInputFile(f"images/backgrounds/{bg_file}"), caption=caption, reply_markup=bld.as_markup())
     else:
-        name = get_title_str(itm, html=True)
-        await cq.message.answer(f"🔱 Предпросмотр титула:\n{name}", reply_markup=bld.as_markup(), parse_mode="HTML")
+        name = TITLES.get(itm, 'Титул')
+        await cq.message.answer(f"🔱 Предпросмотр титула: {name}", reply_markup=bld.as_markup())
 
     await cq.answer()
 
@@ -909,10 +898,10 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         await msg.answer(f"✅ Карта «{c['name']}» успешно удалена у пользователя {uid}!")
 
     elif cmd == "/give_title":
-        title_display = get_title_str(val, html=True)
+        title_name = TITLES.get(val, val)
         db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, val))
         try:
-            await bot.send_message(uid, f"Вам выдан титул: {title_display} от админа ✅", parse_mode="HTML")
+            await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅")
         except Exception:
             pass
         await msg.answer(f"✅ Титул выдан пользователю {uid}!")
@@ -941,10 +930,10 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         await msg.answer(f"✅ Фон «{bg_data.get('name', val)}» выдан пользователю {uid}!")
 
     elif cmd == "/give_title":
-        title_display = get_title_str(val, html=True)
+        title_name = TITLES.get(val, val)
         db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, val))
         try:
-            await bot.send_message(uid, f"Вам выдан титул: {title_display} от админа ✅", parse_mode="HTML")
+            await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅")
         except Exception:
             pass
         await msg.answer(f"✅ Титул выдан пользователю {uid}!")
