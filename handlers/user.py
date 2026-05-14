@@ -51,8 +51,8 @@ EMOJI_RE = re.compile(
     flags=re.UNICODE
 )
 def get_title_str(title_key: str, html: bool = True) -> str:
-    """Возвращает титул. html=True для текста (с эмодзи), False для кнопок (без HTML)."""
     data = TITLES.get(title_key)
+
     if not data:
         return "Отсутствует"
 
@@ -60,8 +60,7 @@ def get_title_str(title_key: str, html: bool = True) -> str:
     emoji_id = data.get("emoji")
 
     if html and emoji_id:
-        # Это специальный тег Телеграма для премиум-эмодзи
-        return f'{name} ✨'
+        return f'{name} <tg-emoji emoji-id="{emoji_id}"></tg-emoji>'
 
     return name
 
