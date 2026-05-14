@@ -60,7 +60,7 @@ def get_title_str(title_key: str, html: bool = True) -> str:
     emoji_id = data.get("emoji")
 
     if html and emoji_id:
-        return f'{name} <tg-emoji emoji-id="{emoji_id}"></tg-emoji>'
+        return f'{name} <tg-emoji emoji-id="{emoji_id}">✨</tg-emoji>'
 
     return name
 
