@@ -74,11 +74,11 @@ SPIN_PACKS_KRW = [
 ]
 # Фоны в магазине: ключ, цена, валюта, дата окончания (ГГГГ-ММ-ДД), текст даты
 SHOP_BG_LIST = [
-    {"id": "veliki", "price": 500,  "currency": "bc", "icon": "💴", "ends_at": "2026-06-01", "date_str": "1-го Июня"},
+    {"id": "veliki", "price": 500,  "currency": "bc", "icon": "🪙", "ends_at": "2026-06-01", "date_str": "1-го Июня"},
     {"id": "yamzaki_clan", "price": 8500, "currency": "krw", "icon": "💴", "ends_at": "2026-06-01", "date_str": "1-го Июня"},
 ]
 # ВИДЕО-ФОНЫ. Сюда кидаешь ключи тех фонов, которые у тебя загружены как видео.
-VIDEO_BGS = {"zero"}, {"adminn"}
+VIDEO_BGS = {"yamzaki_clan"}, {"adminn"}
 
 # ====== ЕВЕНТ ======
 EVENT_ENABLED = False  # Поставь False, чтобы скрыть Евент и показывать "нет событий"
