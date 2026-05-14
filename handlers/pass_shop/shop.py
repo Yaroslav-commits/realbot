@@ -78,7 +78,7 @@ SHOP_BG_LIST = [
     {"id": "yamzaki_clan", "price": 8500, "currency": "krw", "icon": "💴", "ends_at": "2026-06-01", "date_str": "1-го Июня"},
 ]
 # ВИДЕО-ФОНЫ. Сюда кидаешь ключи тех фонов, которые у тебя загружены как видео.
-VIDEO_BGS = {"yamzaki_clan"}, {"adminn"}
+VIDEO_BGS = {"yamzaki_clan", "admin"}
 
 # ====== ЕВЕНТ ======
 EVENT_ENABLED = False  # Поставь False, чтобы скрыть Евент и показывать "нет событий"
