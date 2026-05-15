@@ -21,7 +21,7 @@ from handlers.user import cooldown_notification_scheduler, battle_cooldown_notif
 from config import BOT_TOKEN
 
 # Вставь сюда ссылку на сайт (с Шага 3)
-WEBAPP_URL = "https://yaroslav-commits.github.io/cards-catalog-manhw/"
+WEBAPP_URL = ""
 
 async def main():
     init_db()
