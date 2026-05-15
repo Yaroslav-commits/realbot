@@ -385,10 +385,11 @@ BGS = {
     "lookism_1": {"name": "Лукизм", "file": "lookism_1.png", "price": 500},
     "admin": {"name": "Ю Джунхёк и Ким Докча", "file": "admin.mp4", 'width': 1280, 'height': 720, "price": 99999},
     "veliki": {"name": "Sabbath Crew", "file": "veliki.jpeg", "price": 500},
+    "yamzaki_clan": {"name": "Клан Ямадзаки", "file": "yamzaki_clan.mp4", 'width': 1280, 'height': 720, "price": 8500},
 }
 VIDEO_BGS = {
     "admin": {"name": "Ю Джунхёк и Ким Докча", "file": "admin.mp4", 'width': 1280, 'height': 720, "price": 99999},
-    "yamzaki_clan": {"name": "Клан Ямадзаки", "file": "yamzaki_clan.mp4", 'width': 1280, 'height': 720, "price": 99999},
+    "yamzaki_clan": {"name": "Клан Ямадзаки", "file": "yamzaki_clan.mp4", 'width': 1280, 'height': 720, "price": 8500},
 }
 TITLES = {
     "title_pass_hero": "Герой Месяца 🏆",
