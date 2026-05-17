@@ -360,7 +360,7 @@ CARDS = {
 #====LIMITED CARDS=====
 "premium_card_1": {"name": "Лу Шень", "rarity": "Эпическая 🟢", "style": "Гибрид", "series": "Я прокачиваюсь во сне, убивая монстров", "speed": 80, "strength": 80, "intellect": 80, "file": "premium_card.jpeg", "exclusive": True},
 "exclusive_card_1": {"name": "Юк Сонджи и Джин Хобин", "rarity": "Легендарная 🔵", "style": "Дзюдо", "series": "Лукизм", "speed": 90, "strength": 90, "intellect": 85, "file": "exclusive_card_1.png", "exclusive": True},
-"excluzive_card_jaehwan": {"name": "Дже Хван", "rarity": "Мифическая 🔴", "style": "Выпад", "series": "Лукизм", "speed": 99, "strength": 100, "intellect": 100, "file": "excluzive_card_jaehwan.jpeg", "exclusive": True},
+"excluzive_card_jaehwan": {"name": "Дже Хван", "rarity": "Мифическая 🔴", "style": "Выпад", "series": "Мир после падения", "speed": 99, "strength": 100, "intellect": 100, "file": "excluzive_card_jaehwan.jpeg", "exclusive": True},
 }
 
 RARITIES = {
@@ -387,6 +387,7 @@ BGS = {
     "admin": {"name": "Ю Джунхёк и Ким Докча", "file": "admin.mp4", 'width': 1280, 'height': 720, "price": 99999},
     "veliki": {"name": "Sabbath Crew", "file": "veliki.jpeg", "price": 500},
     "yamzaki_clan": {"name": "Клан Ямадзаки", "file": "yamzaki_clan.mp4", 'width': 1280, 'height': 720, "price": 8500},
+    "jaehwan": {"name": "Дже Хван", "file": "jae_hwan.mp4", 'width': 1280, 'height': 720, "price": 99999},
 }
 VIDEO_BGS = {
     "jaehwan": {"name": "Дже Хван", "file": "jae_hwan.mp4", 'width': 1280, 'height': 720, "price": 99999},

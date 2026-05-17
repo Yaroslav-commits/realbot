@@ -1369,7 +1369,7 @@ async def b_top_wins_cb(cq: CallbackQuery):
         "🏅 76-150 места: 250 🪙 BattleCoin</blockquote>\n\n"
         "Награда выдается автоматически каждого 17-го числа🎖\n\n"
         "🎁 Приз за 1-20 места лимитированная карта:\n"
-        "<blockquote>🃏\ Дже Хван \</blockquote>\n\n"
+        "<blockquote>🃏 Дже Хван</blockquote>\n\n"
         "📅 Дата окончания: 17-го июня\n"
         f"🏆 Ваше место в ТОП-е: {my_place}\n"
         "🚸 ТОП обновляется каждые 3 часа."
