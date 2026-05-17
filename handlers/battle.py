@@ -1369,7 +1369,7 @@ async def b_top_wins_cb(cq: CallbackQuery):
         "🏅 76-150 места: 250 🪙 BattleCoin</blockquote>\n\n"
         "Награда выдается автоматически каждого 17-го числа🎖\n\n"
         "🎁 Приз за 1-20 места лимитированная карта:\n"
-        "<blockquote>🃏 \"название карты\"</blockquote>\n\n"
+        "<blockquote>🃏\ Дже Хван \</blockquote>\n\n"
         "📅 Дата окончания: 17-го июня\n"
         f"🏆 Ваше место в ТОП-е: {my_place}\n"
         "🚸 ТОП обновляется каждые 3 часа."
@@ -1530,34 +1530,111 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
     else:
         db_exec("INSERT INTO battle_shop_packs (user_id, week_number, bought_count) VALUES (?, ?, 1)", (uid, week_num))
 
-        # Логика шансов
+    # Логика шансов
     rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
     weights = [0.05, 0.5, 2.5, 2.5, 4.45, 90.0]
     result = random.choices(rewards, weights=weights, k=1)[0]
 
     reward_text = ""
+    sent_media = False
+    card_c = None  # Сюда будем записывать объект карты для картинки
+
     if result == "card_main":
-        is_new, krw, c = give_card_to_user(uid, PACK_CARD)
-        reward_text = format_card_msg(c)
+        is_new, krw, card_c = give_card_to_user(uid, PACK_CARD)
+        reward_text = format_card_msg(card_c)
     elif result == "bg_yamazaki":
         db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG1))
-        reward_text = f"🌄 Получен новый фон: <b>Клан Ямадзаки</b>!"
+        bg_key = PACK_BG1
+        bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
+        if bg_data:
+            file_path = f"images/backgrounds/{bg_data.get('file')}"
+            bg_name = bg_data.get('name', 'Новый фон')
+            caption_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b> {{joy}}"
+            try:
+                if bg_key in VIDEO_BGS:
+                    await send_cached_video(
+                        cq.bot,
+                        chat_id=uid,
+                        file_path=file_path,
+                        caption=caption_text,
+                        parse_mode="HTML",
+                        supports_streaming=True,
+                        width=bg_data.get('width'),
+                        height=bg_data.get('height')
+                    )
+                else:
+                    await cq.bot.send_photo(uid, photo=FSInputFile(file_path), caption=caption_text, parse_mode="HTML")
+                sent_media = True
+            except Exception:
+                reward_text = f"🌄 Получен новый фон: <b>{bg_name}</b>!"
+        else:
+            reward_text = f"🌄 Получен новый фон: <b>Клан Ямадзаки</b>!"
     elif result == "bg_jaehwan":
         db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG2))
-        reward_text = f"🌄 Получен новый фон: <b>Дже Хван</b>!"
+        bg_key = PACK_BG2
+        bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
+        if bg_data:
+            file_path = f"images/backgrounds/{bg_data.get('file')}"
+            bg_name = bg_data.get('name', 'Новый фон')
+            caption_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b> {{joy}}"
+            try:
+                if bg_key in VIDEO_BGS:
+                    await send_cached_video(
+                        cq.bot,
+                        chat_id=uid,
+                        file_path=file_path,
+                        caption=caption_text,
+                        parse_mode="HTML",
+                        supports_streaming=True,
+                        width=bg_data.get('width'),
+                        height=bg_data.get('height')
+                    )
+                else:
+                    await cq.bot.send_photo(uid, photo=FSInputFile(file_path), caption=caption_text, parse_mode="HTML")
+                sent_media = True
+            except Exception:
+                reward_text = f"🌄 Получен новый фон: <b>{bg_name}</b>!"
+        else:
+            reward_text = f"🌄 Получен новый фон: <b>Дже Хван</b>!"
     elif result == "title":
         db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, PACK_TITLE))
         reward_text = f"🔱 Получен новый титул: <b>Пронзающий судьбу 🩸</b>!"
     elif result == "mythic":
         card_key = pull_random_card(force_rarity="Мифическая 🔴")
-        is_new, krw, c = give_card_to_user(uid, card_key)
-        reward_text = format_card_msg(c)
+        is_new, krw, card_c = give_card_to_user(uid, card_key)
+        reward_text = format_card_msg(card_c)
     else:  # legendary
         card_key = pull_random_card(force_rarity="Легендарная 🔵")
-        is_new, krw, c = give_card_to_user(uid, card_key)
-        reward_text = format_card_msg(c)
+        is_new, krw, card_c = give_card_to_user(uid, card_key)
+        reward_text = format_card_msg(card_c)
 
-    await cq.message.answer(reward_text, parse_mode="HTML")
+    # ЭФФЕКТ ГАЧИ: Отправляем с картинкой и спойлером, если выпала карта
+    if not sent_media and card_c is not None and card_c.get("file"):
+        try:
+            if "Божественная" in card_c.get("rarity", "") and card_c.get("video"):
+                await send_cached_video(
+                    cq.bot,
+                    chat_id=uid,
+                    file_path=f"images/cards/{card_c['video']}",
+                    caption=reward_text,
+                    width=card_c.get("width", 960),
+                    height=card_c.get("height", 1280),
+                    has_spoiler=True, # Эффект размытия (гача)
+                    supports_streaming=True
+                )
+            else:
+                await cq.bot.send_photo(
+                    uid,
+                    photo=FSInputFile(f"images/cards/{card_c['file']}"),
+                    caption=reward_text,
+                    has_spoiler=True, # Эффект размытия (гача)
+                    parse_mode="HTML"
+                )
+        except Exception:
+            await cq.message.answer(reward_text, parse_mode="HTML")
+    elif not sent_media:
+        await cq.message.answer(reward_text, parse_mode="HTML")
+
     await cq.answer("Пак открыт!", show_alert=True)
     await b_shop_pack_cb(cq)
 
