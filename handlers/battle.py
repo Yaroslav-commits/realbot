@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
-                           CallbackQuery, LabeledPrice, PreCheckoutQuery, FSInputFile)
+                           CallbackQuery, LabeledPrice, PreCheckoutQuery, FSInputFile, Message)
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -63,8 +63,10 @@ async def battle_menu(msg: types.Message):
     bld = InlineKeyboardBuilder()
     bld.button(text="Найти противника 👁️", callback_data="find_match")
     bld.button(text="Дружеский бой 🔪", callback_data="friendly_match_start")
-    bld.button(text="Моя колода 🗂", callback_data="my_deck")
-    bld.adjust(1)
+    bld.button(text="Моя колода 🗂️", callback_data="my_deck")
+    bld.button(text="🛒 BattleShop", callback_data="b_shop_main")
+    bld.button(text="🔝 ТОП И РАНГИ", callback_data="b_top_ranks")
+    bld.adjust(1, 2, 1, 1)
 
     if os.path.exists("images/shop/battle.jpeg"):
         await msg.answer_photo(photo=FSInputFile("images/shop/battle.jpeg"), caption=txt, reply_markup=bld.as_markup())
@@ -1175,3 +1177,467 @@ async def surrender_battle(cq: CallbackQuery):
 
     await finish_game(gid, cq.bot)
     await cq.answer()
+
+# ============ НОВОЕ МЕНЮ ТОП И РАНГИ ============
+@router.callback_query(F.data == "b_top_ranks")
+async def b_top_ranks_cb(cq: CallbackQuery):
+    txt = "<i>Здесь можно получать награды, посмотреть топ и ранги, выбирай что хочешь посмотреть:</i>"
+    bld = InlineKeyboardBuilder()
+    bld.button(text="🏆 ТОП", callback_data="b_top_menu")
+    bld.button(text="РАНГИ 🎖", callback_data="b_ranks_menu")
+    bld.button(text="Назад 🔙", callback_data="b_menu_back")
+    bld.adjust(2, 1)
+
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup= bld.as_markup(), parse_mode="HTML")
+    except Exception:
+        try:
+            await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        except:
+            pass
+    await cq.answer()
+
+
+@router.callback_query(F.data == "b_menu_back")
+async def b_menu_back_cb(cq: CallbackQuery):
+    try:
+        await cq.message.delete()
+    except:
+        pass
+    u = get_user(cq.from_user.id)
+    txt = (f"⚔️ BATTLE FIELD ACCESS\n\n"
+           f"Добро пожаловать на поле битвы, Игрок.\n\n"
+           f"Вы входите в зону PvP-испытаний. Здесь формируется сила через сражения, а каждый бой влияет на ваш ранг 📊\n\n"
+           f"<blockquote>🔓 Условия доступа к «Битвам ⚔️»:\n"
+           f"→ Необходимо собрать 10 боевых карт 🃏</blockquote>\n\n"
+           f"▶️ РЕЖИМ: АКТИВЕН\n"
+           f"▶️ СТАТУС: БОЕВАЯ СИСТЕМА ОНЛАЙН И ОФЛАЙН\n\n"
+           f"━━━━━━━━━━━━━━━\n"
+           f'🏅 {u[7]} Очков | Ранг {get_rank(u[7])}\n'
+           f"Победа / Ничья / Поражение :\n"
+           f"{u[8]} / {u[9]} / {u[10]}\n"
+           f"━━━━━━━━━━━━━━━\n\n"
+           f"Каждое сражение фиксируется в хронике данных.")
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Найти противника 👁️", callback_data="find_match")
+    bld.button(text="Дружеский бой 🔪", callback_data="friendly_match_start")
+    bld.button(text="Моя колода 🗂️", callback_data="my_deck")
+    bld.button(text="🛒 BattleShop", callback_data="b_shop_main")
+    bld.button(text="🔝 ТОП И РАНГИ", callback_data="b_top_ranks")
+    bld.adjust(1, 2, 1, 1)
+
+    if os.path.exists("images/shop/battle.jpeg"):
+        await cq.message.answer_photo(photo=FSInputFile("images/shop/battle.jpeg"), caption=txt,
+                                      reply_markup=bld.as_markup())
+    else:
+        await cq.message.answer(txt, reply_markup=bld.as_markup())
+    await cq.answer()
+
+
+@router.callback_query(F.data == "b_top_menu")
+async def b_top_menu_cb(cq: CallbackQuery):
+    txt = "<i>Выбери каталог топа:</i>"
+    bld = InlineKeyboardBuilder()
+    bld.button(text="🏆 Топ по победам", callback_data="b_top_wins")
+    bld.button(text="🏆 Топ по рангам", callback_data="b_top_rankpts")
+    bld.button(text="Назад 🔙", callback_data="b_top_ranks")
+    bld.adjust(2, 1)
+
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    except Exception:
+        try:
+            await cq.message.edit_text(text=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        except:
+            pass
+    await cq.answer()
+
+
+# === РАНГИ И НАГРАДЫ ===
+RANK_REWARDS = {
+    "Новичок 💩": 0, "Боец 🦸‍♂️": 1, "Пробуждённый 🪬": 3, "Неоспоримый 👾": 5,
+    "Уровень Короля 👑": 10, "Титан 🧬": 15, "Легенда 🐉": 20, "Безупречная мощь 😈": 30,
+    "Абсолют ♾️": 40, "Владыка Хаоса 🌋": 55, "Монарх Пустоты 🌑": 75, "Бессмертный Архонт 🪽": 100
+}
+
+
+@router.callback_query(F.data == "b_ranks_menu")
+async def b_ranks_menu_cb(cq: CallbackQuery):
+    u = get_user(cq.from_user.id)
+    my_pts = u[7]
+    my_rank = get_rank(my_pts)
+
+    ranks = [
+        (14000, "Бессмертный Архонт 🪽"), (10000, "Монарх Пустоты 🌑"), (6500, "Владыка Хаоса 🌋"),
+        (4500, "Абсолют ♾️"), (3000, "Безупречная мощь 😈"), (2000, "Легенда 🐉"),
+        (1600, "Титан 🧬"), (1000, "Уровень Короля 👑"), (600, "Неоспоримый 👾"),
+        (300, "Пробуждённый 🪬"), (100, "Боец 🦸‍♂️"), (0, "Новичок 💩")
+    ]
+    next_rank = "Максимальный"
+    for i in range(len(ranks) - 1, -1, -1):
+        if my_pts < ranks[i][0]:
+            next_rank = ranks[i][1]
+            break
+
+    my_reward = RANK_REWARDS.get(my_rank, 0)
+
+    txt = (
+        "📊 Система рангов:\n\n"
+        "1. Новичок 💩 - 0 очков\n"
+        "2. Боец 🦸‍♂️ - 100 очков\n"
+        "3. Пробуждённый 🪬 - 300 очков\n"
+        "4. Неоспоримый 👾 - 600 очков\n"
+        "5. Уровень Короля 👑 - 1000 очков\n"
+        "6. Титан 🧬 - 1600 очков\n"
+        "7. Легенда 🐉 - 2000 очков\n"
+        "8. Безупречная мощь 😈 - 3000 очков\n"
+        "9. Абсолют ♾️ - 4500 очков\n"
+        "10. Владыка Хаоса 🌋 - 6500 очков\n"
+        "11. Монарх Пустоты 🌑 - 10000 очков\n"
+        "12. Бессмертный Архонт 🪽 - 14000 очков\n\n"
+        f"Твой ранг: {my_rank}\n"
+        f"Следующий ранг: {next_rank}\n"
+        f"Твои очки: {my_pts} очков\n"
+        f"Награда: {my_reward} 💎\n\n"
+        "<blockquote>Собрать награды можно по кнопке «Собрать награду 💎» каждого 1-го и 15-го числа</blockquote>"
+    )
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Собрать награду 💎", callback_data="b_rank_claim")
+    bld.button(text="Назад 🔙", callback_data="b_top_ranks")
+    bld.adjust(1)
+
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    except:
+        try:
+            await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        except:
+            pass
+    await cq.answer()
+
+
+@router.callback_query(F.data == "b_rank_claim")
+async def b_rank_claim_cb(cq: CallbackQuery):
+    now = datetime.now()
+    if now.day not in [1, 15]:
+        return await cq.answer("Награду можно забрать только 1-го и 15-го числа!", show_alert=True)
+
+    uid = cq.from_user.id
+    claim_date = now.strftime("%Y-%m-%d")
+
+    already_claimed = db_exec("SELECT 1 FROM user_ranks_claims WHERE user_id = ? AND claim_date = ?", (uid, claim_date),
+                              fetch=True)
+    if already_claimed:
+        return await cq.answer("Вы уже забрали награду за этот период!", show_alert=True)
+
+    u = get_user(uid)
+    my_rank = get_rank(u[7])
+    reward = RANK_REWARDS.get(my_rank, 0)
+
+    if reward > 0:
+        db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (reward, uid))
+        db_exec("INSERT INTO user_ranks_claims (user_id, claim_date) VALUES (?, ?)", (uid, claim_date))
+        await cq.answer(f"✅ Вы успешно забрали {reward} 💎!", show_alert=True)
+    else:
+        await cq.answer("Ваш ранг не позволяет получить награду.", show_alert=True)
+
+
+# === ТОП ПО ПОБЕДАМ И РАНГАМ ===
+@router.callback_query(F.data == "b_top_wins")
+async def b_top_wins_cb(cq: CallbackQuery):
+    top_users = db_exec("SELECT id, nickname, wins FROM users ORDER BY wins DESC LIMIT 10", fetchall=True)
+    all_users = db_exec("SELECT id FROM users ORDER BY wins DESC", fetchall=True)
+    my_place = "Без места"
+    for idx, (uid,) in enumerate(all_users):
+        if uid == cq.from_user.id:
+            my_place = idx + 1
+            break
+    txt = "🏆 ТОП 10 по Победам:\n\n"
+    for i, user in enumerate(top_users):
+        emoji = "👑" if is_premium(user[0]) else "🧩"
+        txt += f"{i + 1}. {user[1]} {emoji} — {user[2]} 🎖\n"
+
+    txt += (
+        "\nНаграды:\n"
+        "<blockquote>🥇 1-е место: 150 💎 Алмазов, 2000 🪙 BattleCoin\n"
+        "🥈 2-е место: 100 💎 Алмазов, 1500 🪙 BattleCoin\n"
+        "🥉 3-е место: 75 💎 Алмазов, 1250 🪙 BattleCoin\n"
+        "🏅 4-10 места: 50 💎 Алмазов, 750 🪙 BattleCoin\n"
+        "🏅 11-25 места: 10 💎 Алмазов, 600 🪙 BattleCoin\n"
+        "🏅 26-75 места: 400 🪙 BattleCoin\n"
+        "🏅 76-150 места: 250 🪙 BattleCoin</blockquote>\n\n"
+        "Награда выдается автоматически каждого 17-го числа🎖\n\n"
+        "🎁 Приз за 1-20 места лимитированная карта:\n"
+        "<blockquote>🃏 \"название карты\"</blockquote>\n\n"
+        "📅 Дата окончания: 17-го июня\n"
+        f"🏆 Ваше место в ТОП-е: {my_place}\n"
+        "🚸 ТОП обновляется каждые 3 часа."
+    )
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Назад 🔙", callback_data="b_top_menu")
+
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    if os.path.exists("images/shop/top_wins.jpeg"):
+        await cq.message.answer_photo(photo=FSInputFile("images/shop/top_wins.jpeg"), caption=txt,
+                                      reply_markup=bld.as_markup(), parse_mode="HTML")
+    else:
+        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+
+@router.callback_query(F.data == "b_top_rankpts")
+async def b_top_rankpts_cb(cq: CallbackQuery):
+    top_users = db_exec("SELECT id, nickname, rank_points FROM users ORDER BY rank_points DESC LIMIT 10", fetchall=True)
+    all_users = db_exec("SELECT id FROM users ORDER BY rank_points DESC", fetchall=True)
+    my_place = "Без места"
+    for idx, (uid,) in enumerate(all_users):
+        if uid == cq.from_user.id:
+            my_place = idx + 1
+            break
+
+    txt = "🏆 Топ пользователей по Рангам и Очкам\n\n"
+    for i, user in enumerate(top_users):
+        emoji = "👑" if is_premium(user[0]) else "🧩"
+        txt += f"{i + 1}. {user[1]} {emoji} - {user[2]}\n"
+
+    txt += (
+        "\n🕓 Топ обновляется раз в сутки\n"
+        f"🔝 Ваше место в топе: {my_place}"
+    )
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Назад 🔙", callback_data="b_top_menu")
+
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    if os.path.exists("images/shop/top_ranks.jpeg"):
+        await cq.message.answer_photo(photo=FSInputFile("images/shop/top_ranks.jpeg"), caption=txt,
+                                      reply_markup=bld.as_markup())
+    else:
+        await cq.message.answer(txt, reply_markup=bld.as_markup())
+    await cq.answer()
+
+
+# ============ МАГАЗИН БИТВЫ ============
+@router.callback_query(F.data == "b_shop_main")
+async def b_shop_main_cb(cq: CallbackQuery):
+    txt = (
+        "[ SYSTEM MESSAGE ]\n\n"
+        "🛒 Боевой магазин активирован.\n\n"
+        "Доступны новые карты, эксклюзивные титулы\n"
+        "и видео-фоны.\n\n"
+        "Некоторые награды имеют мифический ранг.\n"
+        "Есть особый пак, где шанс выпадения редких предметов повышен."
+    )
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Боевой Пак 🗄️", callback_data="b_shop_pack")
+    bld.button(text="Крутки 🪙", callback_data="b_shop_spins")
+    bld.button(text="Назад 🔙", callback_data="b_menu_back")
+    bld.adjust(2, 1)
+
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    if os.path.exists("images/shop/battle_shop.png"):
+        await cq.message.answer_photo(photo=FSInputFile("images/shop/battle_shop.png"), caption=txt,
+                                      reply_markup=bld.as_markup())
+    else:
+        await cq.message.answer(txt, reply_markup=bld.as_markup())
+    await cq.answer()
+
+
+# === ВСТАВИТЬ В НАЧАЛО battle.py ПОСЛЕ ИМПОРТОВ (примерно строка 30) ===
+PACK_CARD = "excluzive_card_jaehwan"
+PACK_BG1 = "yamzaki_clan"
+PACK_BG2 = "jaehwan"
+PACK_TITLE = "title_pack"
+
+# === ЗАМЕНИТЬ ФУНКЦИИ b_shop_pack_cb И b_shop_pack_buy_cb (строки 1459-1533) ===
+
+@router.callback_query(F.data == "b_shop_pack")
+async def b_shop_pack_cb(cq: CallbackQuery):
+    uid = cq.from_user.id
+    now = datetime.now()
+    week_num = now.isocalendar()[1]
+
+    res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num), fetch=True)
+    bought = res[0] if res else 0
+
+    txt = (
+        "<b>Боевой Пак ⚡️</b>\n"
+        f"💵 Можно купить: <b>{3 - bought}</b>\n"
+        f"💸 Куплено: <b>{bought}</b>\n\n"
+        "<blockquote>Стоимость: 400 🪙</blockquote>\n\n"
+        "🔥 Главный приз: <b>Дже Хван</b>\n"
+        "🧪 Содержимое:\n"
+        "<blockquote>🃏 Дже Хван 0.05%\n"
+        "🌄 Клан Ямадзаки 0.5%\n"
+        "🌄 Дже Хван 2.5%\n"
+        "🔱 Пронзающий судьбу 2.5%\n"
+        "🔴 Мифическая карта 4.45%\n"
+        "🔵 Легендарная карта 90%</blockquote>\n\n"
+        "🏆 Главный приз выдается автоматически за ТОП 20 по победам!\n\n"
+        "📅 Дата окончания пака: 17-го Июня 📆"
+    )
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="• Купить 💵", callback_data="b_shop_pack_buy")
+    bld.button(text="Назад 🔙", callback_data="b_shop_main")
+    bld.adjust(1)
+
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    if os.path.exists("images/shop/battlepack.jpeg"):
+        await cq.message.answer_photo(photo=FSInputFile("images/shop/battlepack.jpeg"), caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    else:
+        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+@router.callback_query(F.data == "b_shop_pack_buy")
+async def b_shop_pack_buy_cb(cq: CallbackQuery):
+    uid = cq.from_user.id
+    now = datetime.now()
+    week_num = now.isocalendar()[1]
+
+    res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num), fetch=True)
+    bought = res[0] if res else 0
+
+    if bought >= 3:
+        return await cq.answer("Вы уже купили этот пак 3 раза на этой неделе!", show_alert=True)
+
+    u = get_user(uid)
+    if u[5] < 400:
+        return await cq.answer("❌ Недостаточно BattleCoin! Нужно: 400 🪙", show_alert=True)
+
+    # Списание валюты и обновление счетчика
+    db_exec("UPDATE users SET battlecoin = battlecoin - 400 WHERE id = ?", (uid,))
+    if res:
+        db_exec("UPDATE battle_shop_packs SET bought_count = bought_count + 1 WHERE user_id = ? AND week_number = ?",
+                (uid, week_num))
+    else:
+        db_exec("INSERT INTO battle_shop_packs (user_id, week_number, bought_count) VALUES (?, ?, 1)", (uid, week_num))
+
+        # Логика шансов
+    rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
+    weights = [0.05, 0.5, 2.5, 2.5, 4.45, 90.0]
+    result = random.choices(rewards, weights=weights, k=1)[0]
+
+    reward_text = ""
+    if result == "card_main":
+        is_new, krw, c = give_card_to_user(uid, PACK_CARD)
+        reward_text = format_card_msg(c)
+    elif result == "bg_yamazaki":
+        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG1))
+        reward_text = f"🌄 Получен новый фон: <b>Клан Ямадзаки</b>!"
+    elif result == "bg_jaehwan":
+        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG2))
+        reward_text = f"🌄 Получен новый фон: <b>Дже Хван</b>!"
+    elif result == "title":
+        db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, PACK_TITLE))
+        reward_text = f"🔱 Получен новый титул: <b>Пронзающий судьбу 🩸</b>!"
+    elif result == "mythic":
+        card_key = pull_random_card(force_rarity="Мифическая 🔴")
+        is_new, krw, c = give_card_to_user(uid, card_key)
+        reward_text = format_card_msg(c)
+    else:  # legendary
+        card_key = pull_random_card(force_rarity="Легендарная 🔵")
+        is_new, krw, c = give_card_to_user(uid, card_key)
+        reward_text = format_card_msg(c)
+
+    await cq.message.answer(reward_text, parse_mode="HTML")
+    await cq.answer("Пак открыт!", show_alert=True)
+    await b_shop_pack_cb(cq)
+
+
+def format_card_msg(c):
+    """Вспомогательная функция для формирования текста карты по твоему примеру"""
+    return (
+        f"🃏 <b>Получена новая боевая карта!</b>\n\n"
+        f"🎴 <b>Персонаж:</b> {c['name']}\n"
+        f"🔮 <b>Редкость:</b> {c['rarity']}\n"
+        f"👊 <b>Стиль боя:</b> {c['style']}\n"
+        f"🪐 <b>Вселенная:</b> {c.get('series', 'Неизвестно')}\n\n"
+        f"⚡️ <b>Скорость:</b> {c['speed']}\n"
+        f"💪 <b>Сила:</b> {c['strength']}\n"
+        f"🧠 <b>Интеллект:</b> {c['intellect']}"
+    )
+
+
+@router.callback_query(F.data == "b_shop_spins")
+async def b_shop_spins_cb(cq: CallbackQuery):
+    txt = "Здесь вы можете приобрести крутки за валюту <b>BattleCoin 🪙</b>"
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="25 🪙 = 1 💳", callback_data="b_spin_buy:25:1")
+    bld.button(text="250 🪙 = 10 💳", callback_data="b_spin_buy:250:10")
+    bld.button(text="2500 🪙 = 110 💳", callback_data="b_spin_buy:2500:110")
+    bld.button(text="Назад 🔙", callback_data="b_shop_main")
+    bld.adjust(1)
+
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    except:
+        try:
+            await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        except:
+            pass
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("b_spin_buy:"))
+async def b_spin_buy_cb(cq: CallbackQuery):
+    _, cost_str, att_str = cq.data.split(":")
+    cost = int(cost_str)
+    att = int(att_str)
+
+    uid = cq.from_user.id
+    u = get_user(uid)
+    if u[5] < cost:
+        return await cq.answer(f"❌ Недостаточно средств! Нужно: {cost} 🪙", show_alert=True)
+
+    db_exec("UPDATE users SET battlecoin = battlecoin - ?, attempts = attempts + ? WHERE id = ?", (cost, att, uid))
+    await cq.answer(f"✅ Куплено {att} попыток!", show_alert=True)
+    # === ДОБАВИТЬ В КОНЕЦ battle.py (ФУНКЦИЯ ДЛЯ ВЫДАЧИ ТОП-20) ===
+
+async def distribute_top_20_rewards(bot: Bot):
+    """
+    Функция для автоматической выдачи карты Дже Хван ТОП-20 игрокам по победам.
+    Её можно вызывать по команде админа или через планировщик.
+    """
+    top_20 = db_exec("SELECT id FROM users ORDER BY wins DESC LIMIT 20", fetchall=True)
+    count = 0
+    for (uid,) in top_20:
+        # Проверяем, есть ли уже эта карта у игрока (чтобы не дублировать)
+        exists = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, PACK_CARD), fetch=True)
+        if not exists:
+            give_card_to_user(uid, PACK_CARD)
+            count += 1
+            try:
+                c = CARDS[PACK_CARD]
+                txt = f"🏆 <b>Поздравляем!</b>\nВы вошли в ТОП-20 по победам и получаете эксклюзивную награду!\n\n" + format_card_msg(
+                    c)
+                await bot.send_photo(uid, photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, parse_mode="HTML")
+            except:
+                pass
+    return count
+
+# Можно добавить команду админа для запуска выдачи вручную
+@router.message(Command("distribute_top"))
+async def cmd_distribute_top(msg: Message, bot: Bot):
+    if msg.from_user.id not in ADMIN_IDS: return
+    count = await distribute_top_20_rewards(bot)
+    await msg.answer(f"✅ Награды выданы {count} игрокам из ТОП-20!")
+

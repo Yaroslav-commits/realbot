@@ -35,6 +35,17 @@ def init_db():
     db_exec("CREATE TABLE IF NOT EXISTS titles_inv (user_id INTEGER, title_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS pass_claims (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS promos (code TEXT PRIMARY KEY, p_type TEXT, val TEXT, uses INTEGER)")
+    db_exec('''CREATE TABLE IF NOT EXISTS battle_shop_packs (
+        user_id INTEGER,
+        week_number INTEGER,
+        bought_count INTEGER DEFAULT 0,
+        PRIMARY KEY (user_id, week_number)
+    )''')
+    db_exec('''CREATE TABLE IF NOT EXISTS user_ranks_claims (
+        user_id INTEGER,
+        claim_date TEXT,
+        PRIMARY KEY (user_id, claim_date)
+    )''')
     db_exec('''CREATE TABLE IF NOT EXISTS promo_uses (
         user_id INTEGER,
         promo_code TEXT,

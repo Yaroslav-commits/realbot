@@ -10,7 +10,7 @@ from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            CallbackQuery, LabeledPrice, PreCheckoutQuery,
-                           FSInputFile)
+                           FSInputFile, Message)
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -50,7 +50,8 @@ EMOJI_RE = re.compile(
     "]+",
     flags=re.UNICODE
 )
-
+class GiftBgState(StatesGroup):
+    waiting_for_id = State()
 class BroadcastState(StatesGroup):
     waiting_for_message = State()
 # ================== HANDLERS ==================
@@ -594,6 +595,10 @@ async def preview_cq(cq: CallbackQuery):
     bld = InlineKeyboardBuilder()
     bld.button(text=btn_text, callback_data=f"equip_{type_str}:{itm}")
 
+    if type_str == "bg" and itm != "default":
+        bld.button(text="🎁 Подарить", callback_data=f"gift_bg:{itm}")
+    bld.adjust(1)
+
     if type_str == "bg":
         bg_data = BGS.get(itm, BGS['default'])
         bg_file = bg_data.get('file')
@@ -659,6 +664,149 @@ async def equip_cq(cq: CallbackQuery):
     await cq.answer(alert_text)
 
 
+# ============ ПОДАРИТЬ ФОН ============
+@router.callback_query(F.data.startswith("gift_bg:"))
+async def start_gift_bg(cq: CallbackQuery, state: FSMContext):
+    bg_id = cq.data.split(":")[1]
+    await state.update_data(bg_to_gift=bg_id)
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Отменить", callback_data="cancel_gift")
+
+    await cq.message.answer(
+        "Отправьте 🆔 игрока, которому хотите <b>подарить</b> данный фон:",
+        reply_markup=bld.as_markup(),
+        parse_mode="HTML"
+    )
+    await state.set_state(GiftBgState.waiting_for_id)
+    await cq.answer()
+
+
+@router.callback_query(F.data == "cancel_gift")
+async def cancel_gift_bg(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cq.message.delete()
+    await cq.answer("Действие отменено.")
+
+
+@router.message(GiftBgState.waiting_for_id)
+async def process_gift_id(msg: Message, state: FSMContext, bot: Bot):
+    # Защита от багов: если игрок кликает на постороннюю кнопку (не вводит число)
+    if not msg.text or not msg.text.isdigit():
+        await state.clear()
+        await msg.answer("❌ Действие отменено. Ожидался ID игрока (число).")
+        return
+
+    target_id = int(msg.text)
+    data = await state.get_data()
+    bg_id = data.get("bg_to_gift")
+    sender_id = msg.from_user.id
+
+    if target_id == sender_id:
+        await state.clear()
+        return await msg.answer("❌ Вы не можете подарить фон самому себе.")
+
+    target_user = get_user(target_id)
+    if not target_user:
+        await state.clear()
+        return await msg.answer("❌ Игрок с таким ID не найден в базе.")
+
+    # Проверяем, есть ли фон у отправителя
+    sender_has = db_exec("SELECT rowid FROM bgs_inv WHERE user_id = ? AND bg_id = ?", (sender_id, bg_id), fetch=True)
+    if not sender_has:
+        await state.clear()
+        return await msg.answer("❌ Ошибка: у вас больше нет этого фона в инвентаре.")
+    # Проверяем, есть ли уже фон у получателя
+    target_bgs = db_exec("SELECT bg_id FROM bgs_inv WHERE user_id = ?", (target_id,), fetchall=True)
+    target_bg_ids = [b[0] for b in target_bgs] if target_bgs else []
+    has_bg = bg_id in target_bg_ids
+
+    bg_data = BGS.get(bg_id, BGS.get('default'))
+    bg_file = bg_data.get('file')
+    bg_name = bg_data.get('name', 'Фон')
+
+    if has_bg:
+        caption = f"Вам хотят подарить фон «{bg_name}» ⚠️ У ВАС УЖЕ ЕСТЬ ЭТОТ ФОН, выберете действие:"
+    else:
+        caption = f"Вам хотят подарить фон «{bg_name}», выберете действие:"
+
+    bld = InlineKeyboardBuilder()
+    # Размещаем кнопки в один ряд (слева Отказаться, справа Согласиться)
+    bld.button(text="Отказаться ❌", callback_data=f"gift_ans:reject:{sender_id}:{bg_id}")
+    bld.button(text="Согласиться ✅", callback_data=f"gift_ans:accept:{sender_id}:{bg_id}")
+    bld.adjust(2)
+
+    try:
+        if bg_id in VIDEO_BGS:
+            await send_cached_video(
+                bot,
+                chat_id=target_id,
+                file_path=f"images/backgrounds/{bg_file}",
+                caption=caption,
+                reply_markup=bld.as_markup(),
+                supports_streaming=True,
+                width=bg_data.get('width'),
+                height=bg_data.get('height')
+            )
+        else:
+            await bot.send_photo(
+                chat_id=target_id,
+                photo=FSInputFile(f"images/backgrounds/{bg_file}"),
+                caption=caption,
+                reply_markup=bld.as_markup()
+            )
+        await msg.answer("✅ Предложение о подарке отправлено игроку!")
+    except Exception:
+        await msg.answer("❌ Не удалось отправить сообщение игроку. Возможно, он заблокировал бота.")
+
+    await state.clear()
+
+
+@router.callback_query(F.data.startswith("gift_ans:"))
+async def process_gift_answer(cq: CallbackQuery, bot: Bot):
+    parts = cq.data.split(":")
+    if len(parts) != 4:
+        return
+    action, sender_id, bg_id = parts[1], int(parts[2]), parts[3]
+    receiver_id = cq.from_user.id
+
+    bg_data = BGS.get(bg_id, BGS.get('default'))
+    bg_name = bg_data.get('name', 'Фон')
+
+    if action == "reject":
+        await cq.message.edit_caption(caption=f"❌ Вы отказались от подарка фона «{bg_name}».", reply_markup=None)
+        try:
+            await bot.send_message(sender_id, f"❌ Игрок {receiver_id} отказался от подарка фона «{bg_name}».")
+        except:
+            pass
+        return await cq.answer()
+
+    if action == "accept":
+        # Проверяем, есть ли всё ещё фон у отправителя
+        sender_has = db_exec("SELECT rowid FROM bgs_inv WHERE user_id = ? AND bg_id = ?", (sender_id, bg_id),
+                             fetch=True)
+        if not sender_has:
+            await cq.message.edit_caption(caption=f"❌ Ошибка: У игрока {sender_id} больше нет этого фона.",
+                                          reply_markup=None)
+            return await cq.answer()
+
+        # Забираем фон у отправителя
+        db_exec("DELETE FROM bgs_inv WHERE rowid = ?", (sender_has[0],))
+
+        # Если фон был установлен как активный у отправителя, сбрасываем на default
+        sender_user = get_user(sender_id)
+        if sender_user and sender_user[13] == bg_id:
+            db_exec("UPDATE users SET active_bg = 'default' WHERE id = ?", (sender_id,))
+
+        # Выдаем фон получателю
+        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (receiver_id, bg_id))
+        await cq.message.edit_caption(caption=f"✅ Вы успешно приняли фон «{bg_name}»!", reply_markup=None)
+        try:
+            await bot.send_message(sender_id, f"✅ Игрок {receiver_id} принял ваш подарок! Фон «{bg_name}» передан.")
+        except:
+            pass
+
+        await cq.answer("Фон успешно получен!")
 # ============ АДМИН И ПРОМО ============
 # ============ КОМАНДА РАССЫЛКИ (NOTIFER) ============
 

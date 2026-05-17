@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ManhwaCards TMA</title>
+    <!-- Подключаем Tailwind для верстки без сложной установки -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --primary: #0ea5e9; /* Тёмно-синий/неоновый по ТЗ */
+            --bg: #020617; /* Тёмно-синий фон */
+        }
+        body {
+            background-color: var(--bg);
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Эффект Glassmorphism */
+        .glass {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(14, 165, 233, 0.2);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        .neon-text {
+            text-shadow: 0 0 10px var(--primary), 0 0 20px rgba(14, 165, 233, 0.5);
+        }
+        .neon-border {
+            box-shadow: 0 0 15px rgba(14, 165, 233, 0.4);
+            border: 1px solid var(--primary);
+        }
+        
+        .screen { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .screen.active { display: block; }
+        .nav-item.active { color: var(--primary); text-shadow: 0 0 10px var(--primary); }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="pb-24">
+
+    <!-- Шапка (Баланс синхронизируется с БД) -->
+    <header class="glass fixed top-0 w-full z-50 px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-full bg-slate-800 border border-sky-500 overflow-hidden">
+                <img id="user-avatar" src="" class="w-full h-full object-cover hidden" alt="AV">
+            </div>
+            <span id="header-name" class="font-bold text-sm">Загрузка...</span>
+        </div>
+        <div class="flex gap-3 text-sm font-bold text-sky-400">
+            <div><span id="balance-krw">0</span> ₩</div>
+            <div><span id="balance-diamonds">0</span> 💎</div>
+            <div><span id="balance-bc">0</span> ⚔️</div>
+        </div>
+    </header>
+    <!-- Основной контент -->
+    <main class="mt-20 px-4">
+        
+        <!-- ГЛАВНЫЙ ЭКРАН -->
+        <section id="screen-home" class="screen active space-y-4">
+            <div class="glass rounded-2xl p-6 text-center neon-border">
+                <h1 class="text-3xl font-bold neon-text mb-2">ManhwaCards</h1>
+                <p class="text-sky-200 text-sm opacity-80">Твоя коллекция в одном месте</p>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="navigate('collection')" class="glass rounded-xl p-5 flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform">
+                    <span class="text-3xl">🎴</span>
+                    <span class="font-semibold text-sm">Коллекция</span>
+                </button>
+                <button onclick="navigate('pass')" class="glass rounded-xl p-5 flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform">
+                    <span class="text-3xl">⭐️</span>
+                    <span class="font-semibold text-sm">Battle Pass</span>
+                </button>
+                <button onclick="navigate('profile')" class="glass rounded-xl p-5 flex flex-col items-center justify-center gap-2 active:scale-95 transition-transform">
+                    <span class="text-3xl">👤</span>
+                    <span class="font-semibold text-sm">Профиль</span>
+                </button>
+                <button class="glass rounded-xl p-5 flex flex-col items-center justify-center gap-2 opacity-50">
+                    <span class="text-3xl">🛒</span>
+                    <span class="font-semibold text-sm">Магазин</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- КОЛЛЕКЦИЯ -->
+        <section id="screen-collection" class="screen">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold neon-text">Мои карты</h2>
+                <span id="collection-count" class="text-sm text-sky-400 bg-sky-900/30 px-3 py-1 rounded-full">0 карт</span>
+            </div>
+            <div id="collection-grid" class="grid grid-cols-2 gap-4">
+                <div class="text-center text-gray-500 col-span-2 py-10">Загрузка карт...</div>
+            </div>
+        </section>
+
+        <!-- BATTLE PASS -->
+        <section id="screen-pass" class="screen space-y-4">
+            <h2 class="text-xl font-bold neon-text">Battle Pass</h2>
+            <div class="glass rounded-xl p-5 border border-yellow-500 relative overflow-hidden">
+                <div class="absolute top-0 right-0 bg-yellow-500 text-black text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">PRO</div>
+                <h3 class="font-bold text-yellow-500 mb-1 text-lg">Pro Pass</h3>
+                <p class="text-sm text-yellow-200/70 mb-4">Получай по 200 💎 ежедневно и уникальный титул!</p>
+                <button class="w-full bg-yellow-500 text-black font-bold py-3 rounded-xl active:scale-95 transition-transform shadow-[0_0_15px_rgba(234,179,8,0.4)]">Купить за 449 ⭐️</button>
+            </div>
+            <h3 class="font-bold text-sky-400 mt-6 mb-3">Free Pass Награды</h3>
+            <div class="space-y-3">
+                <div class="glass rounded-xl p-4 flex justify-between items-center neon-border">
+                    <div>
+                        <h4 class="font-bold text-sm">День 1</h4>
+                        <p class="text-xs text-sky-300/70">Награда: 3 💎</p>
+                    </div>
+                    <button class="bg-sky-500 text-white px-5 py-2 rounded-lg text-sm font-bold active:bg-sky-600">Забрать</button>
+                </div>
+            </div>
+        </section>
+        <!-- ПРОФИЛЬ -->
+        <section id="screen-profile" class="screen">
+            <div class="glass rounded-2xl p-6 flex flex-col items-center mb-4 relative overflow-hidden">
+                <div class="absolute top-0 w-32 h-32 bg-sky-500/20 rounded-full blur-3xl"></div>
+                <h2 id="profile-name" class="text-2xl font-bold neon-text mt-2 z-10">...</h2>
+                <p id="profile-title" class="text-sky-400 text-sm font-medium mt-1 z-10">Загрузка...</p>
+                <span id="profile-rank" class="mt-3 bg-sky-500/20 text-sky-300 text-xs px-3 py-1 rounded-full border border-sky-500/30 z-10">Рейтинг: 0</span>
+            </div>
+            <div class="glass rounded-xl p-5 space-y-3">
+                <h3 class="font-bold text-sm text-sky-400 border-b border-sky-900/50 pb-2 mb-3 uppercase tracking-wider">Статистика</h3>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400 text-sm">Попыток (Attempts)</span>
+                    <span id="profile-attempts" class="font-bold text-white">0</span>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Нижнее меню -->
+    <nav class="glass fixed bottom-0 w-full z-50 px-6 py-4 flex justify-between items-center text-gray-400 text-xs pb-6">
+        <div onclick="navigate('home')" class="nav-item active flex flex-col items-center gap-1.5 cursor-pointer" data-target="home">
+            <span class="text-2xl">🏠</span><span>Главная</span>
+        </div>
+        <div onclick="navigate('collection')" class="nav-item flex flex-col items-center gap-1.5 cursor-pointer" data-target="collection">
+            <span class="text-2xl">🎴</span><span>Коллекция</span>
+        </div>
+        <div onclick="navigate('pass')" class="nav-item flex flex-col items-center gap-1.5 cursor-pointer" data-target="pass">
+            <span class="text-2xl">⭐️</span><span>Pass</span>
+        </div>
+        <div onclick="navigate('profile')" class="nav-item flex flex-col items-center gap-1.5 cursor-pointer" data-target="profile">
+            <span class="text-2xl">👤</span><span>Профиль</span>
+        </div>
+    </nav>
+
+    <script src="app.js"></script>
+</body>
+</html>

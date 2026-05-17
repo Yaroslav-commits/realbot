@@ -4105,5 +4105,17 @@
         "file": "exclusive_card_1.png",
         "exclusive": true,
         "id": "exclusive_card_1"
+    },
+    {
+        "name": "Дже Хван",
+        "rarity": "Мифическая 🔴",
+        "style": "Выпад",
+        "series": "Лукизм",
+        "speed": 99,
+        "strength": 100,
+        "intellect": 100,
+        "file": "excluzive_card_jaehwan.jpeg",
+        "exclusive": true,
+        "id": "excluzive_card_jaehwan"
     }
 ]

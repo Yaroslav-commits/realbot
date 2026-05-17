@@ -279,12 +279,12 @@ async def shop_premium_buy_cb(cq: CallbackQuery):
 
 
 # ===== Крутки =====
-SPIN_PAGES = ["dia", "bc", "krw"]
+SPIN_PAGES = ["dia", "krw"]
 SPIN_DATA = {
     "dia": {"packs": SPIN_PACKS_DIA, "icon": "💎", "col": "diamond",    "col_idx": 3, "name": "алмазов"},
-    "bc":  {"packs": SPIN_PACKS_BC,  "icon": "🪙", "col": "battlecoin", "col_idx": 5, "name": "BattleCoin"},
     "krw": {"packs": SPIN_PACKS_KRW, "icon": "💴", "col": "krw",        "col_idx": 4, "name": "KRW"},
 }
+
 
 def _spin_kb(page: int = 0):
     page = max(0, min(page, len(SPIN_PAGES) - 1))
@@ -318,8 +318,7 @@ async def shop_spins_cb(cq: CallbackQuery):
     # Тексты для разных страниц круток
     descriptions = {
         0: "Здесь вы можете приобрести крутки за валюту <b>Алмазы 💎</b>",
-        1: "Здесь вы можете приобрести крутки за валюту <b>BattleCoin 🪙</b>",
-        2: "Здесь вы можете приобрести крутки за валюту <b>KRW 💴</b>"
+        1: "Здесь вы можете приобрести крутки за валюту <b>KRW 💴</b>"
     }
     caption_text = descriptions.get(page, "Здесь вы можете приобрести крутки")
 

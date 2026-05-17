@@ -360,6 +360,7 @@ CARDS = {
 #====LIMITED CARDS=====
 "premium_card_1": {"name": "Лу Шень", "rarity": "Эпическая 🟢", "style": "Гибрид", "series": "Я прокачиваюсь во сне, убивая монстров", "speed": 80, "strength": 80, "intellect": 80, "file": "premium_card.jpeg", "exclusive": True},
 "exclusive_card_1": {"name": "Юк Сонджи и Джин Хобин", "rarity": "Легендарная 🔵", "style": "Дзюдо", "series": "Лукизм", "speed": 90, "strength": 90, "intellect": 85, "file": "exclusive_card_1.png", "exclusive": True},
+"excluzive_card_jaehwan": {"name": "Дже Хван", "rarity": "Мифическая 🔴", "style": "Выпад", "series": "Лукизм", "speed": 99, "strength": 100, "intellect": 100, "file": "excluzive_card_jaehwan.jpeg", "exclusive": True},
 }
 
 RARITIES = {
@@ -388,13 +389,15 @@ BGS = {
     "yamzaki_clan": {"name": "Клан Ямадзаки", "file": "yamzaki_clan.mp4", 'width': 1280, 'height': 720, "price": 8500},
 }
 VIDEO_BGS = {
+    "jaehwan": {"name": "Дже Хван", "file": "jae_hwan.mp4", 'width': 1280, 'height': 720, "price": 99999},
     "admin": {"name": "Ю Джунхёк и Ким Докча", "file": "admin.mp4", 'width': 1280, 'height': 720, "price": 99999},
     "yamzaki_clan": {"name": "Клан Ямадзаки", "file": "yamzaki_clan.mp4", 'width': 1280, 'height': 720, "price": 8500},
 }
 TITLES = {
     "title_pass_hero": "Герой Месяца 🏆",
     "kem": "Редактор Сценариев 👁️",
-    "title_dev": "Создатель ⚜️"
+    "title_dev": "Создатель ⚜️",
+    "title_pack": "Пронзающий судьбу 🩸",
 }
 
 NORMAL_PASS = {1:('krw',25), 2:('atm',5), 3:('bc',12), 4:('atm',2), 5:('pack','epic'), 6:('dia',5), 7:('krw',30), 8:('atm',3), 9:('krw',40), 10:('bc',10), 11:('atm',4), 12:('pack','epic'), 13:('krw',50), 14:('dia',2), 15:('krw',60), 16:('atm',5), 17:('bc',20), 18:('krw',70), 19:('pack','epic'), 20:('atm',3), 21:('krw',30), 22:('dia',3), 23:('krw',90), 24:('bc',10), 25:('pack','leg'), 26:('krw',100), 27:('atm',5), 28:('krw',25), 29:('dia',4), 30:('krw',50), 31:('atm',10)}
