@@ -16,6 +16,7 @@ from handlers import deck as _deck        # noqa: F401
 from handlers import battle as _battle    # noqa: F401
 from handlers.pass_shop import shop as _shop  # noqa: F401
 from handlers.user import cooldown_notification_scheduler, battle_cooldown_notification_scheduler
+from handlers.battle import auto_top_distributor
 
 # Импортируем токен из твоего файла config.py
 from config import BOT_TOKEN
@@ -39,6 +40,7 @@ async def main():
     # Запускаем фоновые планировщики уведомлений
     asyncio.create_task(cooldown_notification_scheduler(bot))
     asyncio.create_task(battle_cooldown_notification_scheduler(bot))
+    asyncio.create_task(auto_top_distributor(bot))
 
     print("Бот успешно запущен!")
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())

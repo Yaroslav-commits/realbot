@@ -27,7 +27,6 @@ from handlers import (router, TradeState, SettingsState, PromoState,
 from media_cache import send_cached_video
 import handlers as _handlers
 
-
 # ============ БОЕВКА ============
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
@@ -685,7 +684,11 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
     emoji1 = "👑" if is_premium(p1) else "🧩"
     emoji2 = "👑" if p2 != -1 and is_premium(p2) else "🧩"
 
-    txt1 = f"Противник найден!\n\n· Имя: {name2} {emoji2}\n· Ранг: {rank2}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+    prem1 = is_premium(p1)
+    pts1_txt = "0 очков" if friendly else f"{4 if prem1 else 3} очка"
+    bc1_txt = "3" if friendly else f"{10 if prem1 else 7}"
+
+    txt1 = f"Противник найден!\n\n· Имя: {name2} {emoji2}\n· Ранг: {rank2}\n· Награда: {pts1_txt}🏅, {bc1_txt} BattleCoin 🪙\n\nБитва начинается!"
 
     if p2 != -1:
         bg_key2 = u2[13] or 'default'
@@ -711,7 +714,10 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         await bot.send_message(p1, txt1, parse_mode="HTML")
 
     if p2 != -1:
-        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> {emoji1}\n· Ранг: {get_rank(u1[7])}\n· Награда: {'0 очков' if friendly else '3 очка'}🏅, 3 BattleCoin 🪙\n\nБитва начинается!"
+        prem2 = is_premium(p2)
+        pts2_txt = "0 очков" if friendly else f"{4 if prem2 else 3} очка"
+        bc2_txt = "3" if friendly else f"{10 if prem2 else 7}"
+        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> {emoji1}\n· Ранг: {get_rank(u1[7])}\n· Награда: {pts2_txt}🏅, {bc2_txt} BattleCoin 🪙\n\nБитва начинается!"
         bg_key1 = u1[13] or 'default'
         bg_data1 = BGS.get(bg_key1, BGS['default'])
         bg_file1 = FSInputFile(f"images/backgrounds/{bg_data1.get('file')}")
@@ -1090,15 +1096,15 @@ async def finish_game(gid, bot):
             pts = 0
             bc = 3 if is_win else 1
         else:
-            # Очки ранга: +1 за победу/ничью для Premium
-            pts = 3 if is_win else (1 if is_draw else -2)
-            if premium and (is_win or is_draw):
-                pts += 1
-
-            # BattleCoin: +2 к любой награде для Premium
-            bc = 3 if is_win else 1
-            if premium:
-                bc += 2
+            if is_win:
+                pts = 4 if premium else 3
+                bc = 10 if premium else 7
+            elif is_draw:
+                pts = 2 if premium else 1
+                bc = 3 if premium else 2
+            else:
+                pts = -1 if premium else -2
+                bc = 2 if premium else 1
 
         db_exec(f"UPDATE users SET rank_points = MAX(0, rank_points + {pts}), battlecoin = battlecoin + {bc}, " +
                 ("wins = wins + 1" if is_win else ("draws = draws + 1" if is_draw else "losses = losses + 1")) +
@@ -1718,3 +1724,82 @@ async def cmd_distribute_top(msg: Message, bot: Bot):
     count = await distribute_top_20_rewards(bot)
     await msg.answer(f"✅ Награды выданы {count} игрокам из ТОП-20!")
 
+async def distribute_all_top_rewards(bot: Bot):
+    """Распределяет награды и карты для ТОП 150 игроков по победам"""
+    top_users = db_exec("SELECT id, wins FROM users WHERE wins > 0 ORDER BY wins DESC LIMIT 150", fetchall=True)
+    count_curr, count_cards = 0, 0
+
+    for i, (uid, wins) in enumerate(top_users):
+        place = i + 1
+        dia, bc = 0, 0
+
+        # Награды в зависимости от места
+        if place == 1: dia, bc = 150, 2000
+        elif place == 2: dia, bc = 100, 1500
+        elif place == 3: dia, bc = 75, 1250
+        elif 4 <= place <= 10: dia, bc = 50, 750
+        elif 11 <= place <= 25: dia, bc = 10, 600
+        elif 26 <= place <= 75: dia, bc = 0, 400
+        elif 76 <= place <= 150: dia, bc = 0, 250
+        # Начисляем валюту
+        if dia > 0 or bc > 0:
+            db_exec("UPDATE users SET diamond = diamond + ?, battlecoin = battlecoin + ? WHERE id = ?", (dia, bc, uid))
+            count_curr += 1
+            try:
+                await bot.send_message(uid,
+                                       f"🏆 <b>Итоги сезона ТОПа!</b>\nВы заняли <b>{place}-е место</b> по победам!\n\nВаша награда: {dia} 💎, {bc} 🪙",
+                                       parse_mode="HTML")
+            except:
+                pass
+
+        # Выдаем карту за 1-20 место
+        if place <= 20:
+            exists = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, PACK_CARD), fetch=True)
+            if not exists:
+                give_card_to_user(uid, PACK_CARD)
+                count_cards += 1
+                try:
+                    c = CARDS[PACK_CARD]
+                    txt = f"🏆 <b>Поздравляем!</b>\nВы вошли в ТОП-20 по победам и получаете лимитированную карту!\n\n" + format_card_msg(
+                        c)
+                    await bot.send_photo(uid, photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt,
+                                         parse_mode="HTML")
+                except:
+                    pass
+
+    return count_curr, count_cards
+
+
+@router.message(Command("reset_top"))
+async def cmd_reset_top(msg: Message, bot: Bot):
+    """Команда для принудительного сброса ТОПа"""
+    if msg.from_user.id not in ADMIN_IDS: return
+    db_exec("UPDATE users SET wins = 0")
+    await msg.answer("✅ ТОП по победам был успешно сброшен! Начались новые битвы за места в ТОПЕ.")
+
+
+@router.message(Command("distribute_top"))
+async def cmd_distribute_top(msg: Message, bot: Bot):
+    """Команда для ручной выдачи наград за ТОП"""
+    if msg.from_user.id not in ADMIN_IDS: return
+    count_curr, count_cards = await distribute_all_top_rewards(bot)
+    await msg.answer(f"✅ Награды выданы! Игрокам выдано валют: {count_curr}, карт: {count_cards}.")
+
+
+async def auto_top_distributor(bot: Bot):
+    """Фоновая задача для автоматической выдачи 17-го числа"""
+    while True:
+        now = datetime.now()
+        # Проверяем, 17-е ли число и время 12:00
+        if now.day == 17 and now.hour == 12 and now.minute == 0:
+            month_str = now.strftime("%Y-%m")
+            already = db_exec("SELECT 1 FROM user_ranks_claims WHERE claim_date = ?", (f"top_reward_{month_str}",),
+                              fetch=True)
+
+            if not already:
+                await distribute_all_top_rewards(bot)
+                db_exec("INSERT INTO user_ranks_claims (user_id, claim_date) VALUES (?, ?)",
+                        (0, f"top_reward_{month_str}"))
+                db_exec("UPDATE users SET wins = 0")  # Автоматический сброс ТОПА после выдачи
+
+        await asyncio.sleep(60)
