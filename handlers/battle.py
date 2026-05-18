@@ -1488,12 +1488,12 @@ async def b_shop_pack_cb(cq: CallbackQuery):
         "🧪 Содержимое:\n"
         "<blockquote>🃏 Дже Хван 0.05%\n"
         "🌄 Клан Ямадзаки 0.5%\n"
-        "🌄 Дже Хван 2.5%\n"
-        "🔱 Пронзающий судьбу 2.5%\n"
-        "🔴 Мифическая карта 4.45%\n"
-        "🔵 Легендарная карта 90%</blockquote>\n\n"
+        "🌄 Дже Хван 3.5%\n"
+        "🔱 Пронзающий судьбу 3.5%\n"
+        "🔴 Мифическая карта 6.45%\n"
+        "🔵 Легендарная карта 85%</blockquote>\n\n"
         "🏆 Главный приз выдается автоматически за ТОП 20 по победам!\n\n"
-        "📅 Дата окончания пака: 17-го Июня 📆"
+        "📅 Дата окончания пака: 19-го Июня 📆"
     )
 
     bld = InlineKeyboardBuilder()
@@ -1538,7 +1538,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
 
     # Логика шансов
     rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
-    weights = [0.05, 0.5, 2.5, 2.5, 4.45, 90.0]
+    weights = [0.05, 0.5, 3.5, 3.5, 6.45, 85.0]
     result = random.choices(rewards, weights=weights, k=1)[0]
 
     reward_text = ""
