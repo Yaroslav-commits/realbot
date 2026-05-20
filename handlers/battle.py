@@ -1362,7 +1362,7 @@ async def b_top_wins_cb(cq: CallbackQuery):
     txt = "🏆 ТОП 10 по Победам:\n\n"
     for i, user in enumerate(top_users):
         emoji = "👑" if is_premium(user[0]) else "🧩"
-        txt += f"{i + 1}. {user[1]} {emoji} — {user[2]} 🎖\n"
+        txt += f"{i + 1}. <a href='tg://user?id={user[0]}'>{user[1]}</a> {emoji} — {user[2]} 🎖\n"
 
     txt += (
         "\nНаграды:\n"
@@ -1409,7 +1409,7 @@ async def b_top_rankpts_cb(cq: CallbackQuery):
     txt = "🏆 Топ пользователей по Рангам и Очкам\n\n"
     for i, user in enumerate(top_users):
         emoji = "👑" if is_premium(user[0]) else "🧩"
-        txt += f"{i + 1}. {user[1]} {emoji} - {user[2]}\n"
+        txt += f"{i + 1}. <a href='tg://user?id={user[0]}'>{user[1]}</a> {emoji} - {user[2]}\n"
 
     txt += (
         "\n🕓 Топ обновляется раз в сутки\n"
@@ -1547,7 +1547,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
 
     if result == "card_main":
         is_new, krw, card_c = give_card_to_user(uid, PACK_CARD)
-        reward_text = format_card_msg(card_c)
+        reward_text = format_card_msg(card_c, is_new, krw)
     elif result == "bg_yamazaki":
         db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG1))
         bg_key = PACK_BG1
@@ -1608,11 +1608,11 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
     elif result == "mythic":
         card_key = pull_random_card(force_rarity="Мифическая 🔴")
         is_new, krw, card_c = give_card_to_user(uid, card_key)
-        reward_text = format_card_msg(card_c)
+        reward_text = format_card_msg(card_c, is_new, krw)
     else:  # legendary
         card_key = pull_random_card(force_rarity="Легендарная 🔵")
         is_new, krw, card_c = give_card_to_user(uid, card_key)
-        reward_text = format_card_msg(card_c)
+        reward_text = format_card_msg(card_c, is_new, krw)
 
     # ЭФФЕКТ ГАЧИ: Отправляем с картинкой и спойлером, если выпала карта
     if not sent_media and card_c is not None and card_c.get("file"):
@@ -1645,10 +1645,15 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
     await b_shop_pack_cb(cq)
 
 
-def format_card_msg(c):
-    """Вспомогательная функция для формирования текста карты по твоему примеру"""
+def format_card_msg(c, is_new=True, krw=0):
+    """Вспомогательная функция для формирования текста карты"""
+    if is_new:
+        header = "🃏 <b>Получена новая боевая карта!</b>"
+    else:
+        header = f"🛑 Вам попалась повторная карта! Вы получаете {krw} 💴 KRW"
+
     return (
-        f"🃏 <b>Получена новая боевая карта!</b>\n\n"
+        f"{header}\n\n"
         f"🎴 <b>Персонаж:</b> {c['name']}\n"
         f"🔮 <b>Редкость:</b> {c['rarity']}\n"
         f"👊 <b>Стиль боя:</b> {c['style']}\n"
@@ -1657,7 +1662,6 @@ def format_card_msg(c):
         f"💪 <b>Сила:</b> {c['strength']}\n"
         f"🧠 <b>Интеллект:</b> {c['intellect']}"
     )
-
 
 @router.callback_query(F.data == "b_shop_spins")
 async def b_shop_spins_cb(cq: CallbackQuery):
@@ -1772,11 +1776,15 @@ async def distribute_all_top_rewards(bot: Bot):
 
 @router.message(Command("reset_top"))
 async def cmd_reset_top(msg: Message, bot: Bot):
-    """Команда для принудительного сброса ТОПа"""
+    """Команда для полного сброса боевого сезона (Победы, Поражения, Очки)"""
     if msg.from_user.id not in ADMIN_IDS: return
-    db_exec("UPDATE users SET wins = 0")
-    await msg.answer("✅ ТОП по победам был успешно сброшен! Начались новые битвы за места в ТОПЕ.")
 
+    # Сбрасываем всю боевую статистику
+    db_exec("UPDATE users SET wins = 0, losses = 0, draws = 0")
+
+    await msg.answer(
+        "🧨 <b>Сезон полностью сброшен!</b>\n\nВсе показатели (Победы, Поражения, Ничьи, Очки ранга) обнулены у всех игроков. Начинается новая битва за первенство! 🏆",
+        parse_mode="HTML")
 
 @router.message(Command("distribute_top"))
 async def cmd_distribute_top(msg: Message, bot: Bot):

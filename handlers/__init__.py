@@ -19,8 +19,7 @@ BATTLE_PAUSED = False
 def kb_main():
     kb = [
         [KeyboardButton(text="🎴 Получить карту"), KeyboardButton(text="⚔️ Поле битвы")],
-        [KeyboardButton(text="👤 Профиль"), KeyboardButton(text="🛍 Магазин")],
-        [KeyboardButton(text="🏞️ Пасс"), KeyboardButton(text="🧳 Мои карты")],
-        [KeyboardButton(text="⛩️ Банды")]
+        [KeyboardButton(text="👤 Профиль"), KeyboardButton(text="🛍 Магазин"), KeyboardButton(text="🏞️ Пасс")],
+        [KeyboardButton(text="🧳 Мои Карты"), KeyboardButton(text="⛩️ Банды")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)

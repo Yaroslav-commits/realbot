@@ -807,6 +807,144 @@ async def process_gift_answer(cq: CallbackQuery, bot: Bot):
             pass
 
         await cq.answer("Фон успешно получен!")
+
+
+@router.message(Command("card"))
+async def cmd_card_info(msg: types.Message):
+    # Разбиваем сообщение, чтобы получить название или ID карты
+    args = msg.text.split(maxsplit=1)
+    if len(args) < 2:
+        return await msg.answer("Введи название или ID карты, например: <code>/card Ким Гитэ</code>", parse_mode="HTML")
+
+    query = args[1].strip().lower()
+    card_id = None
+    card_data = None
+    exact_match = False
+
+    # Сначала ищем по ID (ключу), затем по названию (на точное совпадение)
+    if query in CARDS:
+        card_id = query
+        card_data = CARDS[query]
+        exact_match = True
+    else:
+        for cid, cdata in CARDS.items():
+            if cdata.get("name", "").lower() == query:
+                card_id = cid
+                card_data = cdata
+                exact_match = True
+                break
+
+    # Если точного совпадения нет — ищем частичные вхождения
+    if not exact_match:
+        partial_matches = []
+        for cid, cdata in CARDS.items():
+            if query in cdata.get("name", "").lower():
+                partial_matches.append((cid, cdata.get("name", "Неизвестно")))
+
+        # Если вообще ничего не нашли
+        if not partial_matches:
+            return await msg.answer(f"❌ Карта по запросу «{args[1]}» не найдена!")
+
+        # Формируем инлайн-кнопки с вариантами
+        builder = InlineKeyboardBuilder()
+        for cid, cname in partial_matches[:10]:  # Ограничиваем список до 10 кнопок, чтобы не спамить
+            # Ограничение callback_data - 64 байта
+            builder.button(text=f"{cname} 🃏", callback_data=f"c_inf:{cid}"[:64])
+        builder.adjust(1)  # По одной кнопке в ряд
+
+        return await msg.answer("Может вы имели ввиду кого-то из этих:", reply_markup=builder.as_markup())
+
+    # --- Если точное совпадение найдено, показываем карточку (как и раньше) ---
+    count_res = db_exec("SELECT COUNT(*) FROM cards_inv WHERE card_id = ?", (card_id,), fetch=True)
+    count = count_res[0] if count_res else 0
+
+    is_exclusive = "Лимитированная" if card_data.get("exclusive") else "Стандартная"
+
+    text = (
+        f"🃏 Боевая карта: {card_data.get('name', 'Неизвестно')}\n"
+        f"<blockquote>🔮 Редкость: {card_data.get('rarity', 'Неизвестно')}\n"
+        f"👊 Стиль боя: {card_data.get('style', 'Неизвестно')}\n"
+        f"🪐 Вселенная: {card_data.get('series', 'Неизвестно')}\n"
+        f"⚡️ Скорость: {card_data.get('speed', 0)}\n"
+        f"💪 Сила: {card_data.get('strength', 0)}\n"
+        f"🧠 Интеллект: {card_data.get('intellect', 0)}\n"
+        f"🧬 {is_exclusive}\n"
+        f"♻️ Количество карт в боте: {count}</blockquote>"
+    )
+    try:
+        if "video" in card_data:
+            from media_cache import send_cached_video
+            await send_cached_video(
+                msg.bot,
+                chat_id=msg.chat.id,
+                file_path=f"images/cards/{card_data['video']}",
+                caption=text,
+                width=card_data.get("width", 960),
+                height=card_data.get("height", 960),
+                parse_mode="HTML"
+            )
+        else:
+            from aiogram.types import FSInputFile
+            await msg.answer_photo(
+                photo=FSInputFile(f"images/cards/{card_data.get('file', 'default.png')}"),
+                caption=text,
+                parse_mode="HTML"
+            )
+    except Exception:
+        await msg.answer(text, parse_mode="HTML")
+
+
+# Новый обработчик для показа карты по клику из предложенных вариантов
+@router.callback_query(F.data.startswith("c_inf:"))
+async def cb_card_info(call: types.CallbackQuery):
+    card_id = call.data.split(":", 1)[1]
+    card_data = CARDS.get(card_id)
+
+    if not card_data:
+        return await call.answer("❌ Карта не найдена!", show_alert=True)
+
+    await call.message.delete()  # Убираем сообщение "Может вы имели ввиду..."
+
+    count_res = db_exec("SELECT COUNT(*) FROM cards_inv WHERE card_id = ?", (card_id,), fetch=True)
+    count = count_res[0] if count_res else 0
+
+    is_exclusive = "Лимитированная" if card_data.get("exclusive") else "Стандартная"
+
+    text = (
+        f"🃏 Боевая карта: {card_data.get('name', 'Неизвестно')}\n"
+        f"<blockquote>🔮 Редкость: {card_data.get('rarity', 'Неизвестно')}\n"
+        f"👊 Стиль боя: {card_data.get('style', 'Неизвестно')}\n"
+        f"🪐 Вселенная: {card_data.get('series', 'Неизвестно')}\n"
+        f"⚡️ Скорость: {card_data.get('speed', 0)}\n"
+        f"💪 Сила: {card_data.get('strength', 0)}\n"
+        f"🧠 Интеллект: {card_data.get('intellect', 0)}\n"
+        f"🧬 {is_exclusive}\n"
+        f"♻️ Количество карт в боте: {count}</blockquote>"
+    )
+
+    try:
+        if "video" in card_data:
+            from media_cache import send_cached_video
+            await send_cached_video(
+                call.bot,
+                chat_id=call.message.chat.id,
+                file_path=f"images/cards/{card_data['video']}",
+                caption=text,
+                width=card_data.get("width", 960),
+                height=card_data.get("height", 960),
+                parse_mode="HTML"
+            )
+        else:
+            from aiogram.types import FSInputFile
+            await call.message.answer_photo(
+                photo=FSInputFile(f"images/cards/{card_data.get('file', 'default.png')}"),
+                caption=text,
+                parse_mode="HTML"
+            )
+    except Exception:
+        await call.message.answer(text, parse_mode="HTML")
+
+    await call.answer()
 # ============ АДМИН И ПРОМО ============
 # ============ КОМАНДА РАССЫЛКИ (NOTIFER) ============
 
@@ -871,7 +1009,7 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if cmd == "/create_promo":
         await state.set_state(PromoState.waiting_for_promo_data)
         await msg.answer(
-            "Отправь данные промокода в формате:\n[КОД] [ТИП: krw/atm/card/dia/pass/prem] [ЗНАЧЕНИЕ] [КОЛ-ВО ИСПОЛЬЗОВАНИЙ]\n"
+            "Отправь данные промокода в формате:\n[КОД] [ТИП: krw/atm/card/dia/pass/prem/bc] [ЗНАЧЕНИЕ] [КОЛ-ВО ИСПОЛЬЗОВАНИЙ]\n"
             "Пример: LOOKISM krw 500 10\n"
             "Пример Premium: VDAY prem 7 10 (премиум на 7 дней, 10 активаций)\n\n"
             "Типы:\n"
@@ -880,6 +1018,7 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
             "• card — карта (ключ)\n"
             "• dia — алмазы 💎\n"
             "• pass — Рояль Пасс (значение любое, например 1)\n"
+            "• bc — BattleCoin\n"
             "• prem — Premium 👑 (значение = кол-во дней)")
         return
 
@@ -1115,8 +1254,8 @@ async def create_promo(msg: types.Message, state: FSMContext):
     if len(args) != 4:
         return await msg.answer("Неверный формат. Нужно: [КОД] [ТИП] [ЗНАЧЕНИЕ] [ИСПОЛЬЗОВАНИЙ]")
     p_type = args[1]
-    if p_type not in ('krw', 'atm', 'card', 'dia', 'pass', 'prem'):
-        return await msg.answer("Неверный тип. Допустимые: krw, atm, card, dia, pass, prem")
+    if p_type not in ('krw', 'atm', 'card', 'dia', 'pass', 'prem', 'bc'):
+        return await msg.answer("Неверный тип. Допустимые: krw, atm, card, dia, pass, prem, bc")
     if p_type == 'prem':
         try:
             if int(args[2]) <= 0:
@@ -1152,6 +1291,9 @@ async def use_promo(msg: types.Message):
     if p[0] == 'krw':
         db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (int(p[1]), uid))
         await msg.answer(f"✅ Промокод активирован! Вы получаете {p[1]}💴 KRW")
+    elif p[0] == 'bc':
+        db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (int(p[1]), uid))
+        await msg.answer(f"✅ Промокод активирован! Вы получаете {p[1]} 🪙 BattleCoin")
     elif p[0] == 'atm':
         db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (int(p[1]), uid))
         await msg.answer(f"✅ Промокод активирован! Вы получаете {p[1]} попыток 💳")
