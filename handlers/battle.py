@@ -5,6 +5,7 @@ import sqlite3
 import random
 import calendar
 from datetime import datetime, timedelta
+from html import escape
 
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
@@ -1687,9 +1688,9 @@ async def b_shop_spins_cb(cq: CallbackQuery):
     txt = "Здесь вы можете приобрести крутки за валюту <b>BattleCoin 🪙</b>"
 
     bld = InlineKeyboardBuilder()
-    bld.button(text="25 🪙 = 1 💳", callback_data="b_spin_buy:25:1")
-    bld.button(text="250 🪙 = 10 💳", callback_data="b_spin_buy:250:10")
-    bld.button(text="2500 🪙 = 110 💳", callback_data="b_spin_buy:2500:110")
+    bld.button(text="50 🪙 = 1 💳", callback_data="b_spin_buy:50:1")
+    bld.button(text="500 🪙 = 10 💳", callback_data="b_spin_buy:500:10")
+    bld.button(text="5000 🪙 = 110 💳", callback_data="b_spin_buy:5000:110")
     bld.button(text="Назад 🔙", callback_data="b_shop_main")
     bld.adjust(1)
 
@@ -1750,16 +1751,45 @@ def _clear_craft_slots(uid: int):
         (uid,)
     )
 
+def _card_stat_value(card: dict, key: str) -> int:
+    value = card.get(key, 0)
+    try:
+        return int(value if value is not None else 0)
+    except (TypeError, ValueError):
+        return 0
+
 def _craft_slots_text(slots: list) -> str:
-    """Красивый текст с отображением слотов."""
-    lines = []
-    for i, card_id in enumerate(slots):
+    """Красивый текст с отображением слотов и статов."""
+    text_lines = []
+    total_slots = len(slots)
+
+    for i, card_id in enumerate(slots, start=1):
+        if i == 1 and i == total_slots:
+            prefix = "•"
+        elif i == 1:
+            prefix = "┌"
+        elif i == total_slots:
+            prefix = "└"
+        else:
+            prefix = "├"
+
         if card_id and card_id in CARDS:
             c = CARDS[card_id]
-            lines.append(f"  [{i+1}] 🔵 {c['name']} — {c['rarity']}")
+            card_name = f"«{escape(str(c.get('name', card_id)))}»"
+            spd = _card_stat_value(c, "speed")
+            str_ = _card_stat_value(c, "strength")
+            int_ = _card_stat_value(c, "intellect")
         else:
-            lines.append(f"  [{i+1}] ⬜ пусто")
-    return "\n".join(lines)
+            card_name = "Пусто"
+            spd = str_ = int_ = 0
+
+        text_lines.append(f"{prefix} [{i}] {card_name}")
+
+        stat_prefix = "    " if i == total_slots else "│"
+        text_lines.append(f"{stat_prefix} ⚡️ {spd} │ 💪 {str_} │ 🧠 {int_}")
+
+    return "\n".join(text_lines)
+
 
 # ═══════════════════════════════════════════════════════════════
 # СТАВКИ 🎰
@@ -2001,7 +2031,7 @@ async def b_bet_play_cb(cq: CallbackQuery):
 
         # Lucky streak
         if streak > 0 and streak % 5 == 0:
-            bonus = 25
+            bonus = 75
             db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (bonus, uid))
             balance += bonus
             txt += f"\n🔥 Побед подряд: {streak}\n🎁 Бонус за серию: +{bonus} 🪙\n"
@@ -2163,9 +2193,13 @@ async def b_craft_add_card_cb(cq: CallbackQuery, state: FSMContext):
     await state.set_state(CraftState.choosing_slot)
 
     bld = InlineKeyboardBuilder()
-    for cid, c in legend_cards[:20]:     # макс 20 кнопок
+    for cid, c in legend_cards[:20]:  # макс 20 кнопок
+        spd = _card_stat_value(c, "speed")
+        str_ = _card_stat_value(c, "strength")
+        int_ = _card_stat_value(c, "intellect")
+
         bld.button(
-            text=f"🔵 {c['name']}",
+            text=f"🔵 {c.get('name', cid)} | ⚡️{spd} 💪{str_} 🧠{int_}",
             callback_data=f"b_craft_slot:{cid}"
         )
     bld.button(text="Отмена ✖️", callback_data="b_craft_reactor")
