@@ -39,9 +39,10 @@ class BattleState(StatesGroup):
 class CraftState(StatesGroup):
     waiting_for_item = State()
     confirm_craft = State()
+    choosing_slot = State()
 
 class DiamondExchangeState(StatesGroup):
-    waiting_for_amount = State()
+    entering_amount = State()
 
 def check_advantage(style1, style2):
     if style1 == style2: return 0
