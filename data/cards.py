@@ -500,25 +500,26 @@ CARDS = {
 "dong_ha_ping": {"name": "Дон Ха-Пин", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Легенда о северном клинке", "speed": 10, "strength": 10, "intellect": 15, "file": "dong_ha_ping.jpeg", "exclusive": False},
 "nam_sun_u": {"name": "Нам Сун-Ву", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Легенда о северном клинке", "speed": 11, "strength": 14, "intellect": 12, "file": "nam_sun_u.jpeg", "exclusive": False},
 #====LIMITED CARDS=====
+"yunsu": {"name": "Пак Юнсу", "rarity": "Эпическая 🟢", "style": "Пожирание памяти", "series": "Петля", "speed": 80, "strength": 80, "intellect": 80, "file": "yunsu.jpeg", "exclusive": True},
 "premium_card_1": {"name": "Лу Шень", "rarity": "Эпическая 🟢", "style": "Гибрид", "series": "Я прокачиваюсь во сне, убивая монстров", "speed": 80, "strength": 80, "intellect": 80, "file": "premium_card.jpeg", "exclusive": True},
 "exclusive_card_1": {"name": "Юк Сонджи и Джин Хобин", "rarity": "Легендарная 🔵", "style": "Дзюдо", "series": "Лукизм", "speed": 90, "strength": 90, "intellect": 85, "file": "exclusive_card_1.png", "exclusive": True},
 "excluzive_card_jaehwan": {"name": "Дже Хван", "rarity": "Мифическая 🔴", "style": "Выпад", "series": "Мир после падения", "speed": 99, "strength": 100, "intellect": 100, "file": "excluzive_card_jaehwan.jpeg", "exclusive": True},
 }
 
 RARITIES = {
-    "Обычная ⚪️": {"chance": 55.0, "dup": (1, 10)},
+    "Обычная ⚪️": {"chance": 54.8, "dup": (1, 10)},
     "Редкая 🟡": {"chance": 29.51, "dup": (11, 20)},
     "Эпическая 🟢": {"chance": 14.09, "dup": (25, 30)},
-    "Легендарная 🔵": {"chance": 1, "dup": (31, 50)},
+    "Легендарная 🔵": {"chance": 1.2, "dup": (31, 50)},
     "Мифическая 🔴": {"chance": 0.4, "dup": (40, 65)},
     "Божественная ⚫️": {"chance": 0, "dup": (800, 1100)}
 }
 PREMIUM_RARITIES = {
-    "Обычная ⚪️": {"chance": 54, "dup": (1, 10)},
+    "Обычная ⚪️": {"chance": 53.6, "dup": (1, 10)},
     "Редкая 🟡": {"chance": 29.5, "dup": (11, 20)},
     "Эпическая 🟢": {"chance": 14.1, "dup": (25, 30)},
-    "Легендарная 🔵": {"chance": 1.7, "dup": (31, 50)},
-    "Мифическая 🔴": {"chance": 0.7, "dup": (40, 65)},
+    "Легендарная 🔵": {"chance": 2, "dup": (31, 50)},
+    "Мифическая 🔴": {"chance": 0.8, "dup": (40, 65)},
     "Божественная ⚫️": {"chance": 0, "dup": (800, 1100)}
 }
 

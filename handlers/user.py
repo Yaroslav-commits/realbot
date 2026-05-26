@@ -5,7 +5,7 @@ import logging
 import sqlite3
 import random
 import calendar
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
@@ -1000,7 +1000,7 @@ async def process_broadcast(msg: types.Message, state: FSMContext, bot: Bot):
     )
 
 @router.message(
-    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "delete_diamond", "give_pass", "give_prem", "create_promo"]))
+    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "delete_diamond", "give_pass", "give_prem", "create_promo", "restore_pass_day"]))
 async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if msg.from_user.id not in ADMIN_IDS: return
     args = msg.text.split()
@@ -1032,10 +1032,92 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
             await bot.send_message(uid, f"🌠 Получен Рояль Пасс на этот месяц от администратора ✅{summary}")
         except Exception:
             pass
-        return await msg.answer(f"✅ Рояль Пасс выдан пользователю {uid}!")
+        return await msg.answer(f"✅ Рояль Пасс выдан пользователю {uid}!")  # ← вынести из except
 
-    if len(args) < 3:
-        return await msg.answer("Ошибка аргументов. Формат: /команда [ID] [значение/id_карты]")
+    if cmd == "/restore_pass_day":
+        # Формат: /restore_pass_day [ID] [normal/royale] [ДЕНЬ]
+        if len(args) < 4:
+            return await msg.answer(
+                "❌ Формат: /restore_pass_day [ID] [normal/royale] [ДЕНЬ]\n"
+                "Пример: /restore_pass_day 123456789 normal 5\n"
+                "Пример: /restore_pass_day 123456789 royale 12"
+            )
+        try:
+            uid = int(args[1])
+            p_type = args[2].lower()
+            day = int(args[3])
+        except ValueError:
+            return await msg.answer("❌ Некорректные аргументы. ID и ДЕНЬ должны быть числами.")
+
+        if p_type not in ("normal", "royale"):
+            return await msg.answer("❌ Тип пасса должен быть: normal или royale")
+
+        data = ROYALE_PASS if p_type == "royale" else NORMAL_PASS
+
+        if day not in data:
+            return await msg.answer(f"❌ День {day} не найден в {p_type} пассе.")
+
+        now_msk = datetime.now(timezone(timedelta(hours=3)))
+
+        # Проверяем, не забирал ли уже пользователь этот день
+        is_claimed = db_exec(
+            "SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = ?",
+            (uid, now_msk.month, day, p_type), fetch=True
+        )
+        if is_claimed:
+            return await msg.answer(
+                f"⚠️ Пользователь {uid} уже получил день {day} ({p_type} пасс) в этом месяце.\n"
+                f"Если нужно выдать повторно — удали запись вручную из pass_claims."
+            )
+
+        # Начисляем награду
+        r_type, r_val = data.get(day, ('krw', 10))
+        icon_map = {'krw': '💴', 'atm': '💳', 'bc': '🪙', 'dia': '💎', 'pack': '🗃️'}
+        if r_type == 'krw':
+            db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (r_val, uid))
+            reward_text = f"{r_val} {icon_map['krw']} KRW"
+        elif r_type == 'atm':
+            db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (r_val, uid))
+            reward_text = f"{r_val} {icon_map['atm']} попыток"
+        elif r_type == 'bc':
+            db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (r_val, uid))
+            reward_text = f"{r_val} {icon_map['bc']} BattleCoin"
+        elif r_type == 'dia':
+            db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (r_val, uid))
+            reward_text = f"{r_val} {icon_map['dia']} Алмазов"
+        elif r_type == 'pack':
+            card_key = pull_random_card(force_rarity="Легендарная 🔵" if r_val == "leg" else "Эпическая 🟢")
+            if not card_key:
+                card_key = pull_random_card()
+            give_card_to_user(uid, card_key)
+            reward_text = f"Пак {icon_map['pack']} ({r_val})"
+        else:
+            reward_text = str(r_val)
+
+        # Ставим отметку о получении
+        db_exec(
+            "INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
+            (uid, now_msk.month, day, p_type)
+        )
+
+        pass_name = "Рояль пасс 🌠" if p_type == "royale" else "Обычный пасс 🏙️"
+        try:
+            await bot.send_message(
+                uid,
+                f"🎁 Администратор восстановил день <b>{day}</b> вашего {pass_name}!\n"
+                f"Начислена награда: <b>{reward_text}</b> ✅",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+        return await msg.answer(
+            f"✅ День {day} ({p_type} пасс) восстановлен пользователю {uid}!\n"
+            f"Начислена награда: {reward_text}"
+        )
+
+        if len(args) < 3:
+            return await msg.answer("Ошибка аргументов. Формат: /команда [ID] [значение/id_карты]")
 
     uid, val = int(args[1]), args[2]
 

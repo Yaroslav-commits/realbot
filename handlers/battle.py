@@ -21,7 +21,8 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         NORMAL_PASS, ROYALE_PASS, is_divine)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
-                         pull_random_card, give_card_to_user, is_premium)
+                         pull_random_card, give_card_to_user, is_premium,
+                         stash_card, unstash_card, get_stash)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 from media_cache import send_cached_video
@@ -34,6 +35,13 @@ import asyncio
 
 class BattleState(StatesGroup):
     waiting_for_friend_id = State()
+
+class CraftState(StatesGroup):
+    waiting_for_item = State()
+    confirm_craft = State()
+
+class DiamondExchangeState(StatesGroup):
+    waiting_for_amount = State()
 
 def check_advantage(style1, style2):
     if style1 == style2: return 0
@@ -203,11 +211,10 @@ async def my_deck_menu(cq: CallbackQuery):
     bld.button(text="Посмотреть колоду 🃏", callback_data="view_deck")
     bld.button(text="Автосбор 🔁", callback_data="auto_deck")
     bld.button(text="Собрать колоду 🆕", callback_data="manual_deck_start")
+    bld.button(text="📦 Сундук", callback_data="stash_menu:0")
     bld.adjust(1)
 
     text = "🗂 Меню колоды:\nВыберите действие:"
-    # сообщение из «⚔️ Поле битвы» приходит как фото — edit_text на фото падает,
-    # из-за этого кнопка «Моя колода 🗂️» казалась неактивной. Делаем безопасно.
     try:
         await cq.message.edit_text(text, reply_markup=bld.as_markup())
     except Exception:
@@ -1444,10 +1451,14 @@ async def b_shop_main_cb(cq: CallbackQuery):
         "Есть особый пак, где шанс выпадения редких предметов повышен."
     )
     bld = InlineKeyboardBuilder()
-    bld.button(text="Боевой Пак 🗄️", callback_data="b_shop_pack")
-    bld.button(text="Крутки 🪙", callback_data="b_shop_spins")
-    bld.button(text="Назад 🔙", callback_data="b_menu_back")
-    bld.adjust(2, 1)
+    bld.button(text="Боевой Пак 🗄️",       callback_data="b_shop_pack")
+    bld.button(text="Крутки 🪙",            callback_data="b_shop_spins")
+    bld.button(text="Крафты 🧬",           callback_data="b_craft_menu")
+    bld.button(text="Ставки 🎰",           callback_data="b_bet_menu")
+    bld.button(text="Спин удачи 🍀",       callback_data="b_stub_luck")
+    bld.button(text="Обмен алмазов 💎",    callback_data="b_diamond_exchange")
+    bld.button(text="Назад 🔙",            callback_data="b_menu_back")
+    bld.adjust(1, 2, 2, 1, 1)
 
     try:
         await cq.message.delete()
@@ -1455,8 +1466,10 @@ async def b_shop_main_cb(cq: CallbackQuery):
         pass
 
     if os.path.exists("images/shop/battle_shop.png"):
-        await cq.message.answer_photo(photo=FSInputFile("images/shop/battle_shop.png"), caption=txt,
-                                      reply_markup=bld.as_markup())
+        await cq.message.answer_photo(
+            photo=FSInputFile("images/shop/battle_shop.png"),
+            caption=txt, reply_markup=bld.as_markup()
+        )
     else:
         await cq.message.answer(txt, reply_markup=bld.as_markup())
     await cq.answer()
@@ -1603,8 +1616,13 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         else:
             reward_text = f"🌄 Получен новый фон: <b>Дже Хван</b>!"
     elif result == "title":
-        db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, PACK_TITLE))
-        reward_text = f"🔱 Получен новый титул: <b>Пронзающий судьбу 🩸</b>!"
+        exists = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?", (uid, PACK_TITLE),
+                             fetch=True)
+        if exists:
+            reward_text = f"🔱 Вам выпал титул: <b>Пронзающий судьбу 🩸</b>, но, к сожалению, он у вас уже есть!"
+        else:
+            db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, PACK_TITLE))
+            reward_text = f"🔱 Получен новый титул: <b>Пронзающий судьбу 🩸</b>!"
     elif result == "mythic":
         card_key = pull_random_card(force_rarity="Мифическая 🔴")
         is_new, krw, card_c = give_card_to_user(uid, card_key)
@@ -1698,6 +1716,804 @@ async def b_spin_buy_cb(cq: CallbackQuery):
     db_exec("UPDATE users SET battlecoin = battlecoin - ?, attempts = attempts + ? WHERE id = ?", (cost, att, uid))
     await cq.answer(f"✅ Куплено {att} попыток!", show_alert=True)
     # === ДОБАВИТЬ В КОНЕЦ battle.py (ФУНКЦИЯ ДЛЯ ВЫДАЧИ ТОП-20) ===
+
+CRAFT_GIF_PATH   = "images/shop/craft_animation.mp4"   # путь к mp4 (Telegram сам покажет как GIF)
+CRAFT_GIF_WIDTH  = 960          # ширина анимации крафта
+CRAFT_GIF_HEIGHT = 480          # высота анимации крафта
+_CRAFT_GIF_FILE_ID: str | None = None   # кеш file_id анимации крафта (заполняется после первой отправки)
+CRAFT_REQUIRED  = 5          # легендарок нужно
+CRAFT_COIN_COST = 200        # монет нужно
+DIAMOND_RATE    = 6          # 1 💎 = ? 🪙
+DIAMOND_MIN     = 25         # минимум к обмену
+
+def _get_craft_slots(uid: int) -> list:
+    """Возвращает список из 5 card_id (или None) для пользователя."""
+    row = db_exec(
+        "SELECT slot1, slot2, slot3, slot4, slot5 FROM craft_slots WHERE user_id = ?",
+        (uid,), fetch=True
+    )
+    if not row:
+        db_exec("INSERT INTO craft_slots (user_id) VALUES (?)", (uid,))
+        return [None] * 5
+    return list(row)
+
+def _save_craft_slot(uid: int, slot_idx: int, card_id):
+    """Сохраняет card_id в нужный слот (slot_idx: 0-4)."""
+    col = f"slot{slot_idx + 1}"
+    _get_craft_slots(uid)  # гарантируем строку в БД
+    db_exec(f"UPDATE craft_slots SET {col} = ? WHERE user_id = ?", (card_id, uid))
+
+def _clear_craft_slots(uid: int):
+    db_exec(
+        "UPDATE craft_slots SET slot1=NULL, slot2=NULL, slot3=NULL, slot4=NULL, slot5=NULL WHERE user_id=?",
+        (uid,)
+    )
+
+def _craft_slots_text(slots: list) -> str:
+    """Красивый текст с отображением слотов."""
+    lines = []
+    for i, card_id in enumerate(slots):
+        if card_id and card_id in CARDS:
+            c = CARDS[card_id]
+            lines.append(f"  [{i+1}] 🔵 {c['name']} — {c['rarity']}")
+        else:
+            lines.append(f"  [{i+1}] ⬜ пусто")
+    return "\n".join(lines)
+
+# ═══════════════════════════════════════════════════════════════
+# СТАВКИ 🎰
+# ═══════════════════════════════════════════════════════════════
+
+BET_DEFAULT = 10
+BET_MIN = 5
+COINFLIP_STICKERS = {
+    "eagle": "CAACAgIAAxkBAAFKh1lqEzS9mRtqZYN_N7KbMzOXPiG6BgACqIMAAvaUyErsbrJIlVH9hzsE",   # 🗝️ ВСТАВЬ FILE_ID первого стикера (орёл)
+    "tails": "CAACAgIAAxkBAAFKh1hqEzS9gTamhA9QzEioKB4D82T1KQACl4cAAmkJ0UoCXcTupNR67DsE",   # 🗝️ ВСТАВЬ FILE_ID второго стикера (решка)
+}
+
+def _get_bet_data(uid: int) -> tuple:
+    """Возвращает (streak, bet) для игрока."""
+    row = db_exec(
+        "SELECT streak, bet FROM bets_streak WHERE user_id = ?",
+        (uid,), fetch=True
+    )
+    if not row:
+        db_exec("INSERT INTO bets_streak (user_id, streak, bet) VALUES (?, 0, ?)", (uid, BET_DEFAULT))
+        return 0, BET_DEFAULT
+    return row[0], row[1]
+def _save_bet(uid: int, streak: int, bet: int):
+    db_exec(
+        "UPDATE bets_streak SET streak = ?, bet = ? WHERE user_id = ?",
+        (streak, bet, uid)
+    )
+
+def _bet_keyboard(game: str = "") -> InlineKeyboardMarkup:
+    """Строит главное меню ставок с выделением выбранной игры."""
+    coin  = "🪙*" if game == "coin"   else "🪙"
+    dice  = "🎲*" if game == "dice"   else "🎲"
+    ball  = "⚽️*" if game == "ball"  else "⚽️"
+
+    bld = InlineKeyboardBuilder()
+    bld.row(
+        InlineKeyboardButton(text=coin, callback_data="b_bet_coin"),
+        InlineKeyboardButton(text=dice, callback_data="b_bet_dice"),
+        InlineKeyboardButton(text=ball, callback_data="b_bet_ball"),
+    )
+    if game == "coin":
+        bld.row(
+            InlineKeyboardButton(text="Орёл x2",  callback_data="b_bet_play:coin:eagle"),
+            InlineKeyboardButton(text="Решка x2", callback_data="b_bet_play:coin:tails"),
+        )
+    elif game == "dice":
+        bld.row(
+            InlineKeyboardButton(text="Чётное x2",   callback_data="b_bet_play:dice:even"),
+            InlineKeyboardButton(text="Нечётное x2", callback_data="b_bet_play:dice:odd"),
+        )
+    elif game == "ball":
+        bld.row(
+            InlineKeyboardButton(text="Гол x1.5",    callback_data="b_bet_play:ball:goal"),
+            InlineKeyboardButton(text="Промах x2",   callback_data="b_bet_play:ball:miss"),
+        )
+    bld.row(InlineKeyboardButton(text="✍️ Изменить Ставку", callback_data="b_bet_change"))
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="b_shop_main"))
+    return bld.as_markup()
+
+def _bet_result_keyboard(game: str, choice: str) -> InlineKeyboardMarkup:
+    bld = InlineKeyboardBuilder()
+    bld.row(
+        InlineKeyboardButton(text="Повторить",     callback_data=f"b_bet_play:{game}:{choice}"),
+        InlineKeyboardButton(text="Уменьшить",     callback_data="b_bet_half"),
+        InlineKeyboardButton(text="Удвоить",       callback_data="b_bet_double"),
+        InlineKeyboardButton(text="Назад к играм", callback_data="b_bet_menu"),
+    )
+    bld.adjust(2, 2)
+    return bld.as_markup()
+
+async def _show_bet_menu(cq: CallbackQuery, game: str = ""):
+    uid = cq.from_user.id
+    u = get_user(uid)
+    balance = u[5]  # battlecoin
+    _, bet = _get_bet_data(uid)
+
+    hot = "💥 Крупные выигрыши"
+    txt = (
+        f"🎰 Выберите игру\n\n"
+        f"Баланс — {balance} 🪙\n"
+        f"Ставка — {bet} 🪙\n\n"
+        f"{hot}"
+    )
+    try:
+        await cq.message.edit_text(txt, reply_markup=_bet_keyboard(game))
+    except Exception:
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+        await cq.message.answer(txt, reply_markup=_bet_keyboard(game))
+
+@router.callback_query(F.data == "b_bet_menu")
+async def b_bet_menu_cb(cq: CallbackQuery):
+    await _show_bet_menu(cq)
+    await cq.answer()
+
+@router.callback_query(F.data == "b_bet_coin")
+async def b_bet_coin_cb(cq: CallbackQuery):
+    await _show_bet_menu(cq, game="coin")
+    await cq.answer()
+
+@router.callback_query(F.data == "b_bet_dice")
+async def b_bet_dice_cb(cq: CallbackQuery):
+    await _show_bet_menu(cq, game="dice")
+    await cq.answer()
+
+@router.callback_query(F.data == "b_bet_ball")
+async def b_bet_ball_cb(cq: CallbackQuery):
+    await _show_bet_menu(cq, game="ball")
+    await cq.answer()
+
+
+@router.callback_query(F.data == "b_bet_double")
+async def b_bet_double_cb(cq: CallbackQuery):
+    uid = cq.from_user.id
+    streak, bet = _get_bet_data(uid)
+    _save_bet(uid, streak, bet * 2)
+    await cq.answer(f"Ставка удвоена: {bet * 2} 🪙", show_alert=False)
+@router.callback_query(F.data == "b_bet_half")
+async def b_bet_half_cb(cq: CallbackQuery):
+    uid = cq.from_user.id
+    streak, bet = _get_bet_data(uid)
+    new_bet = max(BET_MIN, bet // 2)
+    _save_bet(uid, streak, new_bet)
+    await cq.answer(f"Ставка уменьшена: {new_bet} 🪙", show_alert=False)
+
+class BetChangeState(StatesGroup):
+    waiting_for_bet = State()
+
+@router.callback_query(F.data == "b_bet_change")
+async def b_bet_change_cb(cq: CallbackQuery, state: FSMContext):
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Отмена", callback_data="b_bet_menu")
+    await cq.message.answer(
+        f"Введите новую ставку (минимум {BET_MIN} 🪙):",
+        reply_markup=bld.as_markup()
+    )
+    await state.set_state(BetChangeState.waiting_for_bet)
+    await cq.answer()
+
+@router.message(BetChangeState.waiting_for_bet)
+async def b_bet_change_msg(msg: types.Message, state: FSMContext):
+    if not msg.text or not msg.text.strip().isdigit():
+        return await msg.answer(f"Введите число (минимум {BET_MIN}).")
+    new_bet = int(msg.text.strip())
+    if new_bet < BET_MIN:
+        return await msg.answer(f"Минимальная ставка — {BET_MIN} 🪙.")
+    uid = msg.from_user.id
+    streak, _ = _get_bet_data(uid)
+    _save_bet(uid, streak, new_bet)
+    await state.clear()
+    await msg.answer(f"✅ Ставка установлена: {new_bet} 🪙")
+
+@router.callback_query(F.data.startswith("b_bet_play:"))
+async def b_bet_play_cb(cq: CallbackQuery):
+    _, game, choice = cq.data.split(":")
+    uid = cq.from_user.id
+    u   = get_user(uid)
+    balance = u[5]
+    streak, bet = _get_bet_data(uid)
+
+    if balance < bet:
+        return await cq.answer("❌ Недостаточно BattleCoin!", show_alert=True)
+
+    await cq.answer()
+
+    # ── Списываем ставку сразу ──
+    db_exec("UPDATE users SET battlecoin = battlecoin - ? WHERE id = ?", (bet, uid))
+    balance -= bet
+
+    win = False
+    result_val = None
+
+    # ── Анимация и логика ──
+    if game == "coin":
+        # Стикер из пака
+        sticker_id = COINFLIP_STICKERS["eagle"]  # орёл
+        try:
+            sticker_msg = await cq.bot.send_sticker(uid, sticker_id)
+        except Exception:
+            sticker_msg = None
+        await asyncio.sleep(1)
+        if sticker_msg:
+            try:
+                await sticker_msg.delete()
+            except Exception:
+                pass
+
+        result_val = random.choice(["eagle", "tails"])
+        win = (result_val == choice)
+        result_label = "Орёл" if result_val == "eagle" else "Решка"
+        choice_label = "Орёл" if choice == "eagle" else "Решка"
+
+    elif game == "dice":
+        dice_msg = await cq.bot.send_dice(uid, emoji="🎲")
+        await asyncio.sleep(4)
+        result_val = dice_msg.dice.value
+        is_even = (result_val % 2 == 0)
+        win = (choice == "even" and is_even) or (choice == "odd" and not is_even)
+        result_label = f"{result_val} ({'Чётное' if is_even else 'Нечётное'})"
+        choice_label = "Чётное" if choice == "even" else "Нечётное"
+
+    elif game == "ball":
+        ball_msg = await cq.bot.send_dice(uid, emoji="⚽️")
+        await asyncio.sleep(4)
+        result_val = ball_msg.dice.value
+        is_goal = result_val in [3, 4, 5]
+        win = (choice == "miss" and not is_goal) or (choice == "goal" and is_goal)
+        result_label = "Гол" if is_goal else "Промах"
+        choice_label = "Гол" if choice == "goal" else "Промах"
+
+    # ── Считаем выигрыш ──
+    if game == "ball" and win:
+        multiplier = 1.5
+    else:
+        multiplier = 2.0
+
+    if win:
+        prize = int(bet * multiplier)
+        db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (prize, uid))
+        balance += prize
+        streak += 1
+        _save_bet(uid, streak, bet)
+        # JACKPOT (1%)
+        jackpot_bonus = 0
+        if random.random() < 0.01:
+            jackpot_bonus = 100
+            db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (jackpot_bonus, uid))
+            balance += jackpot_bonus
+
+        net = prize - bet
+        txt = (
+            f"🎉 Выигрыш +{net} 🪙\n\n"
+            f"Выбрано: {choice_label}\n"
+        )
+        if jackpot_bonus:
+            txt += f"\n💎 JACKPOT!\nБонус: +{jackpot_bonus} 🪙\n"
+
+        # Lucky streak
+        if streak > 0 and streak % 5 == 0:
+            bonus = 25
+            db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (bonus, uid))
+            balance += bonus
+            txt += f"\n🔥 Побед подряд: {streak}\n🎁 Бонус за серию: +{bonus} 🪙\n"
+        elif streak > 1:
+            txt += f"\n🔥 Побед подряд: {streak}\n"
+
+    else:
+        streak = 0
+        _save_bet(uid, streak, bet)
+        txt = (
+            f"💔 Могло быть +{int(bet * multiplier) - bet} 🪙\n\n"
+            f"Выбрано: {choice_label}\n"
+        )
+
+    txt += (
+        f"\n<blockquote>"
+        f"Ставка: {bet} 🪙\n"
+        f"Баланс: {balance} 🪙"
+        f"</blockquote>"
+    )
+
+    await cq.message.answer(
+        txt,
+        reply_markup=_bet_result_keyboard(game, choice),
+        parse_mode="HTML"
+    )
+
+@router.callback_query(F.data == "b_stub_luck")
+async def b_stub_luck(cq: CallbackQuery):
+    await cq.answer("🍀 Спин удачи — скоро будет доступен!", show_alert=True)
+
+# КРАФТ-СИСТЕМА
+# ═══════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "b_craft_menu")
+async def b_craft_menu_cb(cq: CallbackQuery):
+    txt = (
+        "🧬 <b>Craft System</b>\n\n"
+        "Добро пожаловать в систему крафта.\n\n"
+        "Здесь доступны:\n"
+        "• 🧪 <b>Fusion Reactor</b> — создание Mythic-карт\n"
+        "• 🧩 <b>Переработка лишних карт</b>\n\n"
+        "⚠️ Некоторые крафты могут уничтожить материалы."
+    )
+    bld = InlineKeyboardBuilder()
+    bld.button(text="🧪 Fusion Reactor",  callback_data="b_craft_reactor")
+    bld.button(text="Назад 🔙",           callback_data="b_shop_main")
+    bld.adjust(1)
+
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    if os.path.exists("images/shop/battle_shop.png"):
+        await cq.message.answer_photo(
+            photo=FSInputFile("images/shop/battle_shop.png"),
+            caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML"
+        )
+    else:
+        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+
+@router.callback_query(F.data == "b_craft_corrupted")
+async def b_craft_corrupted_cb(cq: CallbackQuery):
+    await cq.answer("☠️ Corrupted Fusion — скоро будет доступен!", show_alert=True)
+
+
+# ─── Fusion Reactor — главный экран ──────────────────────────
+@router.callback_query(F.data == "b_craft_reactor")
+async def b_craft_reactor_cb(cq: CallbackQuery):
+    uid  = cq.from_user.id
+    slots = _get_craft_slots(uid)
+    filled = [s for s in slots if s is not None]
+    ready  = len(filled) == CRAFT_REQUIRED
+
+    status_line = "\n🧬 <b>Reactor готов к запуску...</b>" if ready else ""
+
+    txt = (
+        "🧪 <b>Fusion Reactor</b>\n\n"
+        "⚠️ Нестабильный синтез карт высокой редкости.\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "📦 <b>Требуется:</b>\n"
+        f"🔵 Легендарные x{CRAFT_REQUIRED}\n"
+        f"💸 {CRAFT_COIN_COST} 🪙\n\n"
+        "🎲 <b>Шансы:</b>\n"
+        "🔴 Мифическая 55%\n"
+        "🔵 Рандом Легендарная 35%\n"
+        "💥 Потеря материалов 8%\n\n"
+        "✨ Шанс Exclusive карты 2%\n"
+        "━━━━━━━━━━━━━━\n\n"
+        f"🃏 <b>Слоты ({len(filled)}/{CRAFT_REQUIRED}):</b>\n"
+        f"{_craft_slots_text(slots)}"
+        f"{status_line}"
+    )
+
+    bld = InlineKeyboardBuilder()
+    if ready:
+        bld.button(text="Крафтить 🧬",         callback_data="b_craft_do")
+    bld.button(text="Положить карты 🃏",     callback_data="b_craft_add_card")
+    bld.button(text="Очистить слоты 🗑️",     callback_data="b_craft_clear")
+    bld.button(text="Назад 🔙",              callback_data="b_craft_menu")
+    bld.adjust(1)
+
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    if os.path.exists("images/shop/craft.jpeg"):          # КЛЮЧ 🗝️ — вставь нужную картинку
+        await cq.message.answer_photo(
+            photo=FSInputFile("images/shop/craft.jpeg"),
+            caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML"
+        )
+    else:
+        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+
+# ─── Очистить слоты ───────────────────────────────────────────
+@router.callback_query(F.data == "b_craft_clear")
+async def b_craft_clear_cb(cq: CallbackQuery):
+    _clear_craft_slots(cq.from_user.id)
+    await cq.answer("🗑️ Слоты очищены!", show_alert=True)
+    await b_craft_reactor_cb(cq)
+
+
+# ─── Выбор карты для слота: показываем список легендарок ─────
+@router.callback_query(F.data == "b_craft_add_card")
+async def b_craft_add_card_cb(cq: CallbackQuery, state: FSMContext):
+    uid   = cq.from_user.id
+    slots = _get_craft_slots(uid)
+    in_slots = [s for s in slots if s is not None]
+
+    if len(in_slots) >= CRAFT_REQUIRED:
+        return await cq.answer("✅ Все слоты уже заполнены!", show_alert=True)
+
+    # Берём Легендарные карты пользователя, которых нет в слотах
+    all_cards = db_exec(
+        "SELECT card_id FROM cards_inv WHERE user_id = ?",
+        (uid,), fetchall=True
+    )
+    legend_cards = []
+    seen = set()
+    for (cid,) in all_cards:
+        if cid in seen:
+            continue
+        seen.add(cid)
+        c = CARDS.get(cid)
+        if c and "Легендарная" in c.get("rarity", "") and cid not in in_slots:
+            legend_cards.append((cid, c))
+
+    if not legend_cards:
+        return await cq.answer("❌ Нет доступных Легендарных карт!", show_alert=True)
+
+    # Сохраняем в FSM, какие карты доступны для выбора
+    await state.update_data(legend_cards=[cid for cid, _ in legend_cards])
+    await state.set_state(CraftState.choosing_slot)
+
+    bld = InlineKeyboardBuilder()
+    for cid, c in legend_cards[:20]:     # макс 20 кнопок
+        bld.button(
+            text=f"🔵 {c['name']}",
+            callback_data=f"b_craft_slot:{cid}"
+        )
+    bld.button(text="Отмена ✖️", callback_data="b_craft_reactor")
+    bld.adjust(1)
+
+    txt = (
+        "🃏 <b>Выбери карту для слота</b>\n\n"
+        "Отображаются только Легендарные карты,\n"
+        "которых ещё нет в Reactor."
+    )
+
+    try:
+        await cq.message.delete()
+    except:
+        pass
+    await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+
+# ─── Добавить карту в первый свободный слот ──────────────────
+@router.callback_query(F.data.startswith("b_craft_slot:"), CraftState.choosing_slot)
+async def b_craft_slot_cb(cq: CallbackQuery, state: FSMContext):
+    _, card_id = cq.data.split(":", 1)
+    uid   = cq.from_user.id
+    slots = _get_craft_slots(uid)
+
+    # Первый свободный слот
+    free_idx = next((i for i, s in enumerate(slots) if s is None), None)
+    if free_idx is None:
+        await cq.answer("✅ Все слоты заняты!", show_alert=True)
+        await state.clear()
+        return
+
+    _save_craft_slot(uid, free_idx, card_id)
+    c = CARDS.get(card_id, {})
+    await state.clear()
+    await cq.answer(f"✅ {c.get('name', card_id)} → Слот {free_idx + 1}", show_alert=True)
+
+    # Обновляем экран Reactor
+    await b_craft_reactor_cb(cq)
+
+
+# ─── КРАФТ — выполнение ──────────────────────────────────────
+EXCLUSIVE_CRAFT_CARD = "yunsu"   # 🗝️ ВСТАВЬ СЮДА card_id эксклюзивной карты (аналог PACK_CARD)
+
+@router.callback_query(F.data == "b_craft_do")
+async def b_craft_do_cb(cq: CallbackQuery):
+    uid   = cq.from_user.id
+    slots = _get_craft_slots(uid)
+    filled = [s for s in slots if s is not None]
+
+    if len(filled) < CRAFT_REQUIRED:
+        return await cq.answer("❌ Нужно заполнить все 5 слотов!", show_alert=True)
+
+    u = get_user(uid)
+    if u[5] < CRAFT_COIN_COST:
+        return await cq.answer(
+            f"❌ Недостаточно BattleCoin! Нужно: {CRAFT_COIN_COST} 🪙", show_alert=True
+        )
+
+    # Списание монет и удаление 5 карт из инвентаря
+    db_exec("UPDATE users SET battlecoin = battlecoin - ? WHERE id = ?", (CRAFT_COIN_COST, uid))
+    for cid in filled:
+        db_exec(
+            "DELETE FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1",
+            (uid, cid)
+        )
+    _clear_craft_slots(uid)
+
+    # Рулетка результата
+    outcomes  = ["exclusive", "mythic", "legendary", "loss"]
+    weights   = [1.2, 55.8, 35.0, 8.0]
+    result    = random.choices(outcomes, weights=weights, k=1)[0]
+
+    # --- Отправляем GIF-анимацию ---
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    global _CRAFT_GIF_FILE_ID
+    gif_msg = None
+    _craft_caption = "⚗️ <b>Реактор запущен...</b>\n\nСинтез идёт..."
+    try:
+        if _CRAFT_GIF_FILE_ID:
+            # отправляем по закешированному file_id — мгновенно, без загрузки файла
+            gif_msg = await cq.bot.send_animation(
+                uid,
+                animation=_CRAFT_GIF_FILE_ID,
+                caption=_craft_caption,
+                parse_mode="HTML",
+                width=CRAFT_GIF_WIDTH,
+                height=CRAFT_GIF_HEIGHT
+            )
+        elif os.path.exists(CRAFT_GIF_PATH):
+            # первая отправка: грузим mp4 с диска и сохраняем file_id
+            gif_msg = await cq.bot.send_animation(
+                uid,
+                animation=FSInputFile(CRAFT_GIF_PATH),
+                caption=_craft_caption,
+                parse_mode="HTML",
+                width=CRAFT_GIF_WIDTH,
+                height=CRAFT_GIF_HEIGHT
+            )
+            if gif_msg and gif_msg.animation:
+                _CRAFT_GIF_FILE_ID = gif_msg.animation.file_id
+                logging.info(f"[craft] cached animation file_id: {_CRAFT_GIF_FILE_ID}")
+        else:
+            gif_msg = await cq.bot.send_message(
+                uid,
+                "⚗️ <b>Реактор запущен...</b>\n\n🔄 Синтез идёт...",
+                parse_mode="HTML"
+            )
+    except Exception as e:
+        # если file_id протух (например, бот пересоздан) — сбрасываем кеш и шлём заново с диска
+        logging.exception(f"[craft] send_animation failed, resetting cache: {e}")
+        _CRAFT_GIF_FILE_ID = None
+        try:
+            if os.path.exists(CRAFT_GIF_PATH):
+                gif_msg = await cq.bot.send_animation(
+                    uid,
+                    animation=FSInputFile(CRAFT_GIF_PATH),
+                    caption=_craft_caption,
+                    parse_mode="HTML",
+                    width=CRAFT_GIF_WIDTH,
+                    height=CRAFT_GIF_HEIGHT
+                )
+                if gif_msg and gif_msg.animation:
+                    _CRAFT_GIF_FILE_ID = gif_msg.animation.file_id
+            else:
+                gif_msg = await cq.bot.send_message(
+                    uid, _craft_caption, parse_mode="HTML"
+                )
+        except Exception as e2:
+            logging.exception(f"[craft] fallback also failed: {e2}")
+            gif_msg = await cq.bot.send_message(
+                uid, _craft_caption, parse_mode="HTML"
+            )
+
+    await asyncio.sleep(8)   # держим ожидание
+
+    # --- Удаляем гифку ---
+    try:
+        await gif_msg.delete()
+    except:
+        pass
+
+    # --- Формируем результат ---
+    if result == "loss":
+        txt = (
+            "💥 <b>Реактор нестабилен!</b>\n\n"
+            "Синтез провалился — все материалы уничтожены.\n"
+            "Попробуй ещё раз."
+        )
+        await cq.bot.send_message(uid, txt, parse_mode="HTML")
+        await cq.answer()
+        return
+
+    card_c   = None
+    is_excl  = False
+
+    if result == "exclusive" and EXCLUSIVE_CRAFT_CARD and EXCLUSIVE_CRAFT_CARD in CARDS:
+        is_new, krw, card_c = give_card_to_user(uid, EXCLUSIVE_CRAFT_CARD)
+        is_excl = True
+    elif result == "mythic":
+        card_key = pull_random_card(force_rarity="Мифическая 🔴")
+        is_new, krw, card_c = give_card_to_user(uid, card_key)
+    else:  # legendary
+        card_key = pull_random_card(force_rarity="Легендарная 🔵")
+        is_new, krw, card_c = give_card_to_user(uid, card_key)
+
+    # Заголовок как в обычной гаче, с отличием для Exclusive
+    if is_excl:
+        header = "💫 <b>Получена новая лимитированная карта!</b>"
+    elif is_new:
+        header = "🃏 <b>Получена новая боевая карта!</b>"
+    else:
+        header = f"🛑 Вам попалась повторная карта! Вы получаете {krw} 💴 KRW"
+
+    reward_txt = (
+        f"{header}\n\n"
+        f"🎴 <b>Персонаж:</b> {card_c['name']}\n"
+        f"🔮 <b>Редкость:</b> {card_c['rarity']}\n"
+        f"👊 <b>Стиль боя:</b> {card_c['style']}\n"
+        f"🪐 <b>Вселенная:</b> {card_c.get('series', 'Неизвестно')}\n\n"
+        f"⚡️ <b>Скорость:</b> {card_c['speed']}\n"
+        f"💪 <b>Сила:</b> {card_c['strength']}\n"
+        f"🧠 <b>Интеллект:</b> {card_c['intellect']}"
+    )
+
+    # Отправляем карту как в гаче (со спойлером)
+    if card_c and card_c.get("file"):
+        try:
+            if "Божественная" in card_c.get("rarity", "") and card_c.get("video"):
+                await send_cached_video(
+                    cq.bot,
+                    chat_id=uid,
+                    file_path=f"images/cards/{card_c['video']}",
+                    caption=reward_txt,
+                    width=card_c.get("width", 960),
+                    height=card_c.get("height", 1280),
+                    has_spoiler=True,
+                    supports_streaming=True
+                )
+            else:
+                await cq.bot.send_photo(
+                    uid,
+                    photo=FSInputFile(f"images/cards/{card_c['file']}"),
+                    caption=reward_txt,
+                    has_spoiler=True,
+                    parse_mode="HTML"
+                )
+        except Exception:
+            await cq.bot.send_message(uid, reward_txt, parse_mode="HTML")
+    else:
+        await cq.bot.send_message(uid, reward_txt, parse_mode="HTML")
+
+    await cq.answer()
+
+
+# ═══════════════════════════════════════════════════════════════
+# ОБМЕН АЛМАЗОВ
+# ═══════════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "b_diamond_exchange")
+async def b_diamond_exchange_cb(cq: CallbackQuery, state: FSMContext):
+    u   = get_user(cq.from_user.id)
+    dia = u[3]  # колонка diamond
+
+    txt = (
+        "💎 <b>Обмен алмазов</b>\n\n"
+        "Здесь ты можешь обменять свои Алмазы 💎 на валюту нашего "
+        "магазина BattleShop и при этом БЕЗ комиссии %😆\n\n"
+        "<blockquote>Текущий курс: 1💎 = 7🪙</blockquote>\n"
+        f"Принимаем обмен от {DIAMOND_MIN} алмазов 💎\n"
+        f"Ваш баланс: <b>{dia} 💎</b>\n\n"
+        "Введите сумму которую хотите внести:"
+    )
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Назад 🔙", callback_data="b_shop_main")
+
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    if os.path.exists("images/shop/battle_shop.png"):
+        sent = await cq.message.answer_photo(
+            photo=FSInputFile("images/shop/battle_shop.png"),
+            caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML"
+        )
+    else:
+        sent = await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+
+    await state.set_state(DiamondExchangeState.entering_amount)
+    await state.update_data(prompt_msg_id=sent.message_id)
+    await cq.answer()
+
+
+@router.message(DiamondExchangeState.entering_amount)
+async def b_diamond_amount_msg(msg: types.Message, state: FSMContext):
+    uid = msg.from_user.id
+
+    if not msg.text or not msg.text.strip().isdigit():
+        return await msg.answer("❌ Введите целое число алмазов.")
+
+    amount = int(msg.text.strip())
+
+    if amount < DIAMOND_MIN:
+        return await msg.answer(
+            f"❌ Минимальная сумма для обмена — {DIAMOND_MIN} 💎"
+        )
+
+    u   = get_user(uid)
+    dia = u[3]
+
+    if dia < amount:
+        return await msg.answer(
+            f"❌ Недостаточно алмазов! У тебя: {dia} 💎"
+        )
+
+    coins = amount * 7   # 1 💎 = 7 🪙
+
+    await state.update_data(exchange_amount=amount, exchange_coins=coins)
+
+    confirm_txt = (
+        "⚠️ <b>Подтвердите детали обмена:</b>\n\n"
+        "Сумма для обмена:\n"
+        f"💎 {amount}\n\n"
+        "Вы получите:\n"
+        f"🪙 {coins}\n\n"
+        "Подтвердите продажу или отмените."
+    )
+
+    bld = InlineKeyboardBuilder()
+    # Telegram не поддерживает цвет кнопок, но добавим эмодзи для наглядности
+    bld.button(text="✅ Подтвердить", callback_data="b_dia_confirm")
+    bld.button(text="❌ Отмена",     callback_data="b_dia_cancel")
+    bld.adjust(2)
+
+    await msg.answer(confirm_txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+
+
+@router.callback_query(F.data == "b_dia_confirm", DiamondExchangeState.entering_amount)
+async def b_dia_confirm_cb(cq: CallbackQuery, state: FSMContext):
+    data   = await state.get_data()
+    amount = data.get("exchange_amount", 0)
+    coins  = data.get("exchange_coins",  0)
+    uid    = cq.from_user.id
+
+    u = get_user(uid)
+    if u[3] < amount:
+        await state.clear()
+        return await cq.answer("❌ Алмазов стало меньше, обмен отменён.", show_alert=True)
+
+    db_exec(
+        "UPDATE users SET diamond = diamond - ?, battlecoin = battlecoin + ? WHERE id = ?",
+        (amount, coins, uid)
+    )
+    db_exec(
+        "INSERT INTO diamond_exchange_log (user_id, diamonds, coins) VALUES (?, ?, ?)",
+        (uid, amount, coins)
+    )
+
+    await state.clear()
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    await cq.bot.send_message(
+        uid,
+        f"✅ <b>Обмен выполнен!</b>\n\n💎 -{amount} → 🪙 +{coins}\n\nПриятной игры!",
+        parse_mode="HTML"
+    )
+    await cq.answer()
+
+
+@router.callback_query(F.data == "b_dia_cancel")
+async def b_dia_cancel_cb(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
+    try:
+        await cq.message.delete()
+    except:
+        pass
+    await cq.answer("❌ Обмен отменён.", show_alert=True)
+    # Возвращаем в главное меню
+    await b_shop_main_cb(cq)
 
 async def distribute_top_20_rewards(bot: Bot):
     """
@@ -1811,3 +2627,184 @@ async def auto_top_distributor(bot: Bot):
                 db_exec("UPDATE users SET wins = 0")  # Автоматический сброс ТОПА после выдачи
 
         await asyncio.sleep(60)
+
+# ═══════════════════════════════════════════════════════════════
+# СУНДУК — отдельное хранилище карт
+# ═══════════════════════════════════════════════════════════════
+
+STASH_PAGE_SIZE = 8
+
+def _stash_menu_kb(uid: int, page: int = 0):
+    """Меню сундука: показывает что лежит, плюс кнопки."""
+    bld = InlineKeyboardBuilder()
+    bld.button(text="➕ Положить карту", callback_data="stash_put:0")
+    bld.button(text="📤 Забрать карту", callback_data=f"stash_take:{page}")
+    bld.button(text="Назад 🔙", callback_data="my_deck")
+    bld.adjust(1)
+    return bld.as_markup()
+
+@router.callback_query(F.data.startswith("stash_menu:"))
+async def stash_menu_cb(cq: CallbackQuery):
+    uid = cq.from_user.id
+    stash = get_stash(uid)
+    counts = {}
+    for cid in stash:
+        counts[cid] = counts.get(cid, 0) + 1
+
+    lines = [f"📦 <b>Ваш Сундук</b>\n",
+             f"Всего отложено карт: <b>{len(stash)}</b>\n"]
+    if counts:
+        for cid, n in counts.items():
+            c = CARDS.get(cid)
+            if c:
+                lines.append(f"• {c['name']} {c['rarity']} × {n}")
+            else:
+                lines.append(f"• {cid} × {n}")
+    else:
+        lines.append("<i>Сундук пуст.</i>")
+    lines.append("\n<blockquote>Карты в Сундуке НЕ участвуют в боях и автосборе колоды.</blockquote>")
+
+    text = "\n".join(lines)
+    try:
+        await cq.message.edit_text(text, reply_markup=_stash_menu_kb(uid, 0), parse_mode="HTML")
+    except Exception:
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+        await cq.message.answer(text, reply_markup=_stash_menu_kb(uid, 0), parse_mode="HTML")
+    await cq.answer()
+
+@router.callback_query(F.data.startswith("stash_put:"))
+async def stash_put_cb(cq: CallbackQuery):
+    """Показать список карт из инвентаря для перекладывания в сундук."""
+    page = int(cq.data.split(":")[1])
+    uid = cq.from_user.id
+
+    # Считаем уникальные карты инвентаря (с количеством)
+    rows = db_exec("SELECT card_id, COUNT(*) FROM cards_inv WHERE user_id = ? GROUP BY card_id",
+                   (uid,), fetchall=True)
+    if not rows:
+        return await cq.answer("В инвентаре нет карт.", show_alert=True)
+
+    # Сортируем по редкости (от слабых к сильным — удобно прятать дубли)
+    rarity_order = {"Обычная ⚪️": 1, "Редкая 🟡": 2, "Эпическая 🟢": 3,
+                    "Легендарная 🔵": 4, "Мифическая 🔴": 5, "Божественная ⚫️": 6}
+    items = []
+    for cid, cnt in rows:
+        c = CARDS.get(cid)
+        if not c:
+            continue
+        items.append((cid, c, cnt))
+    items.sort(key=lambda x: rarity_order.get(x[1].get('rarity'), 0))
+
+    total_pages = max(1, (len(items) + STASH_PAGE_SIZE - 1) // STASH_PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+    chunk = items[page * STASH_PAGE_SIZE:(page + 1) * STASH_PAGE_SIZE]
+
+    bld = InlineKeyboardBuilder()
+    for cid, c, cnt in chunk:
+        bld.button(text=f"{c['name']} ({c['rarity'].split()[-1]}) ×{cnt}",
+                   callback_data=f"stash_do_put:{cid}:{page}")
+    bld.adjust(1)
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"stash_put:{page-1}"))
+    nav.append(InlineKeyboardButton(text=f"{page+1}/{total_pages}", callback_data="ignore"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"stash_put:{page+1}"))
+    if nav:
+        bld.row(*nav)
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="stash_menu:0"))
+
+    try:
+        await cq.message.edit_text("🃏 Выберите карту, которую хотите положить в Сундук:",
+                                    reply_markup=bld.as_markup())
+    except Exception:
+        await cq.message.answer("🃏 Выберите карту, которую хотите положить в Сундук:",
+                                reply_markup=bld.as_markup())
+    await cq.answer()
+
+@router.callback_query(F.data.startswith("stash_do_put:"))
+async def stash_do_put_cb(cq: CallbackQuery):
+    _, cid, page = cq.data.split(":")
+    uid = cq.from_user.id
+
+    # Проверка: карта не должна быть в активной колоде
+    in_deck = db_exec("SELECT 1 FROM decks WHERE user_id = ? AND card_id = ?", (uid, cid), fetch=True)
+    if in_deck:
+        return await cq.answer("Эта карта стоит в активной колоде! Уберите её сначала.", show_alert=True)
+
+    ok = stash_card(uid, cid)
+    if not ok:
+        return await cq.answer("Карта не найдена в инвентаре.", show_alert=True)
+
+    c = CARDS.get(cid, {})
+    await cq.answer(f"📦 {c.get('name', cid)} → в Сундук", show_alert=False)
+    # Возвращаемся в меню "положить" с той же страницей
+    cq.data = f"stash_put:{page}"
+    await stash_put_cb(cq)
+
+@router.callback_query(F.data.startswith("stash_take:"))
+async def stash_take_cb(cq: CallbackQuery):
+    """Показать список карт из сундука для возврата в инвентарь."""
+    page = int(cq.data.split(":")[1])
+    uid = cq.from_user.id
+
+    stash = get_stash(uid)
+    if not stash:
+        return await cq.answer("Сундук пуст.", show_alert=True)
+
+    counts = {}
+    for cid in stash:
+        counts[cid] = counts.get(cid, 0) + 1
+    rarity_order = {"Обычная ⚪️": 1, "Редкая 🟡": 2, "Эпическая 🟢": 3,
+                    "Легендарная 🔵": 4, "Мифическая 🔴": 5, "Божественная ⚫️": 6}
+    items = []
+    for cid, cnt in counts.items():
+        c = CARDS.get(cid)
+        if not c:
+            continue
+        items.append((cid, c, cnt))
+    items.sort(key=lambda x: rarity_order.get(x[1].get('rarity'), 0), reverse=True)
+
+    total_pages = max(1, (len(items) + STASH_PAGE_SIZE - 1) // STASH_PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+    chunk = items[page * STASH_PAGE_SIZE:(page + 1) * STASH_PAGE_SIZE]
+
+    bld = InlineKeyboardBuilder()
+    for cid, c, cnt in chunk:
+        bld.button(text=f"{c['name']} ({c['rarity'].split()[-1]}) ×{cnt}",
+                   callback_data=f"stash_do_take:{cid}:{page}")
+    bld.adjust(1)
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"stash_take:{page-1}"))
+    nav.append(InlineKeyboardButton(text=f"{page+1}/{total_pages}", callback_data="ignore"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"stash_take:{page+1}"))
+    if nav:
+        bld.row(*nav)
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="stash_menu:0"))
+
+    try:
+        await cq.message.edit_text("📤 Выберите карту, которую хотите забрать из Сундука:",
+                                    reply_markup=bld.as_markup())
+    except Exception:
+        await cq.message.answer("📤 Выберите карту, которую хотите забрать из Сундука:",
+                                reply_markup=bld.as_markup())
+    await cq.answer()
+
+@router.callback_query(F.data.startswith("stash_do_take:"))
+async def stash_do_take_cb(cq: CallbackQuery):
+    _, cid, page = cq.data.split(":")
+    uid = cq.from_user.id
+    ok = unstash_card(uid, cid)
+    if not ok:
+        return await cq.answer("Карты нет в сундуке.", show_alert=True)
+    c = CARDS.get(cid, {})
+    await cq.answer(f"📤 {c.get('name', cid)} → в инвентарь", show_alert=False)
+    cq.data = f"stash_take:{page}"
+    await stash_take_cb(cq)

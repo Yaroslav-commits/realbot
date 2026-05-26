@@ -112,8 +112,8 @@
         "rarity": "Легендарная 🔵",
         "style": "Универсал",
         "series": "Борьба в прямом эфире",
-        "speed": 86,
-        "strength": 83,
+        "speed": 88,
+        "strength": 88,
         "intellect": 89,
         "file": "yu_hobin.jpeg",
         "exclusive": false,
@@ -660,13 +660,13 @@
         "id": "yu_hobin1"
     },
     {
-        "name": "Джихёк У",
+        "name": "У Джихёк",
         "rarity": "Обычная ⚪️",
         "style": "Отсутствует",
         "series": "Борьба в прямом эфире",
-        "speed": 14,
+        "speed": 20,
         "strength": 15,
-        "intellect": 18,
+        "intellect": 25,
         "file": "ji_hyeok_u.jpeg",
         "exclusive": false,
         "id": "ji_hyeok_u"

@@ -58,7 +58,54 @@ def init_db():
         rewarded INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now'))
     )''')
-    # Миграция: добавляем новые колонки, если их ещё нет (для существующих БД)
+    db_exec('''CREATE TABLE IF NOT EXISTS referrals (
+        referrer_id INTEGER,
+        referred_id INTEGER PRIMARY KEY,
+        rewarded INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+    )''')
+
+    # ========== ВСТАВИТЬ БЛОК 1 СЮДА ==========
+    db_exec('''CREATE TABLE IF NOT EXISTS craft_slots (
+        user_id   INTEGER PRIMARY KEY,
+        slot1     TEXT DEFAULT NULL,
+        slot2     TEXT DEFAULT NULL,
+        slot3     TEXT DEFAULT NULL,
+        slot4     TEXT DEFAULT NULL,
+        slot5     TEXT DEFAULT NULL
+    )''')
+
+    db_exec('''CREATE TABLE IF NOT EXISTS diamond_exchange_log (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id   INTEGER,
+        diamonds  INTEGER,
+        coins     INTEGER,
+        created_at TEXT DEFAULT (datetime('now'))
+    )''')
+    db_exec('''CREATE TABLE IF NOT EXISTS bets_streak (
+        user_id   INTEGER PRIMARY KEY,
+        streak    INTEGER DEFAULT 0,
+        bet       INTEGER DEFAULT 10
+    )''')
+    db_exec('''CREATE TABLE IF NOT EXISTS cards_stash (
+        user_id  INTEGER,
+        card_id  TEXT
+    )''')
+
+    # Миграция — добавить слоты, если таблицы уже были созданы ранее
+    for col, col_def in [
+        ('slot1', 'TEXT DEFAULT NULL'),
+        ('slot2', 'TEXT DEFAULT NULL'),
+        ('slot3', 'TEXT DEFAULT NULL'),
+        ('slot4', 'TEXT DEFAULT NULL'),
+        ('slot5', 'TEXT DEFAULT NULL'),
+    ]:
+        try:
+            db_exec(f"ALTER TABLE craft_slots ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+    # ==========================================
+        # Миграция: добавляем новые колонки, если их ещё нет (для существующих БД)
     for col, col_def in [
         ('notifications', 'INTEGER DEFAULT 1'),
         ('referral_code', 'TEXT'),
@@ -252,12 +299,46 @@ def get_rank(pts):
         if pts >= p:
             return n
 
+# ===== ВЕСА ВЫПАДЕНИЯ КАРТ ВНУТРИ РЕДКОСТИ =====
+# Чем сильнее карта, тем реже падает. Стат 100/99/90 — топ, режутся жёстче.
+def _card_pull_weight(card: dict) -> float:
+    """Вес карты для random.choices. Чем меньше — тем реже падает."""
+    # Божественные карты не подвержены штрафам за статы
+    if "Божественная" in card.get("rarity", ""):
+        return 1.0
+
+    spd = card.get('speed', 0)
+    strg = card.get('strength', 0)
+    intl = card.get('intellect', 0)
+    stats = (spd, strg, intl)
+    total = spd + strg + intl
+
+    weight = 1.0
+
+    if any(s == 100 for s in stats):
+        weight *= 0.10
+    elif any(s == 99 for s in stats):
+        weight *= 0.15
+    elif any(s == 90 for s in stats):
+        weight *= 0.25
+
+    if total >= 285:
+        weight *= 0.45
+    elif total >= 270:
+        weight *= 0.75
+
+    if weight < 0.02:
+        weight = 0.02
+    return weight
+
 def pull_random_card(force_rarity=None, premium=False):
     """Возвращает ключ случайной карты или None, если пул пуст.
-    Если premium=True — используется PREMIUM_RARITIES."""
+    Если premium=True — используется PREMIUM_RARITIES.
+    Внутри редкости карты с 100/99/90 в статах падают реже (взвешенный выбор)."""
     try:
         if force_rarity:
-            pool = [k for k, v in CARDS.items() if v.get('rarity') == force_rarity and not v.get('exclusive')]
+            pool = [(k, v) for k, v in CARDS.items()
+                    if v.get('rarity') == force_rarity and not v.get('exclusive')]
         else:
             rarities_dict = PREMIUM_RARITIES if premium else RARITIES
             total = sum(d.get('chance', 0) for d in rarities_dict.values())
@@ -269,12 +350,51 @@ def pull_random_card(force_rarity=None, premium=False):
                 if roll <= cum:
                     rolled_r = r
                     break
-            pool = [k for k, v in CARDS.items() if v.get('rarity') == rolled_r and not v.get('exclusive')]
+            pool = [(k, v) for k, v in CARDS.items()
+                    if v.get('rarity') == rolled_r and not v.get('exclusive')]
             if not pool:
-                pool = [k for k, v in CARDS.items() if not v.get('exclusive')]
-        return random.choice(pool) if pool else None
+                pool = [(k, v) for k, v in CARDS.items() if not v.get('exclusive')]
+
+        if not pool:
+            return None
+
+        keys = [k for k, _ in pool]
+        weights = [_card_pull_weight(v) for _, v in pool]
+        return random.choices(keys, weights=weights, k=1)[0]
     except Exception:
         return None
+
+# ===== СУНДУК (ОТЛОЖЕННЫЕ КАРТЫ) =====
+def stash_card(uid: int, card_key: str) -> bool:
+    """Перекладывает 1 экземпляр карты из инвентаря в сундук.
+    Возвращает True, если успешно."""
+    row = db_exec(
+        "SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1",
+        (uid, card_key), fetch=True
+    )
+    if not row:
+        return False
+    db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row[0],))
+    db_exec("INSERT INTO cards_stash (user_id, card_id) VALUES (?, ?)", (uid, card_key))
+    return True
+
+def unstash_card(uid: int, card_key: str) -> bool:
+    """Возвращает 1 экземпляр карты из сундука обратно в инвентарь."""
+    row = db_exec(
+        "SELECT rowid FROM cards_stash WHERE user_id = ? AND card_id = ? LIMIT 1",
+        (uid, card_key), fetch=True
+    )
+    if not row:
+        return False
+    db_exec("DELETE FROM cards_stash WHERE rowid = ?", (row[0],))
+    db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (uid, card_key))
+    return True
+
+def get_stash(uid: int):
+    """Возвращает список card_id из сундука пользователя."""
+    rows = db_exec("SELECT card_id FROM cards_stash WHERE user_id = ?", (uid,), fetchall=True)
+    return [r[0] for r in rows] if rows else []
+
 
 
 def give_card_to_user(uid, card_key):
