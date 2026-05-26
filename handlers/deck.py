@@ -31,7 +31,7 @@ from media_cache import send_cached_video
 # ============ ИНВЕНТАРЬ И ТРЕЙД ============
 RARITY_ORDER = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2, "Обычная ⚪️": 1}
 
-@router.message(F.text == "🧳 Мои карты")
+@router.message(F.text == "🧳 Мои Карты")
 async def my_cards(msg: types.Message):
     cards = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (msg.from_user.id,), fetchall=True)
     if not cards: return await msg.answer("У вас пока нет карт.")
