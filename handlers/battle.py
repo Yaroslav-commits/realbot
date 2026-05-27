@@ -1798,9 +1798,22 @@ def _craft_slots_text(slots: list) -> str:
 BET_DEFAULT = 10
 BET_MIN = 5
 COINFLIP_STICKERS = {
-    "eagle": "CAACAgIAAxkBAAFKh1lqEzS9mRtqZYN_N7KbMzOXPiG6BgACqIMAAvaUyErsbrJIlVH9hzsE",   # 🗝️ ВСТАВЬ FILE_ID первого стикера (орёл)
-    "tails": "CAACAgIAAxkBAAFKh1hqEzS9gTamhA9QzEioKB4D82T1KQACl4cAAmkJ0UoCXcTupNR67DsE",   # 🗝️ ВСТАВЬ FILE_ID второго стикера (решка)
+    "eagle": "CAACAgIAAxkBAAFKh1lqEzS9mRtqZYN_N7KbMzOXPiG6BgACqIMAAvaUyErsbrJIlVH9hzsE",
+    "tails": "CAACAgIAAxkBAAFKh1hqEzS9gTamhA9QzEioKB4D82T1KQACl4cAAmkJ0UoCXcTupNR67DsE",
 }
+BET_VALID_CHOICES = {
+    "coin": {"eagle", "tails"},
+    "dice": {"even", "odd"},
+    "ball": {"goal", "miss"},
+}
+BET_PLAY_LOCKS: dict[int, asyncio.Lock] = {}
+
+def _get_bet_lock(uid: int) -> asyncio.Lock:
+    lock = BET_PLAY_LOCKS.get(uid)
+    if lock is None:
+        lock = asyncio.Lock()
+        BET_PLAY_LOCKS[uid] = lock
+    return lock
 
 def _get_bet_data(uid: int) -> tuple:
     """Возвращает (streak, bet) для игрока."""
@@ -1812,6 +1825,7 @@ def _get_bet_data(uid: int) -> tuple:
         db_exec("INSERT INTO bets_streak (user_id, streak, bet) VALUES (?, 0, ?)", (uid, BET_DEFAULT))
         return 0, BET_DEFAULT
     return row[0], row[1]
+
 def _save_bet(uid: int, streak: int, bet: int):
     db_exec(
         "UPDATE bets_streak SET streak = ?, bet = ? WHERE user_id = ?",
@@ -1883,7 +1897,8 @@ async def _show_bet_menu(cq: CallbackQuery, game: str = ""):
         await cq.message.answer(txt, reply_markup=_bet_keyboard(game))
 
 @router.callback_query(F.data == "b_bet_menu")
-async def b_bet_menu_cb(cq: CallbackQuery):
+async def b_bet_menu_cb(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
     await _show_bet_menu(cq)
     await cq.answer()
 
@@ -1946,118 +1961,137 @@ async def b_bet_change_msg(msg: types.Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("b_bet_play:"))
 async def b_bet_play_cb(cq: CallbackQuery):
-    _, game, choice = cq.data.split(":")
+    try:
+        _, game, choice = cq.data.split(":", 2)
+    except ValueError:
+        return await cq.answer("❌ Некорректная ставка.", show_alert=True)
+
+    if choice not in BET_VALID_CHOICES.get(game, set()):
+        return await cq.answer("❌ Некорректная ставка.", show_alert=True)
+
     uid = cq.from_user.id
-    u   = get_user(uid)
-    balance = u[5]
-    streak, bet = _get_bet_data(uid)
+    lock = _get_bet_lock(uid)
 
-    if balance < bet:
-        return await cq.answer("❌ Недостаточно BattleCoin!", show_alert=True)
+    if lock.locked():
+        return await cq.answer("⏳ Предыдущая игра ещё не завершилась.", show_alert=False)
 
-    await cq.answer()
+    async with lock:
+        u = get_user(uid)
+        balance = u[5]
+        streak, bet = _get_bet_data(uid)
 
-    # ── Списываем ставку сразу ──
-    db_exec("UPDATE users SET battlecoin = battlecoin - ? WHERE id = ?", (bet, uid))
-    balance -= bet
+        if balance < bet:
+            return await cq.answer("❌ Недостаточно BattleCoin!", show_alert=True)
 
-    win = False
-    result_val = None
-
-    # ── Анимация и логика ──
-    if game == "coin":
-        # Стикер из пака
-        sticker_id = COINFLIP_STICKERS["eagle"]  # орёл
         try:
-            sticker_msg = await cq.bot.send_sticker(uid, sticker_id)
+            await cq.message.edit_reply_markup(reply_markup=None)
         except Exception:
-            sticker_msg = None
-        await asyncio.sleep(1)
-        if sticker_msg:
-            try:
-                await sticker_msg.delete()
-            except Exception:
-                pass
+            pass
 
-        result_val = random.choice(["eagle", "tails"])
-        win = (result_val == choice)
-        result_label = "Орёл" if result_val == "eagle" else "Решка"
-        choice_label = "Орёл" if choice == "eagle" else "Решка"
+        await cq.answer()
 
-    elif game == "dice":
-        dice_msg = await cq.bot.send_dice(uid, emoji="🎲")
-        await asyncio.sleep(4)
-        result_val = dice_msg.dice.value
-        is_even = (result_val % 2 == 0)
-        win = (choice == "even" and is_even) or (choice == "odd" and not is_even)
-        result_label = f"{result_val} ({'Чётное' if is_even else 'Нечётное'})"
-        choice_label = "Чётное" if choice == "even" else "Нечётное"
+        db_exec("UPDATE users SET battlecoin = battlecoin - ? WHERE id = ?", (bet, uid))
+        balance -= bet
 
-    elif game == "ball":
-        ball_msg = await cq.bot.send_dice(uid, emoji="⚽️")
-        await asyncio.sleep(4)
-        result_val = ball_msg.dice.value
-        is_goal = result_val in [3, 4, 5]
-        win = (choice == "miss" and not is_goal) or (choice == "goal" and is_goal)
-        result_label = "Гол" if is_goal else "Промах"
-        choice_label = "Гол" if choice == "goal" else "Промах"
+        win = False
+        result_val = None
+        result_label = "-"
+        choice_label = "-"
+        try:
+            if game == "coin":
+                result_val = random.choice(["eagle", "tails"])
+                win = (result_val == choice)
+                result_label = "Орёл" if result_val == "eagle" else "Решка"
+                choice_label = "Орёл" if choice == "eagle" else "Решка"
 
-    # ── Считаем выигрыш ──
-    if game == "ball" and win:
-        multiplier = 1.5
-    else:
-        multiplier = 2.0
+                sticker_id = COINFLIP_STICKERS.get(result_val)
+                if sticker_id:
+                    try:
+                        await cq.bot.send_sticker(uid, sticker_id)
+                    except Exception:
+                        pass
+                await asyncio.sleep(1)
 
-    if win:
-        prize = int(bet * multiplier)
-        db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (prize, uid))
-        balance += prize
-        streak += 1
-        _save_bet(uid, streak, bet)
-        # JACKPOT (1%)
-        jackpot_bonus = 0
-        if random.random() < 0.01:
-            jackpot_bonus = 100
-            db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (jackpot_bonus, uid))
-            balance += jackpot_bonus
+            elif game == "dice":
+                dice_msg = await cq.bot.send_dice(uid, emoji="🎲")
+                await asyncio.sleep(4)
+                result_val = dice_msg.dice.value
+                is_even = (result_val % 2 == 0)
+                win = (choice == "even" and is_even) or (choice == "odd" and not is_even)
+                result_label = f"{result_val} ({'Чётное' if is_even else 'Нечётное'})"
+                choice_label = "Чётное" if choice == "even" else "Нечётное"
 
-        net = prize - bet
-        txt = (
-            f"🎉 Выигрыш +{net} 🪙\n\n"
-            f"Выбрано: {choice_label}\n"
-        )
-        if jackpot_bonus:
-            txt += f"\n💎 JACKPOT!\nБонус: +{jackpot_bonus} 🪙\n"
+            elif game == "ball":
+                ball_msg = await cq.bot.send_dice(uid, emoji="⚽️")
+                await asyncio.sleep(4)
+                result_val = ball_msg.dice.value
+                is_goal = result_val in [3, 4, 5]
+                win = (choice == "miss" and not is_goal) or (choice == "goal" and is_goal)
+                result_label = "Гол" if is_goal else "Промах"
+                choice_label = "Гол" if choice == "goal" else "Промах"
 
-        # Lucky streak
-        if streak > 0 and streak % 5 == 0:
-            bonus = 75
-            db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (bonus, uid))
-            balance += bonus
-            txt += f"\n🔥 Побед подряд: {streak}\n🎁 Бонус за серию: +{bonus} 🪙\n"
-        elif streak > 1:
-            txt += f"\n🔥 Побед подряд: {streak}\n"
+            else:
+                db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (bet, uid))
+                return await cq.message.answer("❌ Неизвестная игра. Ставка возвращена.")
 
-    else:
-        streak = 0
-        _save_bet(uid, streak, bet)
-        txt = (
-            f"💔 Могло быть +{int(bet * multiplier) - bet} 🪙\n\n"
-            f"Выбрано: {choice_label}\n"
-        )
+        except Exception:
+            logging.exception("Ошибка в ставках: uid=%s game=%s choice=%s", uid, game, choice)
+            db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (bet, uid))
+            return await cq.message.answer("❌ Ошибка игры. Ставка возвращена.")
 
-    txt += (
-        f"\n<blockquote>"
-        f"Ставка: {bet} 🪙\n"
-        f"Баланс: {balance} 🪙"
-        f"</blockquote>"
-    )
+        multiplier = 1.5 if game == "ball" and win else 2.0
 
-    await cq.message.answer(
-        txt,
-        reply_markup=_bet_result_keyboard(game, choice),
-        parse_mode="HTML"
-    )
+        if win:
+            prize = int(bet * multiplier)
+            db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (prize, uid))
+            balance += prize
+            streak += 1
+            _save_bet(uid, streak, bet)
+
+            jackpot_bonus = 0
+            if random.random() < 0.01:
+                jackpot_bonus = 100
+                db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (jackpot_bonus, uid))
+                balance += jackpot_bonus
+
+            net = prize - bet
+            txt = (
+                f"🎉 Выигрыш +{net} 🪙\n\n"
+                f"Выбрано: {choice_label}\n"
+                f"Выпало: {result_label}\n"
+            )
+            if jackpot_bonus:
+                txt += f"\n💎 JACKPOT!\nБонус: +{jackpot_bonus} 🪙\n"
+
+            if streak > 0 and streak % 5 == 0:
+                bonus = 75
+                db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (bonus, uid))
+                balance += bonus
+                txt += f"\n🔥 Побед подряд: {streak}\n🎁 Бонус за серию: +{bonus} 🪙\n"
+            elif streak > 1:
+                txt += f"\n🔥 Побед подряд: {streak}\n"
+
+        else:
+            streak = 0
+            _save_bet(uid, streak, bet)
+            txt = (
+                f"💔 Могло быть +{int(bet * multiplier) - bet} 🪙\n\n"
+                f"Выбрано: {choice_label}\n"
+                f"Выпало: {result_label}\n"
+            )
+
+            txt += (
+                f"\n<blockquote>"
+                f"Ставка: {bet} 🪙\n"
+                f"Баланс: {balance} 🪙"
+                f"</blockquote>"
+            )
+
+            await cq.message.answer(
+                txt,
+                reply_markup=_bet_result_keyboard(game, choice),
+                parse_mode="HTML"
+            )
 
 @router.callback_query(F.data == "b_stub_luck")
 async def b_stub_luck(cq: CallbackQuery):
@@ -2440,7 +2474,7 @@ async def b_diamond_exchange_cb(cq: CallbackQuery, state: FSMContext):
     )
 
     bld = InlineKeyboardBuilder()
-    bld.button(text="Назад 🔙", callback_data="b_shop_main")
+    bld.button(text="Назад 🔙", callback_data="b_dia_back")
 
     try:
         await cq.message.delete()
@@ -2459,13 +2493,23 @@ async def b_diamond_exchange_cb(cq: CallbackQuery, state: FSMContext):
     await state.update_data(prompt_msg_id=sent.message_id)
     await cq.answer()
 
+@router.callback_query(F.data == "b_dia_back")
+async def b_dia_back_cb(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await b_shop_main_cb(cq)
+    await cq.answer()
 
 @router.message(DiamondExchangeState.entering_amount)
 async def b_diamond_amount_msg(msg: types.Message, state: FSMContext):
     uid = msg.from_user.id
 
     if not msg.text or not msg.text.strip().isdigit():
-        return await msg.answer("❌ Введите целое число алмазов.")
+        bld = InlineKeyboardBuilder()
+        bld.button(text="Отменить", callback_data="b_dia_cancel")
+        return await msg.answer(
+            "❌ Введите целое число алмазов для обмена или нажмите «Отменить».",
+            reply_markup=bld.as_markup()
+        )
 
     amount = int(msg.text.strip())
 
