@@ -2080,18 +2080,19 @@ async def b_bet_play_cb(cq: CallbackQuery):
                 f"Выпало: {result_label}\n"
             )
 
-            txt += (
-                f"\n<blockquote>"
-                f"Ставка: {bet} 🪙\n"
-                f"Баланс: {balance} 🪙"
-                f"</blockquote>"
-            )
+        # ── общая часть для победы и поражения ──
+        txt += (
+            f"\n<blockquote>"
+            f"Ставка: {bet} 🪙\n"
+            f"Баланс: {balance} 🪙"
+            f"</blockquote>"
+        )
 
-            await cq.message.answer(
-                txt,
-                reply_markup=_bet_result_keyboard(game, choice),
-                parse_mode="HTML"
-            )
+        await cq.message.answer(
+            txt,
+            reply_markup=_bet_result_keyboard(game, choice),
+            parse_mode="HTML"
+        )
 
 @router.callback_query(F.data == "b_stub_luck")
 async def b_stub_luck(cq: CallbackQuery):
