@@ -1,1 +1,7 @@
-aiogram===3.27.0
+aiogram>=3.27.0
+fastapi
+uvicorn
+jinja2
+aiofiles
+python-multipart
+sqlite3

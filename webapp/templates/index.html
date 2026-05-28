@@ -1,0 +1,72 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lookism Mini App</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* Стили из твоего index.html для карточек */
+        .site-header { padding: 22px 16px; text-align: center; border-bottom: 1px solid #2a1a4a; }
+        .logo-text { font-family: 'Rajdhani'; font-size: 30px; font-weight: 700; letter-spacing: 2px; background: linear-gradient(90deg, #a78bfa, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 15px; }
+        .card { background: var(--surface); border-radius: 15px; padding: 8px; border: 1px solid var(--border); }
+        .card img { width: 100%; border-radius: 10px; height: 180px; object-fit: cover; }
+        .stats { display: flex; justify-content: space-around; font-size: 11px; margin-top: 5px; }
+        .rarity { font-size: 10px; padding: 2px 8px; border-radius: 10px; margin: 5px 0; display: inline-block; }
+        .header-controls { padding: 10px 15px; display: flex; flex-direction: column; gap: 8px; }
+        input, select { background: var(--surface); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div id="catalog" class="tab-content active">
+        <div class="site-header"><div class="logo-text">LOOKISM CARDS</div></div>
+        <div class="header-controls">
+            <input type="text" id="searchInput" placeholder="Поиск персонажа..." oninput="updateCards()">
+            <select id="rarityFilter" onchange="updateCards()">
+                <option value="all">Все редкости</option>
+                <option value="Божественная">Божественная</option>
+                <option value="Мифическая">Мифическая</option>
+                <option value="Легендарная">Легендарная</option>
+            </select>
+        </div>
+        <div class="cards-grid" id="cardsContainer"></div>
+    </div>
+
+    <div id="profile" class="tab-content">
+        <div class="profile-container">
+            <div class="profile-card">
+                <div class="profile-avatar">👤</div>
+                <h2 id="prof-name">Загрузка...</h2>
+                <div id="prof-rank" style="color: var(--muted); margin-bottom: 15px;">Ранг</div>
+
+                <div class="currency-grid">
+                    <div class="currency-item"><small>Diamond</small><span class="currency-val" id="val-dia">0</span></div>
+                    <div class="currency-item"><small>KRW</small><span class="currency-val" id="val-krw">0</span></div>
+                    <div class="currency-item"><small>BattleCoin</small><span class="currency-val" id="val-bc">0</span></div>
+                </div>
+
+                <div style="margin-top: 20px; text-align: left; background: var(--bg); padding: 15px; border-radius: 12px;">
+                    <div>🏆 Побед: <span id="stat-wins">0</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <a href="#" class="nav-item active" onclick="switchTab('catalog', this)">
+            <span class="nav-icon">🃏</span>
+            <span>Каталог</span>
+        </a>
+        <a href="#" class="nav-item" onclick="switchTab('profile', this)">
+            <span class="nav-icon">👤</span>
+            <span>Профиль</span>
+        </a>
+    </nav>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

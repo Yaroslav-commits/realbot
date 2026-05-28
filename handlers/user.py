@@ -8,6 +8,7 @@ import calendar
 from datetime import datetime, timedelta, timezone
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
+                           ReplyKeyboardRemove,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            CallbackQuery, LabeledPrice, PreCheckoutQuery,
                            FSInputFile, Message)
@@ -65,7 +66,7 @@ async def start_cmd(msg: types.Message):
         if referrer:
             referred_by = referrer[0]
 
-    # Вызываем добавление пользователя и получаем сумму награды, если это был реферал
+    # Добавляем пользователя и получаем сумму награды, если это был реферал
     reward_amount = add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name, referred_by)
 
     # Если награда выдана, уведомляем владельца ссылки
@@ -78,13 +79,19 @@ async def start_cmd(msg: types.Message):
         except Exception:
             pass  # Если у владельца бот заблокирован
 
+    # В личке показываем reply-клавиатуру, в группах/чатах — убираем её
+    if msg.chat.type == "private":
+        markup = kb_main()
+    else:
+        markup = ReplyKeyboardRemove()
+
     await msg.answer(
         "🎴 Добро пожаловать в *ManhwCard*! 🎴\n\n"
         "Здесь ты сможешь собирать карты любимых персонажей, сражаться с другими игроками и обмениваться редкими картами 💥\n\n"
         "📢 [Канал](https://t.me/manhwcard)\n"
         "💬 [Чат](https://t.me/manhwcardchat)\n\n"
         "Выбирай действие ниже и начинай своё приключение 👇",
-        reply_markup=kb_main(),
+        reply_markup=markup,
         parse_mode="Markdown"
     )
 
@@ -945,6 +952,108 @@ async def cb_card_info(call: types.CallbackQuery):
         await call.message.answer(text, parse_mode="HTML")
 
     await call.answer()
+
+# ============ ФОНЫ (/fon) ============
+async def _send_bg_card(bot, chat_id, bg_id, bg_data):
+    """Отправляет карточку фона (фото или видео)."""
+    name = bg_data.get("name", bg_id)
+    file = bg_data.get("file")
+    text = (
+        f"🌄 Фон: {name}\n"
+    )
+    try:
+        if bg_id in VIDEO_BGS:
+            await send_cached_video(
+                bot,
+                chat_id=chat_id,
+                file_path=f"images/backgrounds/{file}",
+                caption=text,
+                width=bg_data.get("width", 1280),
+                height=bg_data.get("height", 720),
+                parse_mode="HTML",
+                supports_streaming=True
+            )
+        else:
+            await bot.send_photo(
+                chat_id,
+                photo=FSInputFile(f"images/backgrounds/{file}"),
+                caption=text,
+                parse_mode="HTML"
+            )
+    except Exception:
+        await bot.send_message(chat_id, text, parse_mode="HTML")
+
+    @router.message(Command("fon"))
+    async def cmd_fon_info(msg: types.Message):
+        args = msg.text.split(maxsplit=1)
+        if len(args) < 2:
+            return await msg.answer("Укажи название фона, пример: <code>/fon название</code>", parse_mode="HTML")
+
+        query = args[1].strip().lower()
+        bg_id = None
+        bg_data = None
+        exact_match = False
+
+        # Сначала ищем точное совпадение по ID, потом по имени
+        if query in BGS:
+            bg_id = query
+            bg_data = BGS[query]
+            exact_match = True
+        else:
+            for bid, bdata in BGS.items():
+                if bdata.get("name", "").lower() == query:
+                    bg_id = bid
+                    bg_data = bdata
+                    exact_match = True
+                    break
+
+        # Если точного нет — ищем частичные совпадения
+        if not exact_match:
+            partial_matches = []
+            for bid, bdata in BGS.items():
+                name = bdata.get("name", bid)
+                if query in name.lower() or query in bid.lower():
+                    partial_matches.append((bid, name))
+
+            if not partial_matches:
+                return await msg.answer(f"Фон по запросу «{args[1]}» не найден!")
+
+            builder = InlineKeyboardBuilder()
+            for bid, bname in partial_matches[:10]:
+                builder.button(text=f"{bname}", callback_data=f"f_inf:{bid}"[:64])
+            builder.adjust(1)
+            return await msg.answer("Найдено несколько фонов, выбери нужный:", reply_markup=builder.as_markup())
+
+        await _send_bg_card(msg.bot, msg.chat.id, bg_id, bg_data)
+
+    @router.callback_query(F.data.startswith("f_inf:"))
+    async def cb_fon_info(call: types.CallbackQuery):
+        bg_id = call.data.split(":", 1)[1]
+        bg_data = BGS.get(bg_id)
+
+        if not bg_data:
+            return await call.answer("Фон не найден!", show_alert=True)
+
+        await call.message.delete()
+        await _send_bg_card(call.bot, call.message.chat.id, bg_id, bg_data)
+        await call.answer()
+
+    # ============ PREMIUM (/premium) ============
+    @router.message(Command("premium"))
+    async def cmd_premium(msg: types.Message):
+        text = (
+            "<b>Преимущества Premium-подписки:</b>\n\n"
+            "🃏 Увеличенный лимит карт в коллекции;\n"
+            "🎁 Повышенный шанс выпадения редких карт;\n"
+            "⏱️ Сокращённый кулдаун получения карт;\n"
+            "💴 Больше валюты за ежедневные награды;\n"
+            "🛡️ Бонусы на Поле Битвы (PVP +1);\n"
+            "✨ Эксклюзивные рамки и фоны;\n"
+            "💳 Дополнительные кредиты каждый месяц;"
+        )
+        await msg.answer(text, parse_mode="HTML")
+
+
 # ============ АДМИН И ПРОМО ============
 # ============ КОМАНДА РАССЫЛКИ (NOTIFER) ============
 
