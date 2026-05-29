@@ -4767,6 +4767,18 @@
         "id": "nam_sun_u"
     },
     {
+        "name": "Пак Юнсу",
+        "rarity": "Эпическая 🟢",
+        "style": "Пожирание памяти",
+        "series": "Петля",
+        "speed": 80,
+        "strength": 80,
+        "intellect": 80,
+        "file": "yunsu.jpeg",
+        "exclusive": true,
+        "id": "yunsu"
+    },
+    {
         "name": "Лу Шень",
         "rarity": "Эпическая 🟢",
         "style": "Гибрид",
