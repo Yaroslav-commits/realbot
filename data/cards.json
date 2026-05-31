@@ -1,5 +1,17 @@
 [
     {
+        "name": "Ю Хобин",
+        "rarity": "Легендарная 🔵",
+        "style": "Универсал",
+        "series": "Борьба в прямом эфире",
+        "speed": 89,
+        "strength": 89,
+        "intellect": 90,
+        "file": "yu_hobin.jpeg",
+        "exclusive": false,
+        "id": "yu_hobin_pass"
+    },
+    {
         "name": "Самдак",
         "rarity": "Мифическая 🔴",
         "style": "Универсал",

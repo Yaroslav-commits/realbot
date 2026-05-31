@@ -3,7 +3,7 @@
 # ================== БАЗА ДАННЫХ ==================
 CARDS = {
 # =========== Борьба в эфире ХОВ ТУ ФАЙТ =====
-"yu_hobin_pass": {"name": "Ю Хобин", "rarity": "Легендарная 🔵", "style": "Универсал", "series": "Борьба в прямом эфире", "speed": 89, "strength": 89, "intellect": 90, "file": "yu_hobin.jpeg", "exclusive": False},
+"yu_hobin_pass": {"name": "Ю Хобин", "rarity": "Легендарная 🔵", "style": "Универсал", "series": "Борьба в прямом эфире", "speed": 89, "strength": 89, "intellect": 90, "file": "yu_hobin_pass.jpeg", "exclusive": True},
 "samdak": {"name": "Самдак", "rarity": "Мифическая 🔴", "style": "Универсал", "series": "Борьба в прямом эфире", "speed": 99, "strength": 99, "intellect": 99, "file": "samdak.jpeg", "exclusive": False},
 "seong_han_su": {"name": "Сон Хансу", "rarity": "Мифическая 🔴", "style": "Тхэквондо ITF и Кёкушинкай", "series": "Борьба в прямом эфире", "speed": 99, "strength": 99, "intellect": 98, "file": "seong_han_su.jpeg", "exclusive": False},
 "logan_gracie": {"name": "Логан Грейси", "rarity": "Мифическая 🔴", "style": "ММА",
