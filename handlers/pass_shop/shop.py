@@ -659,17 +659,17 @@ import calendar
 # Жесткая привязка к МСК (UTC+3)
 MSK = timezone(timedelta(hours=3))
 
-PASS_NORMAL_IMG_1 = FSInputFile("images/shop/pass_normal_1.jpeg")
-PASS_NORMAL_IMG_2 = FSInputFile("images/shop/pass_normal_2.jpeg")
-PASS_NORMAL_IMG_3 = FSInputFile("images/shop/pass_normal_3.jpeg")
-PASS_NORMAL_IMG_4 = FSInputFile("images/shop/pass_normal_4.jpeg")
-PASS_NORMAL_IMG_5 = FSInputFile("images/shop/pass_normal_5.jpeg")
+PASS_NORMAL_IMG_1 = FSInputFile("images/shop/pass_normal_1.jpg")
+PASS_NORMAL_IMG_2 = FSInputFile("images/shop/pass_normal_2.jpg")
+PASS_NORMAL_IMG_3 = FSInputFile("images/shop/pass_normal_3.jpg")
+PASS_NORMAL_IMG_4 = FSInputFile("images/shop/pass_normal_4.jpg")
+PASS_NORMAL_IMG_5 = FSInputFile("images/shop/pass_normal_5.jpg")
 
-PASS_ROYALE_IMG_1 = FSInputFile("images/shop/pass_royale_1.jpeg")
-PASS_ROYALE_IMG_2 = FSInputFile("images/shop/pass_royale_2.jpeg")
-PASS_ROYALE_IMG_3 = FSInputFile("images/shop/pass_royale_3.jpeg")
-PASS_ROYALE_IMG_4 = FSInputFile("images/shop/pass_royale_4.jpeg")
-PASS_ROYALE_IMG_5 = FSInputFile("images/shop/pass_royale_5.jpeg")
+PASS_ROYALE_IMG_1 = FSInputFile("images/shop/pass_royale_1.jpg")
+PASS_ROYALE_IMG_2 = FSInputFile("images/shop/pass_royale_2.jpg")
+PASS_ROYALE_IMG_3 = FSInputFile("images/shop/pass_royale_3.jpg")
+PASS_ROYALE_IMG_4 = FSInputFile("images/shop/pass_royale_4.jpg")
+PASS_ROYALE_IMG_5 = FSInputFile("images/shop/pass_royale_5.jpg")
 
 
 @router.message(F.text == "🏞️ Пасс")
@@ -724,12 +724,12 @@ async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, 
         try:
             await cq.message.edit_media(
                 media=types.InputMediaPhoto(media=PASS_ROYALE_IMG_1,
-                                            caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\nЛимитированная карта 🃏\n⚠️ Данный пасс у вас ещё не приобретен."),
+                                            caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\n🃏 Лимитированная карта: Ю Хобин\n⚠️ Данный пасс у вас ещё не приобретен."),
                 reply_markup=bld.as_markup()
             )
         except:
             await cq.message.answer_photo(photo=PASS_ROYALE_IMG_1,
-                                          caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\nЛимитированная карта 🃏\n⚠️ Данный пасс у вас ещё не приобретен.",
+                                          caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\n🃏 Лимитированная карта: Ю Хобин\n\n⚠️ Данный пасс у вас ещё не приобретен.",
                                           reply_markup=bld.as_markup())
         return
     data = ROYALE_PASS if is_royale else NORMAL_PASS
