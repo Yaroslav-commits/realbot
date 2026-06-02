@@ -20,6 +20,7 @@ def db_exec(query, params=(), fetch=False, fetchall=False):
         conn.commit()
 
 def init_db():
+    init_event_db()
     db_exec('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY, username TEXT, nickname TEXT,
         diamond INTEGER DEFAULT 0, krw INTEGER DEFAULT 0, battlecoin INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0,
@@ -487,3 +488,24 @@ def grant_retroactive_royale_pass(uid):
     if rewards_summary['packs']: lines.append(f"• {rewards_summary['packs']} 🗃️ Паков (карты добавлены в инвентарь)")
 
     return "\n\n🎁 Автоматически начислены награды за " + str(len(days_to_grant)) + " дн. (из обычного пасса):\n" + "\n".join(lines)
+
+# ================== ИВЕНТ (ЛЕГКО УДАЛИТЬ) ==================
+def init_event_db():
+    db_exec('''CREATE TABLE IF NOT EXISTS event_items (
+        user_id INTEGER PRIMARY KEY,
+        cocktail INTEGER DEFAULT 0,
+        icecream INTEGER DEFAULT 0,
+        dango INTEGER DEFAULT 0
+    )''')
+
+def get_event_items(uid):
+    res = db_exec("SELECT cocktail, icecream, dango FROM event_items WHERE user_id = ?", (uid,), fetch=True)
+    if not res:
+        db_exec("INSERT OR IGNORE INTO event_items (user_id) VALUES (?)", (uid,))
+        return 0, 0, 0
+    return res
+
+def add_event_item(uid, item_type, amount):
+    get_event_items(uid)
+    db_exec(f"UPDATE event_items SET {item_type} = {item_type} + ? WHERE user_id = ?", (amount, uid))
+# ==========================================================

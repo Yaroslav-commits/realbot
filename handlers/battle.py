@@ -1127,9 +1127,24 @@ async def finish_game(gid, bot):
     my_name = get_user(p1)[2]
     n2 = g['n2'] if p2 == -1 else get_user(p2)[2]
 
-    await bot.send_message(p1, f"Игра окончена!\nСчет: {my_name} {s1} - {s2} {n2}\nНаграда: {r1[0]}🏅, {r1[1]}🪙")
+    # === ИВЕНТ: НАГРАДА ЗА БОЙ ===
+    from database.db import add_event_item
+    cocktail_p1 = random.randint(3, 8)
+    add_event_item(p1, "cocktail", cocktail_p1)
+    ev_txt1 = f"\n🍹 Коктейль: +{cocktail_p1}"
+
+    ev_txt2 = ""
     if p2 != -1:
-        await bot.send_message(p2, f"Игра окончена!\nСчет: {n2} {s2} - {s1} {my_name}\nНаграда: {r2[0]}🏅, {r2[1]}🪙")
+        cocktail_p2 = random.randint(3, 8)
+        add_event_item(p2, "cocktail", cocktail_p2)
+        ev_txt2 = f"\n🍹 Коктейль: +{cocktail_p2}"
+    # =============================
+
+    await bot.send_message(p1,
+                           f"Игра окончена!\nСчет: {my_name} {s1} - {s2} {n2}\nНаграда: {r1[0]}🏅, {r1[1]}🪙{ev_txt1}")
+    if p2 != -1:
+        await bot.send_message(p2,
+                               f"Игра окончена!\nСчет: {n2} {s2} - {s1} {my_name}\nНаграда: {r2[0]}🏅, {r2[1]}🪙{ev_txt2}")
 
 
 # ============ ЗАЩИТА И БЛОКИРОВКА ВО ВРЕМЯ БОЯ ============

@@ -74,26 +74,19 @@ SHOP_BG_LIST = [
 VIDEO_BGS = {"yamzaki_clan", "admin, jaehwan"}
 
 # ====== ЕВЕНТ ======
-EVENT_ENABLED = False  # Поставь False, чтобы скрыть Евент и показывать "нет событий"
+EVENT_ENABLED = True  # Включаем ивент!
 EVENT_CARDS = {
-    1: {"key": "event_card_1", "price": 1000},  # Сон Джин Ву
-    2: {"key": "event_card_2", "price": 1000},  # Богиня судьбы
-    3: {"key": "event_card_3", "price": 1000},  # Санта Клаус
+    1: {"key": "ouen", "price": 195, "currency": "cocktail", "icon": "🍹", "name": "Оуэн"},
+    2: {"key": "jae_hyen", "price": 175, "currency": "icecream", "icon": "🍨", "name": "Джахён"},
+    3: {"key": "kaneshiro", "price": 170, "currency": "dango", "icon": "🍡", "name": "Канеширо"},
+    4: {"key": "yubin", "price": 150, "currency": "cocktail", "icon": "🍹", "name": "Юбин"},
+    5: {"key": "noa", "price": 150, "currency": "icecream", "icon": "🍨", "name": "Ноа"},
+    6: {"key": "hyek_kwon", "price": 125, "currency": "dango", "icon": "🍡", "name": "Хёк Квон"},
+    7: {"key": "joker", "price": 120, "currency": "icecream", "icon": "🍨", "name": "Джокер"},
+    8: {"key": "hannam", "price": 110, "currency": "cocktail", "icon": "🍹", "name": "Ханнам"},
+    9: {"key": "uin_yu", "price": 100, "currency": "cocktail", "icon": "🍹", "name": "Уин Ю"},
+    10: {"key": "shelly", "price": 90,  "currency": "dango",    "icon": "🍡", "name": "Шелли"},
 }
-# Если ключа ещё нет в CARDS — возьмётся имя отсюда
-EVENT_FALLBACK_NAMES = {
-    1: "Сон Джин Ву",
-    2: "Богиня судьбы",
-    3: "Санта Клаус",
-}
-
-def _event_card_name(idx):
-    info = EVENT_CARDS.get(idx)
-    if info:
-        c = CARDS.get(info["key"])
-        if c:
-            return c["name"]
-    return EVENT_FALLBACK_NAMES.get(idx, f"Карта {idx}")
 
 def _shop_main_kb():
     bld = InlineKeyboardBuilder()
@@ -102,7 +95,7 @@ def _shop_main_kb():
     bld.button(text="Крутки 🎴",        callback_data="shop:spins")
     bld.button(text="Фоны 🌄",          callback_data="shop:bgs:0")
     bld.button(text="Паки 🗃️",          callback_data="shop:packs")
-    bld.button(text="Евент 🤩",         callback_data="shop:event")
+    bld.button(text="Ивент 🪎",         callback_data="shop:event")
     bld.adjust(2)
     return bld.as_markup()
 
@@ -379,7 +372,7 @@ async def shop_bgs_cb(cq: CallbackQuery):
     # Формируем текст с названием, датой и цитатой цены
     caption = (
         f"🌄 Фон: {bg_data['name']}\n\n"
-        f"🗓️ До {item.get('date_str', '1-го Июня')}\n"
+        f"🗓️ До {item.get('date_str', '5-го Июня')}\n"
         f"<blockquote>💰 Цена: {item['price']}{item['icon']}</blockquote>"
     )
     # Навигация
@@ -554,24 +547,34 @@ async def back_to_packs(msg: types.Message):
 @router.callback_query(F.data == "shop:event")
 async def shop_event_cb(cq: CallbackQuery):
     if not EVENT_ENABLED:
-        return await cq.answer("В данный момент нету никаких событий", show_alert=True)
+        return await cq.answer("В данный момент нет активных событий", show_alert=True)
 
-    n1, n2, n3 = _event_card_name(1), _event_card_name(2), _event_card_name(3)
+    from database.db import get_event_items
+    cocktail, icecream, dango = get_event_items(cq.from_user.id)
 
     caption = (
-        f"🌅 Карточки текущего События.\n\n"
-        f"<blockquote>Карта 1: {n1}\n"
-        f"Карта 2: {n2}\n"
-        f"Карта 3: {n3}</blockquote>\n\n"
-        f"Здесь можно приобрести новые карточки"
+        f"🪎 <b>Летний Ивент!</b> 🪎\n\n"
+        f"Зарабатывайте ресурсы в боях и крутках, чтобы обменивать их на уникальные карты и попытки.\n\n"
+        f"<b>Ваши ресурсы:</b>\n"
+        f"🍹 Коктейль: <b>{cocktail}</b>\n"
+        f"🍨 Мороженое: <b>{icecream}</b>\n"
+        f"🍡 Данго: <b>{dango}</b>\n\n"
+        f"Выберите карту для покупки или обменяйте ресурсы на крутки (10 ресурсов = 1 💳):"
     )
-
     bld = InlineKeyboardBuilder()
-    bld.button(text="🎴 Купить Карту 1", callback_data="shop:event_buy:1")
-    bld.button(text="🎴 Купить Карту 2", callback_data="shop:event_buy:2")
-    bld.button(text="🎴 Купить Карту 3", callback_data="shop:event_buy:3")
-    bld.button(text="Назад 🔙",           callback_data="shop:main")
-    bld.adjust(1)
+    # Кнопки с картами
+    for idx, info in EVENT_CARDS.items():
+        bld.button(text=f"🎴 {info['name']} - {info['price']}{info['icon']}", callback_data=f"shop:event_buy:{idx}")
+
+    # Кнопки для покупки круток (3 варианта)
+    bld.button(text="1 💳 = 10 🍹", callback_data="shop:event_spin:cocktail")
+    bld.button(text="1 💳 = 10 🍨", callback_data="shop:event_spin:icecream")
+    bld.button(text="1 💳 = 10 🍡", callback_data="shop:event_spin:dango")
+
+    bld.button(text="Назад 🔙", callback_data="shop:main")
+
+    # Расставляем кнопки красиво: 4 ряда по 2 карты, 5-й ряд 1 карта, затем 3 кнопки круток, затем кнопка назад
+    bld.adjust(2, 2, 2, 2, 2, 3, 1)
 
     try:
         await cq.message.edit_media(
@@ -586,12 +589,41 @@ async def shop_event_cb(cq: CallbackQuery):
         await cq.message.answer_photo(
             photo=EVENT_IMG, caption=caption, reply_markup=bld.as_markup(), parse_mode="HTML"
         )
-    await cq.answer()
+    try:
+        await cq.answer()
+    except:
+        pass
+
+
+@router.callback_query(F.data.startswith("shop:event_spin:"))
+async def shop_event_spin_cb(cq: CallbackQuery):
+    if not EVENT_ENABLED:
+        return await cq.answer("Событие неактивно.", show_alert=True)
+
+    currency = cq.data.split(":")[2]
+    icon = "🍹" if currency == "cocktail" else ("🍨" if currency == "icecream" else "🍡")
+    price = 10
+
+    from database.db import get_event_items, db_exec
+    items = get_event_items(cq.from_user.id)
+    cur_idx = 0 if currency == "cocktail" else (1 if currency == "icecream" else 2)
+
+    if items[cur_idx] < price:
+        return await cq.answer(f"❌ Недостаточно {icon}! Нужно {price} {icon} для одной попытки.", show_alert=True)
+
+    # Списываем ресурсы и выдаем попытку
+    db_exec(f"UPDATE event_items SET {currency} = {currency} - ? WHERE user_id = ?", (price, cq.from_user.id))
+    db_exec("UPDATE users SET attempts = attempts + 1 WHERE id = ?", (cq.from_user.id,))
+
+    await cq.answer(f"✅ Вы купили 1 попытку 💳 за 10 {icon}!", show_alert=True)
+    # Обновляем меню ивента, чтобы цифры баланса поменялись сразу на глазах
+    await shop_event_cb(cq)
+
 
 @router.callback_query(F.data.startswith("shop:event_buy:"))
 async def shop_event_buy_cb(cq: CallbackQuery):
     if not EVENT_ENABLED:
-        return await cq.answer("В данный момент нету никаких событий", show_alert=True)
+        return await cq.answer("В данный момент нет активных событий", show_alert=True)
 
     idx = int(cq.data.split(":")[2])
     info = EVENT_CARDS.get(idx)
@@ -600,17 +632,28 @@ async def shop_event_buy_cb(cq: CallbackQuery):
 
     card_key = info["key"]
     price = info["price"]
+    currency = info["currency"]
+    icon = info["icon"]
+
+    from data.cards import CARDS
     if card_key not in CARDS:
-        return await cq.answer("❌ Карта ещё не добавлена в CARDS. Пропиши ключ в EVENT_CARDS.", show_alert=True)
+        return await cq.answer(f"❌ Карта «{info['name']}» ещё не добавлена в игру! Ожидайте обновления.",
+                               show_alert=True)
 
-    u = get_user(cq.from_user.id)
-    if u[3] < price:
-        return await cq.answer(f"❌ Недостаточно алмазов! Нужно: {price} 💎", show_alert=True)
+    from database.db import get_event_items, db_exec, give_card_to_user
+    items = get_event_items(cq.from_user.id)
+    cur_idx = 0 if currency == "cocktail" else (1 if currency == "icecream" else 2)
+    user_bal = items[cur_idx]
 
-    db_exec("UPDATE users SET diamond = diamond - ? WHERE id = ?", (price, cq.from_user.id))
+    if user_bal < price:
+        return await cq.answer(f"❌ Недостаточно ресурсов! Нужно: {price} {icon}", show_alert=True)
+    # Списываем ресурс
+    db_exec(f"UPDATE event_items SET {currency} = {currency} - ? WHERE user_id = ?", (price, cq.from_user.id))
+
     is_new, krw_earn, c = give_card_to_user(cq.from_user.id, card_key)
+
     if is_new:
-        txt = (f"🃏 Получена новая боевая карта!\n\n"
+        txt = (f"🃏 Получена новая лимитированная карта!\n\n"
                f"🎴 Персонаж: {c['name']}\n"
                f"🔮 Редкость: {c['rarity']}\n"
                f"👊 Стиль боя: {c['style']}\n"
@@ -628,8 +671,9 @@ async def shop_event_buy_cb(cq: CallbackQuery):
                f"💪 Сила: {c['strength']}\n"
                f"🧠 Интеллект: {c['intellect']}")
 
+    from aiogram.types import FSInputFile
     await cq.message.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True)
-    await cq.answer()
+    await cq.answer(f"✅ Вы успешно купили карту {c['name']}!", show_alert=True)
 
 # ===== Единая обработка оплат (алмазы через звёзды + Рояль пасс) =====
 @router.pre_checkout_query()

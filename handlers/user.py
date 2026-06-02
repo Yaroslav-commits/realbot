@@ -197,6 +197,18 @@ async def get_card_cmd(msg: types.Message):
                    f"<b>⚡️ Скорость:</b> {c['speed']}\n"
                    f"<b>💪 Сила:</b> {c['strength']}\n"
                    f"<b>🧠 Интеллект:</b> {c['intellect']}")
+            # === ИВЕНТ: НАГРАДА ЗА КРУТКУ ===
+        from database.db import add_event_item
+        ev_amount = random.randint(2, 6)
+        if random.choice([True, False]):
+            add_event_item(uid, "icecream", ev_amount)
+            txt += f"\n\n<b>🪎 Ивент:</b>\n🍨 Мороженое +{ev_amount}"
+        else:
+            add_event_item(uid, "dango", ev_amount)
+            txt += f"\n\n<b>🪎 Ивент:</b>\n🍡 Данго +{ev_amount}"
+        # ================================
+
+        # Божественные карты приходят видео, остальные — фото.
 
         # Божественные карты приходят видео, остальные — фото.
         try:
@@ -255,6 +267,17 @@ async def profile(msg: types.Message):
 
     user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
 
+    # === ИВЕНТ ===
+    from database.db import get_event_items
+    cocktail, icecream, dango = get_event_items(uid)
+    event_str = (
+        f"<b>🪎 Ивент:</b>\n"
+        f"🍹 Коктейль - {cocktail}\n"
+        f"🍨 Мороженое - {icecream}\n"
+        f"🍡 Данго - {dango}\n\n"
+    )
+    # =============
+
     txt = (
         f" {status_emoji} Профиль - {user_link}\n"
         f"━━━━━━━━━━━━━━━\n"
@@ -264,6 +287,7 @@ async def profile(msg: types.Message):
         f"┌ 💎 Diamond — {u[3]}\n"
         f'├ 💴 KRW — {u[4]}\n'
         f"└ 🪙 BattleCoin — {u[5]}\n\n"
+        f"{event_str}"
         f"<b>🎟 Попытки:</b>\n"
         f"└ 💳 {u[6]}\n\n"
         f"<b>🏆 Ранг:</b>\n"
@@ -365,6 +389,17 @@ async def cmd_profile(msg: types.Message):
     title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n" if u[14] and u[14] in TITLES else "\n"
     status_emoji = "👑" if is_premium(target_id) else "🧩"
     user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
+
+    # === ИВЕНТ ===
+    from database.db import get_event_items
+    cocktail, icecream, dango = get_event_items(target_id)
+    event_str = (
+        f"<b>🪎 Ивент:</b>\n"
+        f"🍹 Коктейль - {cocktail}\n"
+        f"🍨 Мороженое - {icecream}\n"
+        f"🍡 Данго - {dango}\n\n"
+    )
+    # =============
 
     if is_admin:
         # Полный профиль для админа
