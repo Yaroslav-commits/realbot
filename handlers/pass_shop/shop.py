@@ -37,7 +37,7 @@ PACK_LEG_IMG = FSInputFile("images/shop/pack_leg.jpeg")
 PACK_EPIC_IMG = FSInputFile("images/shop/pack_epic.jpeg")
 
 # Картинка Евента
-EVENT_IMG = FSInputFile("images/shop/event.png")
+EVENT_IMG = FSInputFile("images/shop/event.jpeg")
 
 # Наборы алмазов: (звёзды, алмазы)
 DIAMOND_PACKS = [
