@@ -3,6 +3,7 @@ import logging
 import os
 import sqlite3
 import uvicorn
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,10 +14,11 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN, DB_PATH
-# Добавили импорт функций для выдачи карт
+# Импорт функций для выдачи карт
 from database.db import init_db, is_premium, pull_random_card, give_card_to_user
 from handlers import router
 
+# Импорты хендлеров
 from handlers import user as _user  # noqa: F401
 from handlers import deck as _deck  # noqa: F401
 from handlers import battle as _battle  # noqa: F401
@@ -24,19 +26,11 @@ from handlers.pass_shop import shop as _shop  # noqa: F401
 from handlers.user import cooldown_notification_scheduler, battle_cooldown_notification_scheduler
 from handlers.battle import auto_top_distributor
 
-app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
+# Функция для БД (с защитой от зависания)
 def db_exec_sync(query, params=(), fetch=False, fetchall=False):
-    with sqlite3.connect(DB_PATH) as conn:
+    # Добавлен timeout=3.0, чтобы хостинг не отключал сервер из-за задержек SQLite
+    with sqlite3.connect(DB_PATH, timeout=3.0) as conn:
         c = conn.cursor()
         c.execute(query, params)
         if fetchall:
@@ -59,10 +53,68 @@ def migrate_daily():
 
 
 # ==========================================
-# 1. API ЕЖЕДНЕВНЫХ НАГРАД И ПРОФИЛЯ
+# ЗАПУСК БОТА (aiogram)
+# ==========================================
+async def start_bot():
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    dp = Dispatcher()
+    dp.include_router(router)
+
+    WEBAPP_URL = "https://yaroslav-commits.github.io/cards-catalog-manhw/"
+
+    await bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(text="🃏 Каталог", web_app=WebAppInfo(url=WEBAPP_URL))
+    )
+
+    await bot.delete_webhook(drop_pending_updates=True)
+
+    asyncio.create_task(cooldown_notification_scheduler(bot))
+    asyncio.create_task(battle_cooldown_notification_scheduler(bot))
+    asyncio.create_task(auto_top_distributor(bot))
+
+    print("Бот успешно запущен в фоновом режиме!")
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+
+
+# ==========================================
+# НОВЫЙ МЕТОД ЗАПУСКА СЕРВЕРА (Lifespan)
+# ==========================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # То, что происходит ПРИ СТАРТЕ сервера
+    init_db()
+    migrate_daily()
+    bot_task = asyncio.create_task(start_bot())
+
+    yield  # Сервер работает и принимает запросы
+
+    # То, что происходит ПРИ ВЫКЛЮЧЕНИИ сервера
+    bot_task.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ==========================================
+# КОРНЕВОЙ МАРШРУТ (ДЛЯ ПРОВЕРКИ ХОСТИНГА BOTHOST)
+# ==========================================
+@app.get("/")
+async def healthcheck():
+    return {"status": "ok", "message": "ManhwCard Server is running perfectly"}
+
+
+# ==========================================
+# API ЕЖЕДНЕВНЫХ НАГРАД И ПРОФИЛЯ
 # ==========================================
 
-# Словарь всех 30 наград
 DAILY_REWARDS = {
     1: {'krw': 200}, 2: {'krw': 300}, 3: {'krw': 350}, 4: {'krw': 350},
     5: {'krw': 400}, 6: {'krw': 400}, 7: {'pack': 'leg'}, 8: {'krw': 450},
@@ -79,7 +131,6 @@ DAILY_REWARDS = {
 
 @app.get("/api/profile/{user_id}")
 async def get_profile(user_id: int):
-    # Теперь достаем еще и информацию о ежедневках
     user = db_exec_sync(
         "SELECT diamond, krw, battlecoin, daily_day, last_daily_claim FROM users WHERE id = ?",
         (user_id,), fetch=True
@@ -91,7 +142,6 @@ async def get_profile(user_id: int):
     cards_rows = db_exec_sync("SELECT card_id FROM cards_inv WHERE user_id = ?", (user_id,), fetchall=True)
     owned_cards = [row[0] for row in cards_rows] if cards_rows else []
 
-    # Проверяем, можно ли забрать бонус сегодня (Время по МСК)
     now_msk = datetime.now(timezone(timedelta(hours=3)))
     today_str = now_msk.strftime("%Y-%m-%d")
     last_claim_date = user[4].split(" ")[0] if user[4] else '2000-01-01'
@@ -123,11 +173,10 @@ async def claim_daily(user_id: int):
 
     current_day = (user[0] or 0) + 1
     if current_day > 30:
-        current_day = 1  # После 30-го дня счетчик обнуляется
+        current_day = 1
 
     reward = DAILY_REWARDS.get(current_day, {'krw': 200})
 
-    # Начисляем награды
     if 'krw' in reward:
         db_exec_sync("UPDATE users SET krw = krw + ? WHERE id = ?", (reward['krw'], user_id))
     if 'dia' in reward:
@@ -141,7 +190,6 @@ async def claim_daily(user_id: int):
         if card_key:
             give_card_to_user(user_id, card_key)
 
-    # Записываем, что юзер забрал награду сегодня
     db_exec_sync("UPDATE users SET daily_day = ?, last_daily_claim = ? WHERE id = ?",
                  (current_day, today_str, user_id))
 
@@ -160,40 +208,6 @@ async def get_card_count(card_id: str):
     res = db_exec_sync("SELECT COUNT(*) FROM cards_inv WHERE card_id = ?", (card_id,), fetch=True)
     count = res[0] if res else 0
     return {"card_id": card_id, "count": count}
-
-
-# ==========================================
-# 2. НАСТРОЙКА И ЗАПУСК БОТА (aiogram)
-# ==========================================
-async def start_bot():
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher()
-    dp.include_router(router)
-
-    WEBAPP_URL = "https://yaroslav-commits.github.io/cards-catalog-manhw/"
-
-    await bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(text="🃏 Каталог", web_app=WebAppInfo(url=WEBAPP_URL))
-    )
-
-    await bot.delete_webhook(drop_pending_updates=True)
-
-    asyncio.create_task(cooldown_notification_scheduler(bot))
-    asyncio.create_task(battle_cooldown_notification_scheduler(bot))
-    asyncio.create_task(auto_top_distributor(bot))
-
-    print("Бот успешно запущен в фоновом режиме!")
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
-
-
-# ==========================================
-# 3. ОБЪЕДИНЕНИЕ ЗАПУСКА БОТА И СЕРВЕРА
-# ==========================================
-@app.on_event("startup")
-async def on_startup():
-    init_db()
-    migrate_daily()  # Запускаем создание колонок для бонуса
-    asyncio.create_task(start_bot())
 
 
 if __name__ == "__main__":
