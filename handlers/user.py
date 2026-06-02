@@ -1018,75 +1018,71 @@ async def _send_bg_card(bot, chat_id, bg_id, bg_data):
     except Exception:
         await bot.send_message(chat_id, text, parse_mode="HTML")
 
-    @router.message(Command("fon"))
-    async def cmd_fon_info(msg: types.Message):
-        args = msg.text.split(maxsplit=1)
-        if len(args) < 2:
-            return await msg.answer("Укажи название фона, пример: <code>/fon название</code>", parse_mode="HTML")
+@router.message(Command("fon"))
+async def cmd_fon_info(msg: types.Message):
+    args = msg.text.split(maxsplit=1)
+    if len(args) < 2:
+        return await msg.answer("Укажи название фона, пример: <code>/fon название</code>", parse_mode="HTML")
 
-        query = args[1].strip().lower()
-        bg_id = None
-        bg_data = None
-        exact_match = False
+    query = args[1].strip().lower()
+    bg_id = None
+    bg_data = None
+    exact_match = False
 
-        # Сначала ищем точное совпадение по ID, потом по имени
-        if query in BGS:
-            bg_id = query
-            bg_data = BGS[query]
-            exact_match = True
-        else:
-            for bid, bdata in BGS.items():
-                if bdata.get("name", "").lower() == query:
-                    bg_id = bid
-                    bg_data = bdata
-                    exact_match = True
-                    break
+    if query in BGS:
+        bg_id = query
+        bg_data = BGS[query]
+        exact_match = True
+    else:
+        for bid, bdata in BGS.items():
+            if bdata.get("name", "").lower() == query:
+                bg_id = bid
+                bg_data = bdata
+                exact_match = True
+                break
 
-        # Если точного нет — ищем частичные совпадения
-        if not exact_match:
-            partial_matches = []
-            for bid, bdata in BGS.items():
-                name = bdata.get("name", bid)
-                if query in name.lower() or query in bid.lower():
-                    partial_matches.append((bid, name))
+    if not exact_match:
+        partial_matches = []
+        for bid, bdata in BGS.items():
+            name = bdata.get("name", bid)
+            if query in name.lower() or query in bid.lower():
+                partial_matches.append((bid, name))
 
-            if not partial_matches:
-                return await msg.answer(f"Фон по запросу «{args[1]}» не найден!")
+        if not partial_matches:
+            return await msg.answer(f"Фон по запросу «{args[1]}» не найден!")
 
-            builder = InlineKeyboardBuilder()
-            for bid, bname in partial_matches[:10]:
-                builder.button(text=f"{bname}", callback_data=f"f_inf:{bid}"[:64])
-            builder.adjust(1)
-            return await msg.answer("Найдено несколько фонов, выбери нужный:", reply_markup=builder.as_markup())
+        builder = InlineKeyboardBuilder()
+        for bid, bname in partial_matches[:10]:
+            builder.button(text=f"{bname}", callback_data=f"f_inf:{bid}"[:64])
+        builder.adjust(1)
+        return await msg.answer("Найдено несколько фонов, выбери нужный:", reply_markup=builder.as_markup())
 
-        await _send_bg_card(msg.bot, msg.chat.id, bg_id, bg_data)
+    await _send_bg_card(msg.bot, msg.chat.id, bg_id, bg_data)
 
-    @router.callback_query(F.data.startswith("f_inf:"))
-    async def cb_fon_info(call: types.CallbackQuery):
-        bg_id = call.data.split(":", 1)[1]
-        bg_data = BGS.get(bg_id)
+@router.callback_query(F.data.startswith("f_inf:"))
+async def cb_fon_info(call: types.CallbackQuery):
+    bg_id = call.data.split(":", 1)[1]
+    bg_data = BGS.get(bg_id)
 
-        if not bg_data:
-            return await call.answer("Фон не найден!", show_alert=True)
+    if not bg_data:
+        return await call.answer("Фон не найден!", show_alert=True)
 
-        await call.message.delete()
-        await _send_bg_card(call.bot, call.message.chat.id, bg_id, bg_data)
-        await call.answer()
+    await call.message.delete()
+    await _send_bg_card(call.bot, call.message.chat.id, bg_id, bg_data)
+    await call.answer()
+# ============ PREMIUM (/premium) ============
+@router.message(Command("premium"))
+async def cmd_premium(msg: types.Message):
+    text = (
+        "<b>Преимущества Premium-подписки:</b>\n\n"
+        "🃏 Получкник лимитированной карты;\n"
+        "🎁 Повышенный шанс выпадения редких карт;\n"
+        "⏱️ Сокращённый кулдаун на получения карт и битв;\n"
+        "💴 Можно получать больше BattleCoin;\n"
+        "🛡️ Бонусы на Поле Битвы (PVP +1);\n"
+    )
+    await msg.answer(text, parse_mode="HTML")
 
-    # ============ PREMIUM (/premium) ============
-    @router.message(Command("premium"))
-    async def cmd_premium(msg: types.Message):
-        text = (
-            "<b>Преимущества Premium-подписки:</b>\n\n"
-            "🃏 Увеличенный лимит карт в коллекции;\n"
-            "🎁 Повышенный шанс выпадения редких карт;\n"
-            "⏱️ Сокращённый кулдаун получения карт;\n"
-            "💴 Больше валюты за ежедневные награды;\n"
-            "🛡️ Бонусы на Поле Битвы (PVP +1);\n"
-            "✨ Эксклюзивные рамки и фоны;\n"
-            "💳 Дополнительные кредиты каждый месяц;"
-        )
-        await msg.answer(text, parse_mode="HTML")
 
 
 # ============ АДМИН И ПРОМО ============

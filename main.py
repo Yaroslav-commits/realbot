@@ -18,7 +18,7 @@ from config import BOT_TOKEN, DB_PATH
 from database.db import init_db, is_premium, pull_random_card, give_card_to_user
 from handlers import router
 
-# Импорты хендлеров
+# 👇 ИСПРАВЛЕННЫЙ БЛОК ИМПОРТОВ (БОЛЬШЕ НЕ БУДЕТ ПАДАТЬ)
 from handlers import user as _user  # noqa: F401
 from handlers import deck as _deck  # noqa: F401
 from handlers import battle as _battle  # noqa: F401
@@ -29,7 +29,6 @@ from handlers.battle import auto_top_distributor
 
 # Функция для БД (с защитой от зависания)
 def db_exec_sync(query, params=(), fetch=False, fetchall=False):
-    # Добавлен timeout=3.0, чтобы хостинг не отключал сервер из-за задержек SQLite
     with sqlite3.connect(DB_PATH, timeout=3.0) as conn:
         c = conn.cursor()
         c.execute(query, params)
@@ -81,14 +80,10 @@ async def start_bot():
 # ==========================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # То, что происходит ПРИ СТАРТЕ сервера
     init_db()
     migrate_daily()
     bot_task = asyncio.create_task(start_bot())
-
-    yield  # Сервер работает и принимает запросы
-
-    # То, что происходит ПРИ ВЫКЛЮЧЕНИИ сервера
+    yield
     bot_task.cancel()
 
 
@@ -103,9 +98,6 @@ app.add_middleware(
 )
 
 
-# ==========================================
-# КОРНЕВОЙ МАРШРУТ (ДЛЯ ПРОВЕРКИ ХОСТИНГА BOTHOST)
-# ==========================================
 @app.get("/")
 async def healthcheck():
     return {"status": "ok", "message": "ManhwCard Server is running perfectly"}
