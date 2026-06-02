@@ -1075,11 +1075,12 @@ async def cb_fon_info(call: types.CallbackQuery):
 async def cmd_premium(msg: types.Message):
     text = (
         "<b>Преимущества Premium-подписки:</b>\n\n"
-        "🃏 Получкник лимитированной карты;\n"
+        "🃏 Получение лимитированной карты;\n"
         "🎁 Повышенный шанс выпадения редких карт;\n"
         "⏱️ Сокращённый кулдаун на получения карт и битв;\n"
-        "💴 Можно получать больше BattleCoin;\n"
+        "🪙 Можно получать больше BattleCoin;\n"
         "🛡️ Бонусы на Поле Битвы (PVP +1);\n"
+        "🫠️ Возможность юзать эмодзи в нике;\n"
     )
     await msg.answer(text, parse_mode="HTML")
 

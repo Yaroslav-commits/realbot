@@ -14,11 +14,10 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN, DB_PATH
-# Импорт функций для выдачи карт
 from database.db import init_db, is_premium, pull_random_card, give_card_to_user
 from handlers import router
 
-# 👇 ИСПРАВЛЕННЫЙ БЛОК ИМПОРТОВ (БОЛЬШЕ НЕ БУДЕТ ПАДАТЬ)
+# Импорты хендлеров
 from handlers import user as _user  # noqa: F401
 from handlers import deck as _deck  # noqa: F401
 from handlers import battle as _battle  # noqa: F401
@@ -27,9 +26,9 @@ from handlers.user import cooldown_notification_scheduler, battle_cooldown_notif
 from handlers.battle import auto_top_distributor
 
 
-# Функция для БД (с защитой от зависания)
 def db_exec_sync(query, params=(), fetch=False, fetchall=False):
-    with sqlite3.connect(DB_PATH, timeout=3.0) as conn:
+    # Увеличенный таймаут для безопасности базы данных
+    with sqlite3.connect(DB_PATH, timeout=5.0) as conn:
         c = conn.cursor()
         c.execute(query, params)
         if fetchall:
@@ -39,7 +38,6 @@ def db_exec_sync(query, params=(), fetch=False, fetchall=False):
         conn.commit()
 
 
-# Автоматическое создание колонок для Ежедневного бонуса
 def migrate_daily():
     try:
         db_exec_sync("ALTER TABLE users ADD COLUMN daily_day INTEGER DEFAULT 0")
@@ -51,9 +49,6 @@ def migrate_daily():
         pass
 
 
-# ==========================================
-# ЗАПУСК БОТА (aiogram)
-# ==========================================
 async def start_bot():
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
@@ -75,9 +70,6 @@ async def start_bot():
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
-# ==========================================
-# НОВЫЙ МЕТОД ЗАПУСКА СЕРВЕРА (Lifespan)
-# ==========================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -100,12 +92,8 @@ app.add_middleware(
 
 @app.get("/")
 async def healthcheck():
-    return {"status": "ok", "message": "ManhwCard Server is running perfectly"}
+    return {"status": "ok"}
 
-
-# ==========================================
-# API ЕЖЕДНЕВНЫХ НАГРАД И ПРОФИЛЯ
-# ==========================================
 
 DAILY_REWARDS = {
     1: {'krw': 200}, 2: {'krw': 300}, 3: {'krw': 350}, 4: {'krw': 350},
@@ -121,82 +109,108 @@ DAILY_REWARDS = {
 }
 
 
+# ВАЖНО: Убрано 'async', чтобы FastAPI запускал функцию в отдельном фоновом потоке.
+# Это защищает сервер от зависаний Bothost Агента при работе с БД!
 @app.get("/api/profile/{user_id}")
-async def get_profile(user_id: int):
-    user = db_exec_sync(
-        "SELECT diamond, krw, battlecoin, daily_day, last_daily_claim FROM users WHERE id = ?",
-        (user_id,), fetch=True
-    )
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+def get_profile(user_id: int):
+    try:
+        user = db_exec_sync(
+            "SELECT diamond, krw, battlecoin FROM users WHERE id = ?",
+            (user_id,), fetch=True
+        )
+        if not user:
+            return {"diamond": 0, "krw": 0, "battlecoin": 0, "is_premium": False, "owned_cards": [], "daily_day": 0, "can_claim_daily": False}
 
-    is_prem = is_premium(user_id)
-    cards_rows = db_exec_sync("SELECT card_id FROM cards_inv WHERE user_id = ?", (user_id,), fetchall=True)
-    owned_cards = [row[0] for row in cards_rows] if cards_rows else []
+        # Бронебойное получение ежедневных данных с авто-восстановлением БД
+        daily_day = 0
+        last_claim_date = '2000-01-01'
+        try:
+            daily_info = db_exec_sync("SELECT daily_day, last_daily_claim FROM users WHERE id = ?", (user_id,), fetch=True)
+            if daily_info:
+                daily_day = daily_info[0] or 0
+                last_claim_date = daily_info[1] or '2000-01-01'
+        except Exception:
+            migrate_daily()  # Если колонок нет - создаем их на лету
 
-    now_msk = datetime.now(timezone(timedelta(hours=3)))
-    today_str = now_msk.strftime("%Y-%m-%d")
-    last_claim_date = user[4].split(" ")[0] if user[4] else '2000-01-01'
-    can_claim_daily = (last_claim_date != today_str)
+        is_prem = is_premium(user_id)
+        cards_rows = db_exec_sync("SELECT card_id FROM cards_inv WHERE user_id = ?", (user_id,), fetchall=True)
+        owned_cards = [row[0] for row in cards_rows] if cards_rows else []
 
-    return {
-        "diamond": user[0],
-        "krw": user[1],
-        "battlecoin": user[2],
-        "is_premium": is_prem,
-        "owned_cards": owned_cards,
-        "daily_day": user[3] if user[3] else 0,
-        "can_claim_daily": can_claim_daily
-    }
+        now_msk = datetime.now(timezone(timedelta(hours=3)))
+        today_str = now_msk.strftime("%Y-%m-%d")
+        can_claim_daily = (last_claim_date.split(" ")[0] != today_str)
+
+        return {
+            "diamond": user[0],
+            "krw": user[1],
+            "battlecoin": user[2],
+            "is_premium": is_prem,
+            "owned_cards": owned_cards,
+            "daily_day": daily_day,
+            "can_claim_daily": can_claim_daily
+        }
+    except Exception as e:
+        logging.error(f"Error in get_profile: {e}")
+        # Если совсем всё плохо - возвращаем нули, но не ломаем сайт
+        return {"diamond": 0, "krw": 0, "battlecoin": 0, "is_premium": False, "owned_cards": [], "daily_day": 0, "can_claim_daily": False}
 
 
 @app.post("/api/claim_daily/{user_id}")
-async def claim_daily(user_id: int):
-    user = db_exec_sync("SELECT daily_day, last_daily_claim FROM users WHERE id = ?", (user_id,), fetch=True)
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+def claim_daily(user_id: int):
+    try:
+        try:
+            user = db_exec_sync("SELECT daily_day, last_daily_claim FROM users WHERE id = ?", (user_id,), fetch=True)
+        except Exception:
+            migrate_daily()
+            user = db_exec_sync("SELECT daily_day, last_daily_claim FROM users WHERE id = ?", (user_id,), fetch=True)
 
-    now_msk = datetime.now(timezone(timedelta(hours=3)))
-    today_str = now_msk.strftime("%Y-%m-%d")
-    last_claim_date = user[1].split(" ")[0] if user[1] else '2000-01-01'
+        if not user:
+            return {"success": False, "error": "Пользователь не найден в базе"}
 
-    if last_claim_date == today_str:
-        return {"success": False, "error": "Награда уже получена сегодня!"}
+        now_msk = datetime.now(timezone(timedelta(hours=3)))
+        today_str = now_msk.strftime("%Y-%m-%d")
+        last_claim_date = user[1].split(" ")[0] if user[1] else '2000-01-01'
 
-    current_day = (user[0] or 0) + 1
-    if current_day > 30:
-        current_day = 1
+        if last_claim_date == today_str:
+            return {"success": False, "error": "Награда уже получена сегодня!"}
 
-    reward = DAILY_REWARDS.get(current_day, {'krw': 200})
+        current_day = (user[0] or 0) + 1
+        if current_day > 30:
+            current_day = 1
 
-    if 'krw' in reward:
-        db_exec_sync("UPDATE users SET krw = krw + ? WHERE id = ?", (reward['krw'], user_id))
-    if 'dia' in reward:
-        db_exec_sync("UPDATE users SET diamond = diamond + ? WHERE id = ?", (reward['dia'], user_id))
+        reward = DAILY_REWARDS.get(current_day, {'krw': 200})
 
-    card_key = None
-    if 'pack' in reward:
-        pack_type = reward['pack']
-        rarity = "Мифическая 🔴" if pack_type == 'mythic' else "Легендарная 🔵"
-        card_key = pull_random_card(force_rarity=rarity)
-        if card_key:
-            give_card_to_user(user_id, card_key)
+        if 'krw' in reward:
+            db_exec_sync("UPDATE users SET krw = krw + ? WHERE id = ?", (reward['krw'], user_id))
+        if 'dia' in reward:
+            db_exec_sync("UPDATE users SET diamond = diamond + ? WHERE id = ?", (reward['dia'], user_id))
 
-    db_exec_sync("UPDATE users SET daily_day = ?, last_daily_claim = ? WHERE id = ?",
-                 (current_day, today_str, user_id))
+        card_key = None
+        if 'pack' in reward:
+            pack_type = reward['pack']
+            rarity = "Мифическая 🔴" if pack_type == 'mythic' else "Легендарная 🔵"
+            card_key = pull_random_card(force_rarity=rarity)
+            if card_key:
+                give_card_to_user(user_id, card_key)
 
-    new_user = db_exec_sync("SELECT diamond, krw FROM users WHERE id = ?", (user_id,), fetch=True)
+        db_exec_sync("UPDATE users SET daily_day = ?, last_daily_claim = ? WHERE id = ?",
+                     (current_day, today_str, user_id))
 
-    return {
-        "success": True,
-        "new_krw": new_user[1],
-        "new_dia": new_user[0],
-        "card_key": card_key
-    }
+        new_user = db_exec_sync("SELECT diamond, krw FROM users WHERE id = ?", (user_id,), fetch=True)
+
+        return {
+            "success": True,
+            "new_krw": new_user[1],
+            "new_dia": new_user[0],
+            "card_key": card_key
+        }
+    except Exception as e:
+        logging.error(f"Error in claim_daily: {e}")
+        return {"success": False, "error": "Внутренняя ошибка сервера. Попробуйте позже."}
 
 
 @app.get("/api/card_count/{card_id}")
-async def get_card_count(card_id: str):
+def get_card_count(card_id: str):
     res = db_exec_sync("SELECT COUNT(*) FROM cards_inv WHERE card_id = ?", (card_id,), fetch=True)
     count = res[0] if res else 0
     return {"card_id": card_id, "count": count}
