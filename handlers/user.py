@@ -5,6 +5,8 @@ import logging
 import sqlite3
 import random
 import calendar
+from html import escape
+from urllib.parse import quote_plus
 from datetime import datetime, timedelta, timezone
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
@@ -26,6 +28,8 @@ from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user, try_use_promo, grant_retroactive_royale_pass,
                          get_user_by_ref_code, get_referral_count, get_users_for_cooldown_notify,
                          mark_cooldown_notified, reset_cooldown_notified, toggle_notifications,
+                         get_notifications_enabled, is_anonymous, toggle_anonymity,
+                         user_has_bg, user_has_title, give_bg_to_user, give_title_to_user,
                          is_premium, get_premium_until,
                          get_users_for_battle_cooldown_notify, mark_battle_cooldown_notified)
 from handlers import (router, TradeState, SettingsState, PromoState,
@@ -55,6 +59,8 @@ class GiftBgState(StatesGroup):
     waiting_for_id = State()
 class BroadcastState(StatesGroup):
     waiting_for_message = State()
+class NicknameState(StatesGroup):
+    waiting_for_nick = State()
 # ================== HANDLERS ==================
 @router.message(Command("start"))
 async def start_cmd(msg: types.Message):
@@ -245,6 +251,151 @@ async def get_card_cmd(msg: types.Message):
                     (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
 
 
+RU_MONTHS_GENITIVE = {
+    1: "января",
+    2: "февраля",
+    3: "марта",
+    4: "апреля",
+    5: "мая",
+    6: "июня",
+    7: "июля",
+    8: "августа",
+    9: "сентября",
+    10: "октября",
+    11: "ноября",
+    12: "декабря",
+}
+
+def format_ru_date(dt: datetime) -> str:
+    return f"{dt.day}-го {RU_MONTHS_GENITIVE.get(dt.month, '')}"
+
+def is_royale_active(u) -> bool:
+    try:
+        now_msk = datetime.now(timezone(timedelta(hours=3)))
+        current_ym = int(now_msk.strftime("%Y%m"))
+        return int(u[16] or 0) == current_ym
+    except Exception:
+        return False
+
+def build_profile_keyboard() -> InlineKeyboardMarkup:
+    bld = InlineKeyboardBuilder()
+    bld.button(text="🔱 Мои титулы", callback_data="my_titles")
+    bld.button(text="🌄 Мои фоны", callback_data="my_bgs")
+    bld.button(text="⚙️ Настройка", callback_data="settings")
+    bld.adjust(1)
+    return bld.as_markup()
+
+def profile_user_name(u, viewer_id: int | None = None, admin: bool = False) -> str:
+    nick = escape(u[2] or "Игрок")
+    anonymous = bool(u[23]) if len(u) > 23 and u[23] is not None else False
+
+    if anonymous and not admin and viewer_id != u[0]:
+        return nick
+
+    return f'<a href="tg://user?id={u[0]}">{nick}</a>'
+
+def build_own_profile_text(u, viewer_id: int | None = None) -> str:
+    uid = u[0]
+    pts = u[7]
+
+    if u[14] and u[14] in TITLES:
+        title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n"
+    else:
+        title_str = "\n"
+
+    status_emoji = "👑" if is_premium(uid) else "🧩"
+    user_link = profile_user_name(u, viewer_id=viewer_id)
+
+    from database.db import get_event_items
+    cocktail, icecream, dango = get_event_items(uid)
+    event_str = (
+        f"<b>🪎 Ивент:</b>\n"
+        f"🍹 Коктейль - {cocktail}\n"
+        f"🍨 Мороженое - {icecream}\n"
+        f"🍡 Данго - {dango}\n\n"
+    )
+    return (
+        f" {status_emoji} Профиль - {user_link}\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f'🆔 ID: <code>{u[0]}</code>\n'
+        f"{title_str}\n"
+        f"<b>💰 Баланс:</b>\n"
+        f"┌ 💎 Diamond — {u[3]}\n"
+        f'├ 💴 KRW — {u[4]}\n'
+        f"└ 🪙 BattleCoin — {u[5]}\n\n"
+        f"{event_str}"
+        f"<b>🎟 Попытки:</b>\n"
+        f"└ 💳 {u[6]}\n\n"
+        f"<b>🏆 Ранг:</b>\n"
+        f'✨ {get_rank(pts)} • {pts}🏅\n\n'
+        f"<b>⚔️ Статистика боёв:</b>\n"
+        f"├ 🏆 Побед — {u[8]}\n"
+        f"├ ⚔️ Ничьих — {u[9]}\n"
+        f"└ ☠️ Поражений — {u[10]}"
+    )
+
+def build_settings_text(uid: int) -> str:
+    u = get_user(uid)
+    nick = escape(u[2] or "Игрок")
+
+    premium_until_dt = get_premium_until(uid)
+    if premium_until_dt and premium_until_dt > datetime.now():
+        premium_text = f"Активен до {format_ru_date(premium_until_dt)} ✅"
+    else:
+        premium_text = "Не Активна ❌"
+
+    royale_text = "Активен ✅" if is_royale_active(u) else "Не Активен ❌"
+
+    return (
+        "⚙️ <b>Настройки:</b>\n\n"
+        f"👤 <b>Ник</b> - {nick}\n"
+        f"👑 <b>Подписка</b> - {premium_text}\n"
+        f"🌠 <b>Рояль-Пасс</b> - {royale_text}"
+    )
+
+def build_settings_keyboard(uid: int) -> InlineKeyboardMarkup:
+    notif_on = get_notifications_enabled(uid)
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Изменить ник 🔄", callback_data="change_nick_start")
+    bld.button(text="Реферальная система 🔗", callback_data="referral_system")
+    bld.button(
+        text=f"Уведомления 📣 {'✅' if notif_on else '☑️'}",
+        callback_data="toggle_notifications"
+    )
+    bld.button(text="Анонимность 🥷", callback_data="anonymity_settings")
+    bld.button(text="Назад 🔙", callback_data="back_to_profile")
+    bld.adjust(1, 1, 2, 1)
+    return bld.as_markup()
+
+def build_anonymity_keyboard(uid: int) -> InlineKeyboardMarkup:
+    anon = is_anonymous(uid)
+
+    bld = InlineKeyboardBuilder()
+    bld.button(
+        text="Выключить ✅" if anon else "Включить ☑️",
+        callback_data="toggle_anonymity"
+    )
+    bld.button(text="Назад 🔙", callback_data="settings")
+    bld.adjust(1)
+    return bld.as_markup()
+
+async def smart_edit_message(message: Message, text: str, reply_markup=None, parse_mode: str = "HTML"):
+    """
+    Редактирует текущее сообщение.
+    Если это фото/видео профиля — меняет caption.
+    Если это текст — меняет text.
+    Новое сообщение не отправляет.
+    """
+    try:
+        if message.content_type == "text":
+            await message.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+        else:
+            await message.edit_caption(caption=text, reply_markup=reply_markup, parse_mode=parse_mode)
+    except Exception:
+        # Например: message is not modified
+        pass
+
 # ======== ПРОФИЛЬ =========
 @router.message(F.text == "👤 Профиль")
 async def profile(msg: types.Message):
@@ -265,7 +416,7 @@ async def profile(msg: types.Message):
     # Эмодзи статуса
     status_emoji = "👑" if is_premium(uid) else "🧩"
 
-    user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
+    user_link = profile_user_name(u, viewer_id=msg.from_user.id)
 
     # === ИВЕНТ ===
     from database.db import get_event_items
@@ -384,11 +535,13 @@ async def cmd_profile(msg: types.Message):
 
     u = get_user(target_id)
     if not u:
-        return await msg.answer("❌ Игрок не найден в базе данных.")
+        return await msg.answer("❌ Игрок не найден в базе бл..")
+    if is_anonymous(target_id) and target_id != msg.from_user.id and not is_admin:
+        return await msg.answer("🥷 Этот игрок включил режим инкогнито. Его профиль скрыт.")
     pts = u[7]
     title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n" if u[14] and u[14] in TITLES else "\n"
     status_emoji = "👑" if is_premium(target_id) else "🧩"
-    user_link = f'<a href="tg://user?id={u[0]}">{u[2]}</a>'
+    user_link = profile_user_name(u, viewer_id=msg.from_user.id, admin=is_admin)
 
     # === ИВЕНТ ===
     from database.db import get_event_items
@@ -473,47 +626,133 @@ async def settings_cq(cq: CallbackQuery):
         await cq.answer("Пользователь не найден", show_alert=True)
         return
 
-    notif_on = bool(u[17])  # notifications (индекс 17)
-    notif_emoji = "✅" if notif_on else "☑️"
-    notif_text = "Включить уведомления" if notif_on else "Выключить уведомления"
-
-    premium_until_dt = get_premium_until(cq.from_user.id)
-    if premium_until_dt and premium_until_dt > datetime.now():
-        premium_line = f"👑 Premium активен до: {premium_until_dt.strftime('%d.%m.%Y')}\n"
-    else:
-        premium_line = "👑 Premium: не активен\n"
-
-    txt = (
-        f"⚙️ Настройки\n"
-        f"Дата регистрации: {u[15]}\n"
-        f"{premium_line}"
-        f"Для смены ника отправьте команду /nick [новый ник]\n"
-        f"{notif_text} > {notif_emoji}"
+    await smart_edit_message(
+        cq.message,
+        build_settings_text(cq.from_user.id),
+        reply_markup=build_settings_keyboard(cq.from_user.id),
+        parse_mode="HTML"
     )
-
-    bld = InlineKeyboardBuilder()
-    bld.button(text="👥 Реферальная система", callback_data="referral_system")
-    bld.button(text=f"Вкл/выкл уведомления {notif_emoji}", callback_data="toggle_notifications")
-    bld.adjust(1)
-
-    try:
-        await cq.message.edit_text(txt, reply_markup=bld.as_markup())
-    except Exception:
-        await cq.message.answer(txt, reply_markup=bld.as_markup())
-
     await cq.answer()
+
+@router.callback_query(F.data == "back_to_profile")
+async def back_to_profile_cq(cq: CallbackQuery):
+    u = get_user(cq.from_user.id)
+    if not u:
+        await cq.answer("Пользователь не найден", show_alert=True)
+        return
+    await smart_edit_message(
+        cq.message,
+        build_own_profile_text(u, viewer_id=cq.from_user.id),
+        reply_markup=build_profile_keyboard(),
+        parse_mode="HTML"
+    )
+    await cq.answer()
+
+@router.callback_query(F.data == "change_nick_start")
+async def change_nick_start_cq(cq: CallbackQuery, state: FSMContext):
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Отмена ✖️", callback_data="cancel_change_nick")
+
+    await state.set_state(NicknameState.waiting_for_nick)
+
+    await smart_edit_message(
+        cq.message,
+        "Введите новый никнейм:",
+        reply_markup=bld.as_markup(),
+        parse_mode="HTML"
+    )
+    await cq.answer()
+
+@router.callback_query(F.data == "cancel_change_nick")
+async def cancel_change_nick_cq(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
+
+    await smart_edit_message(
+        cq.message,
+        build_settings_text(cq.from_user.id),
+        reply_markup=build_settings_keyboard(cq.from_user.id),
+        parse_mode="HTML"
+    )
+    await cq.answer("Отменено")
+
+@router.message(NicknameState.waiting_for_nick)
+async def process_new_nick(msg: Message, state: FSMContext):
+    new_nick = (msg.text or "").strip()
+
+    if not new_nick:
+        return await msg.answer("❌ Ник не может быть пустым.")
+
+    if len(new_nick) > 32:
+        return await msg.answer("❌ Ник слишком длинный. Максимум 32 символа.")
+
+    if EMOJI_RE.search(new_nick) and not is_premium(msg.from_user.id):
+        return await msg.answer("❌ Эмодзи в нике доступны только Premium 👑 пользователям.")
+
+    db_exec("UPDATE users SET nickname = ? WHERE id = ?", (new_nick, msg.from_user.id))
+    await state.clear()
+
+    await msg.answer(f"✅ Ник изменён на <b>{escape(new_nick)}</b>", parse_mode="HTML")
 
 @router.message(Command("nick"))
 async def change_nick(msg: types.Message):
-    new_nick = msg.text.replace("/nick", "").strip()
+    new_nick = msg.text.replace("/nick", "", 1).strip()
+
     if not new_nick:
         return await msg.answer("Использование: /nick НовыйНик")
+
+    if len(new_nick) > 32:
+        return await msg.answer("❌ Ник слишком длинный. Максимум 32 символа.")
+
     if EMOJI_RE.search(new_nick) and not is_premium(msg.from_user.id):
         return await msg.answer("❌ Эмодзи в нике доступны только Premium 👑 пользователям.")
+
     db_exec("UPDATE users SET nickname = ? WHERE id = ?", (new_nick, msg.from_user.id))
-    await msg.answer(f"✅ Ник изменён на {new_nick}")
+    await msg.answer(f"✅ Ник изменён на <b>{escape(new_nick)}</b>", parse_mode="HTML")
 
+@router.callback_query(F.data == "toggle_notifications")
+async def toggle_notifications_cq(cq: CallbackQuery):
+    new_state = toggle_notifications(cq.from_user.id)
 
+    await smart_edit_message(
+        cq.message,
+        build_settings_text(cq.from_user.id),
+        reply_markup=build_settings_keyboard(cq.from_user.id),
+        parse_mode="HTML"
+    )
+
+    await cq.answer(f"Уведомления {'включены' if new_state else 'выключены'}")
+
+@router.callback_query(F.data == "anonymity_settings")
+async def anonymity_settings_cq(cq: CallbackQuery):
+    text = (
+        "С помощью кнопки ниже активируется режим инкогнито, "
+        "можно использовать, чтобы другие игроки не могли просматривать твой профиль."
+    )
+
+    await smart_edit_message(
+        cq.message,
+        text,
+        reply_markup=build_anonymity_keyboard(cq.from_user.id),
+        parse_mode="HTML"
+    )
+    await cq.answer()
+
+@router.callback_query(F.data == "toggle_anonymity")
+async def toggle_anonymity_cq(cq: CallbackQuery):
+    new_state = toggle_anonymity(cq.from_user.id)
+
+    text = (
+        "С помощью кнопки ниже активируется режим инкогнито, "
+        "можно использовать, чтобы другие игроки не могли просматривать твой профиль."
+    )
+
+    await smart_edit_message(
+        cq.message,
+        text,
+        reply_markup=build_anonymity_keyboard(cq.from_user.id),
+        parse_mode="HTML"
+    )
+    await cq.answer("Инкогнито включено" if new_state else "Инкогнито выключено")
 
 # ============ РЕФЕРАЛЬНАЯ СИСТЕМА ============
 @router.callback_query(F.data == "referral_system")
@@ -532,19 +771,26 @@ async def referral_system_cq(cq: CallbackQuery, bot: Bot):
     ref_link = f"https://t.me/{bot_info.username}?start={ref_code}"
 
     txt = (
-        f"👥 Всего приглашенных: {ref_count}\n\n"
+        f"👥 <b>Всего приглашённых:</b> {ref_count}\n\n"
         f"Приглашай друзей! За каждого игрока, перешедшего по твоей ссылке, "
         f"<b>ты и твой друг</b> получите от 500💴 до 850💴 и 5💳 попыток бонусом!\n\n"
-        f"⛓️‍💥 Твоя уникальная реферальная ссылка:\n<code>{ref_link}</code>"
+        f"⛓️‍💥 <b>Твоя уникальная реферальная ссылка:</b>\n"
+        f"<code>{ref_link}</code>"
+    )
+
+    share_url = (
+        "https://t.me/share/url"
+        f"?url={quote_plus(ref_link)}"
+        f"&text={quote_plus('Залетай в ManhwCard 🎴 По моей ссылке дадут бонус!')}"
     )
 
     bld = InlineKeyboardBuilder()
+    bld.button(text="📨 Отправить реф ссылку", url=share_url)
     bld.button(text="🔙 Назад", callback_data="settings")
-    await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    bld.adjust(1)
+
+    await smart_edit_message(cq.message, txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
-
-
-
 
 # ============ ПЕРЕКЛЮЧЕНИЕ УВЕДОМЛЕНИЙ ============
 @router.callback_query(F.data == "toggle_notifications")
@@ -586,18 +832,50 @@ async def toggle_notifications_cq(cq: CallbackQuery):
     await cq.answer(f"Уведомления {'включены' if new_state else 'выключены'}")
 
 
-
 @router.callback_query(F.data.in_(["my_bgs", "my_titles"]))
 async def bgs_titles_cq(cq: CallbackQuery):
     is_bg = cq.data == "my_bgs"
     table = "bgs_inv" if is_bg else "titles_inv"
     col = "bg_id" if is_bg else "title_id"
+    valid_items = BGS if is_bg else TITLES
 
-    items = db_exec(f"SELECT {col} FROM {table} WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
-    item_ids = [itm[0] for itm in items]
+    # Чистим неизвестные предметы конкретно у этого игрока
+    valid_keys = list(valid_items.keys())
+    if valid_keys:
+        ph = ",".join(["?"] * len(valid_keys))
+        db_exec(
+            f"DELETE FROM {table} WHERE user_id = ? AND {col} NOT IN ({ph})",
+            tuple([cq.from_user.id] + valid_keys)
+        )
 
-    # Добавляем стандартный фон в список фонов, чтобы его всегда можно было вернуть
-    if is_bg and "default" not in item_ids:
+    # Чистим дубли конкретно у этого игрока
+    db_exec(f"""
+        DELETE FROM {table}
+        WHERE user_id = ?
+        AND rowid NOT IN (
+            SELECT MIN(rowid)
+            FROM {table}
+            WHERE user_id = ?
+            GROUP BY {col}
+        )
+    """, (cq.from_user.id, cq.from_user.id))
+
+    items = db_exec(
+        f"SELECT DISTINCT {col} FROM {table} WHERE user_id = ?",
+        (cq.from_user.id,),
+        fetchall=True
+    )
+
+    item_ids = []
+    seen = set()
+
+    for row in items or []:
+        item_id = row[0]
+        if item_id in valid_items and item_id not in seen:
+            item_ids.append(item_id)
+            seen.add(item_id)
+
+    if is_bg and "default" not in seen:
         item_ids.insert(0, "default")
 
     if not item_ids:
@@ -605,18 +883,22 @@ async def bgs_titles_cq(cq: CallbackQuery):
         return
 
     bld = InlineKeyboardBuilder()
+
     for itm in item_ids:
         if is_bg:
-            name = BGS.get(itm, {}).get('name', 'Неизвестный фон')
+            name = BGS[itm].get("name", itm)
+            callback = f"preview_bg:{itm}"
         else:
-            name = TITLES.get(itm, 'Неизвестный титул')
-        bld.button(text=name, callback_data=f"preview_{'bg' if is_bg else 'title'}:{itm}")
+            name = TITLES[itm]
+            callback = f"preview_title:{itm}"
 
-    bld.adjust(1)
-    text_msg = "Выберите фон для просмотра:" if is_bg else "Выберите титул для просмотра:"
-    await cq.message.answer(text_msg, reply_markup=bld.as_markup())
-    await cq.answer()
+        bld.button(text=name, callback_data=callback)
 
+        bld.adjust(1)
+
+        text_msg = "🌄 Выберите фон для просмотра:" if is_bg else "🔱 Выберите титул для просмотра:"
+        await cq.message.answer(text_msg, reply_markup=bld.as_markup())
+        await cq.answer()
 
 # ============ Предпросмотр фона/титула ============
 @router.callback_query(F.data.startswith("preview_"))
@@ -625,6 +907,16 @@ async def preview_cq(cq: CallbackQuery):
     if len(parts) != 2:
         return
     type_str, itm = parts[0].replace("preview_", ""), parts[1]
+
+    if type_str == "bg" and itm not in BGS:
+        db_exec("DELETE FROM bgs_inv WHERE user_id = ? AND bg_id = ?", (cq.from_user.id, itm))
+        await cq.answer("Этот фон был удалён из игры и убран из инвентаря.", show_alert=True)
+        return
+
+    if type_str == "title" and itm not in TITLES:
+        db_exec("DELETE FROM titles_inv WHERE user_id = ? AND title_id = ?", (cq.from_user.id, itm))
+        await cq.answer("Этот титул был удалён из игры и убран из инвентаря.", show_alert=True)
+        return
 
     u = get_user(cq.from_user.id)
     current_active = u[13] if type_str == "bg" else u[14]
@@ -670,41 +962,64 @@ async def preview_cq(cq: CallbackQuery):
 @router.callback_query(F.data.startswith("equip_"))
 async def equip_cq(cq: CallbackQuery):
     parts = cq.data.split(":")
-    if len(parts) != 2: return
+    if len(parts) != 2:
+        return
+
     type_str, itm = parts[0].replace("equip_", ""), parts[1]
 
+    if type_str not in ("bg", "title"):
+        return await cq.answer("Ошибка типа предмета.", show_alert=True)
+
+    if type_str == "bg":
+        if itm not in BGS:
+            db_exec("DELETE FROM bgs_inv WHERE user_id = ? AND bg_id = ?", (cq.from_user.id, itm))
+            return await cq.answer("Этот фон был удалён из игры.", show_alert=True)
+
+        if itm != "default" and not user_has_bg(cq.from_user.id, itm):
+            return await cq.answer("У вас нет этого фона.", show_alert=True)
+
+        col = "active_bg"
+    else:
+        if itm not in TITLES:
+            db_exec("DELETE FROM titles_inv WHERE user_id = ? AND title_id = ?", (cq.from_user.id, itm))
+            return await cq.answer("Этот титул был удалён из игры.", show_alert=True)
+
+        if not user_has_title(cq.from_user.id, itm):
+            return await cq.answer("У вас нет этого титула.", show_alert=True)
+
+        col = "active_title"
+
     u = get_user(cq.from_user.id)
-    col = "active_bg" if type_str == "bg" else "active_title"
     current_active = u[13] if type_str == "bg" else u[14]
 
-    is_active = (current_active == itm)
-    if type_str == "bg" and itm == "default" and current_active in [None, 'default']:
+    is_active = current_active == itm
+    if type_str == "bg" and itm == "default" and current_active in [None, "default"]:
         is_active = True
 
     if is_active:
-        # Если уже установлено, снимаем предмет
-        new_val = 'default' if type_str == "bg" else None
+        new_val = "default" if type_str == "bg" else None
         db_exec(f"UPDATE users SET {col} = ? WHERE id = ?", (new_val, cq.from_user.id))
         btn_text = "☑️ Установить"
         alert_text = "Убрано из профиля!"
     else:
-        # Устанавливаем новый предмет
-        new_val = itm
-        db_exec(f"UPDATE users SET {col} = ? WHERE id = ?", (new_val, cq.from_user.id))
+        db_exec(f"UPDATE users SET {col} = ? WHERE id = ?", (itm, cq.from_user.id))
         btn_text = "✅ Установлено"
         alert_text = "Успешно установлено!"
 
-        # Меняем кнопку на лету
     bld = InlineKeyboardBuilder()
     bld.button(text=btn_text, callback_data=f"equip_{type_str}:{itm}")
 
+    if type_str == "bg" and itm != "default":
+        bld.button(text="🎁 Подарить", callback_data=f"gift_bg:{itm}")
+
+    bld.adjust(1)
+
     try:
         await cq.message.edit_reply_markup(reply_markup=bld.as_markup())
-    except:
-        pass  # Игнорируем ошибку, если статус кнопки не изменился
+    except Exception:
+        pass
 
     await cq.answer(alert_text)
-
 
 # ============ ПОДАРИТЬ ФОН ============
 @router.callback_query(F.data.startswith("gift_bg:"))
@@ -823,6 +1138,19 @@ async def process_gift_answer(cq: CallbackQuery, bot: Bot):
             pass
         return await cq.answer()
 
+    if user_has_bg(receiver_id, bg_id):
+            try:
+                await cq.message.edit_caption(
+                    caption=f"⚠️ У вас уже есть фон «{bg_name}». Подарок не был принят.",
+                    reply_markup=None
+                )
+            except Exception:
+                await cq.message.edit_text(
+                    f"⚠️ У вас уже есть фон «{bg_name}». Подарок не был принят.",
+                    reply_markup=None
+                )
+            return await cq.answer("Этот фон уже есть у вас.", show_alert=True)
+
     if action == "accept":
         # Проверяем, есть ли всё ещё фон у отправителя
         sender_has = db_exec("SELECT rowid FROM bgs_inv WHERE user_id = ? AND bg_id = ?", (sender_id, bg_id),
@@ -841,7 +1169,7 @@ async def process_gift_answer(cq: CallbackQuery, bot: Bot):
             db_exec("UPDATE users SET active_bg = 'default' WHERE id = ?", (sender_id,))
 
         # Выдаем фон получателю
-        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (receiver_id, bg_id))
+        give_bg_to_user(receiver_id,bg_id)
         await cq.message.edit_caption(caption=f"✅ Вы успешно приняли фон «{bg_name}»!", reply_markup=None)
         try:
             await bot.send_message(sender_id, f"✅ Игрок {receiver_id} принял ваш подарок! Фон «{bg_name}» передан.")
@@ -849,7 +1177,6 @@ async def process_gift_answer(cq: CallbackQuery, bot: Bot):
             pass
 
         await cq.answer("Фон успешно получен!")
-
 
 @router.message(Command("card"))
 async def cmd_card_info(msg: types.Message):
@@ -1408,8 +1735,14 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         await msg.answer(f"✅ Карта «{c['name']}» успешно удалена у пользователя {uid}!")
 
     elif cmd == "/give_title":
-        title_name = TITLES.get(val, val)
-        db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, val))
+        if val not in TITLES:
+            return await msg.answer(f"❌ Титул с ключом «{val}» не найден!")
+
+        title_name = TITLES[val]
+        added = give_title_to_user(uid, val)
+
+        if not added:
+            return await msg.answer(f"⚠️ У пользователя {uid} уже есть титул «{title_name}».")
         try:
             await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅")
         except Exception:
@@ -1420,7 +1753,10 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         bg_data = BGS.get(val)
         if not bg_data:
             return await msg.answer(f"❌ Фон с ключом «{val}» не найден!")
-        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, val))
+        added = give_bg_to_user(uid, val)
+
+        if not added:
+            return await msg.answer(f"⚠️ У пользователя {uid} уже есть фон «{bg_data.get('name', val)}».")
         is_video = val in VIDEO_BGS
         try:
             bg_file = FSInputFile(f"images/backgrounds/{bg_data['file']}")  # Оставляем для фото
@@ -1440,8 +1776,14 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         await msg.answer(f"✅ Фон «{bg_data.get('name', val)}» выдан пользователю {uid}!")
 
     elif cmd == "/give_title":
-        title_name = TITLES.get(val, val)
-        db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, val))
+        if val not in TITLES:
+            return await msg.answer(f"❌ Титул с ключом «{val}» не найден!")
+
+        title_name = TITLES[val]
+        added = give_title_to_user(uid, val)
+
+        if not added:
+            return await msg.answer(f"⚠️ У пользователя {uid} уже есть титул «{title_name}».")
         try:
             await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅")
         except Exception:
@@ -1452,7 +1794,10 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         bg_data = BGS.get(val)
         if not bg_data:
             return await msg.answer(f"❌ Фон с ключом «{val}» не найден!")
-        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, val))
+        added = give_bg_to_user(uid, val)
+
+        if not added:
+            return await msg.answer(f"⚠️ У пользователя {uid} уже есть фон «{bg_data.get('name', val)}».")
         is_video = val in VIDEO_BGS
         try:
             bg_file = FSInputFile(f"images/backgrounds/{bg_data['file']}")

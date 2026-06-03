@@ -5,7 +5,7 @@ import string
 from datetime import datetime, timedelta, timezone
 
 from config import DB_PATH
-from data.cards import CARDS, RARITIES, PREMIUM_RARITIES, ROYALE_PASS
+from data.cards import CARDS, RARITIES, PREMIUM_RARITIES, ROYALE_PASS, BGS, TITLES
 
 # ================== ФУНКЦИИ БД ==================
 def db_exec(query, params=(), fetch=False, fetchall=False):
@@ -28,7 +28,8 @@ def init_db():
         last_get TEXT DEFAULT '2000-01-01 00:00:00', last_battle TEXT DEFAULT '2000-01-01 00:00:00',
         active_bg TEXT DEFAULT 'default', active_title TEXT, join_date TEXT, royale_pass INTEGER DEFAULT 0,
         notifications INTEGER DEFAULT 1, referral_code TEXT, referred_by INTEGER, cooldown_notified INTEGER DEFAULT 1,
-        premium_until TEXT DEFAULT NULL, battle_cooldown_notified INTEGER DEFAULT 1
+        premium_until TEXT DEFAULT NULL, battle_cooldown_notified INTEGER DEFAULT 1,
+        anonymous INTEGER DEFAULT 0
     )''')
     db_exec("CREATE TABLE IF NOT EXISTS cards_inv (user_id INTEGER, card_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS decks (user_id INTEGER, card_id TEXT, slot_index INTEGER)")
@@ -114,6 +115,7 @@ def init_db():
         ('cooldown_notified', 'INTEGER DEFAULT 1'),
         ('premium_until', 'TEXT DEFAULT NULL'),
         ('battle_cooldown_notified', 'INTEGER DEFAULT 1'),
+        ('anonymous', 'INTEGER DEFAULT 0'),
     ]:
         try:
             db_exec(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
@@ -126,6 +128,12 @@ def init_db():
         for (uid,) in users_no_code:
             code = generate_unique_ref_code()
             db_exec("UPDATE users SET referral_code = ? WHERE id = ?", (code, uid))
+
+    # Чистим старые дубли, удалённые фоны/титулы и ставим защиту от дублей
+    cleanup_visual_inventory()
+
+    db_exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_bgs_inv_unique ON bgs_inv(user_id, bg_id)")
+    db_exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_titles_inv_unique ON titles_inv(user_id, title_id)")
 
 
 def get_user(uid):
@@ -143,6 +151,122 @@ def add_user(uid, uname, fname, referred_by=None):
             return process_referral(referred_by, uid)
     return None
 
+# ================== ФОНЫ / ТИТУЛЫ / АНОНИМНОСТЬ ==================
+def cleanup_visual_inventory():
+    """
+    Удаляет:
+    - дубли фонов/титулов;
+    - фоны/титулы, которые были удалены из data.cards;
+    - сбрасывает активный удалённый фон/титул.
+    """
+    valid_bgs = list(BGS.keys())
+    valid_titles = list(TITLES.keys())
+
+    # Удаляем неизвестные фоны
+    if valid_bgs:
+        ph = ",".join(["?"] * len(valid_bgs))
+        db_exec(f"DELETE FROM bgs_inv WHERE bg_id NOT IN ({ph})", tuple(valid_bgs))
+        db_exec(f"""
+            UPDATE users
+            SET active_bg = 'default'
+            WHERE active_bg IS NULL OR active_bg NOT IN ({ph})
+        """, tuple(valid_bgs))
+    # Удаляем неизвестные титулы
+    if valid_titles:
+        ph = ",".join(["?"] * len(valid_titles))
+        db_exec(f"DELETE FROM titles_inv WHERE title_id NOT IN ({ph})", tuple(valid_titles))
+        db_exec(f"""
+            UPDATE users
+            SET active_title = NULL
+            WHERE active_title IS NOT NULL AND active_title NOT IN ({ph})
+        """, tuple(valid_titles))
+
+    # Удаляем дубли фонов
+    db_exec("""
+        DELETE FROM bgs_inv
+        WHERE rowid NOT IN (
+            SELECT MIN(rowid)
+            FROM bgs_inv
+            GROUP BY user_id, bg_id
+        )
+    """)
+
+    # Удаляем дубли титулов
+    db_exec("""
+        DELETE FROM titles_inv
+        WHERE rowid NOT IN (
+            SELECT MIN(rowid)
+            FROM titles_inv
+            GROUP BY user_id, title_id
+        )
+    """)
+
+def user_has_bg(uid: int, bg_id: str) -> bool:
+    return bool(db_exec(
+        "SELECT 1 FROM bgs_inv WHERE user_id = ? AND bg_id = ?",
+        (uid, bg_id),
+        fetch=True
+    ))
+
+def user_has_title(uid: int, title_id: str) -> bool:
+    return bool(db_exec(
+        "SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?",
+        (uid, title_id),
+        fetch=True
+    ))
+
+def give_bg_to_user(uid: int, bg_id: str) -> bool:
+    """
+    Выдаёт фон без дублей.
+    Возвращает True, если фон реально добавлен.
+    """
+    if bg_id not in BGS:
+        return False
+
+    if user_has_bg(uid, bg_id):
+        return False
+
+    db_exec(
+        "INSERT OR IGNORE INTO bgs_inv (user_id, bg_id) VALUES (?, ?)",
+        (uid, bg_id)
+    )
+    return True
+
+def give_title_to_user(uid: int, title_id: str) -> bool:
+    """
+    Выдаёт титул без дублей.
+    Возвращает True, если титул реально добавлен.
+    """
+    if title_id not in TITLES:
+        return False
+
+    if user_has_title(uid, title_id):
+        return False
+
+    db_exec(
+        "INSERT OR IGNORE INTO titles_inv (user_id, title_id) VALUES (?, ?)",
+        (uid, title_id)
+    )
+    return True
+
+def is_anonymous(uid: int) -> bool:
+    res = db_exec("SELECT anonymous FROM users WHERE id = ?", (uid,), fetch=True)
+    return bool(res[0]) if res else False
+
+def toggle_anonymity(uid: int) -> bool:
+    """
+    Переключает режим инкогнито.
+    True = включён.
+    """
+    current = db_exec("SELECT anonymous FROM users WHERE id = ?", (uid,), fetch=True)
+    old_val = int(current[0]) if current and current[0] is not None else 0
+    new_val = 0 if old_val else 1
+    db_exec("UPDATE users SET anonymous = ? WHERE id = ?", (new_val, uid))
+    return bool(new_val)
+
+def get_notifications_enabled(uid: int) -> bool:
+    res = db_exec("SELECT notifications FROM users WHERE id = ?", (uid,), fetch=True)
+    return bool(res[0]) if res else True
 
 # ================== РЕФЕРАЛЬНАЯ СИСТЕМА ==================
 def generate_unique_ref_code():
@@ -240,13 +364,12 @@ def reset_battle_cooldown_notified(uid):
     db_exec("UPDATE users SET battle_cooldown_notified = 0 WHERE id = ?", (uid,))
 
 def toggle_notifications(uid):
-    """Переключает уведомления и возвращает новое состояние (True = вкл)."""
+    """Переключает уведомления и возвращает новое состояние True = включены."""
     current = db_exec("SELECT notifications FROM users WHERE id = ?", (uid,), fetch=True)
-    if current:
-        new_val = 0 if current[0] else 1
-        db_exec("UPDATE users SET notifications = ? WHERE id = ?", (new_val, uid))
-        return bool(new_val)
-    return True
+    old_val = int(current[0]) if current and current[0] is not None else 1
+    new_val = 0 if old_val else 1
+    db_exec("UPDATE users SET notifications = ? WHERE id = ?", (new_val, uid))
+    return bool(new_val)
 
 # ================== PREMIUM ==================
 def is_premium(uid):
@@ -317,16 +440,16 @@ def _card_pull_weight(card: dict) -> float:
     weight = 1.0
 
     if any(s == 100 for s in stats):
-        weight *= 0.10
+        weight *= 0.04
     elif any(s == 99 for s in stats):
-        weight *= 0.15
+        weight *= 0.10
     elif any(s == 90 for s in stats):
-        weight *= 0.25
+        weight *= 0.20
 
     if total >= 285:
-        weight *= 0.45
+        weight *= 0.40
     elif total >= 270:
-        weight *= 0.75
+        weight *= 0.70
 
     if weight < 0.02:
         weight = 0.02

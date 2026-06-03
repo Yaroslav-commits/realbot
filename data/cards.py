@@ -4,26 +4,25 @@
 CARDS = {
     # ============ ВЕТРОЛОМ Лето ==========
 
-"ouen": {"name": "Оуэн", "rarity": "Эпическая 🟢", "style": "Ветряное чувство", "series": "Ветролом", "speed": 80, "strength": 80, "intellect": 80, "file": "ouen.jpeg", "exclusive": False},
+"ouen": {"name": "Оуэн", "rarity": "Эпическая 🟢", "style": "Ветряное чувство", "series": "Ветролом", "speed": 80, "strength": 80, "intellect": 80, "file": "ouen.jpeg", "exclusive": True},
 
-"jae_hyen": {"name": "Джахён", "rarity": "Эпическая 🟢", "style": "Анализ траектории", "series": "Ветролом", "speed": 80, "strength": 79, "intellect": 80, "file": "jae_hyen.jpeg", "exclusive": False},
+"jae_hyen": {"name": "Джахён", "rarity": "Эпическая 🟢", "style": "Анализ траектории", "series": "Ветролом", "speed": 80, "strength": 79, "intellect": 80, "file": "jae_hyen.jpeg", "exclusive": True},
 
-"yubin": {"name": "Юбин", "rarity": "Эпическая 🟢", "style": "Яросная езда", "series": "Ветролом", "speed": 79, "strength": 80, "intellect": 78, "file": "yubin.jpeg", "exclusive": False},
+"yubin": {"name": "Юбин", "rarity": "Эпическая 🟢", "style": "Яросная езда", "series": "Ветролом", "speed": 79, "strength": 80, "intellect": 78, "file": "yubin.jpeg", "exclusive": True},
 
-"hannam": {"name": "Ханнам", "rarity": "Эпическая 🟢", "style": "Спринт", "series": "Ветролом", "speed": 77, "strength": 80, "intellect": 74, "file": "hannam.jpeg", "exclusive": False},
+"hannam": {"name": "Ханнам", "rarity": "Эпическая 🟢", "style": "Спринт", "series": "Ветролом", "speed": 77, "strength": 80, "intellect": 74, "file": "hannam.jpeg", "exclusive": True},
 
-"joker": {"name": "Джокер", "rarity": "Эпическая 🟢", "style": "Безумный спринт", "series": "Ветролом", "speed": 78, "strength": 80, "intellect": 76, "file": "joker.jpeg", "exclusive": False},
+"joker": {"name": "Джокер", "rarity": "Эпическая 🟢", "style": "Безумный спринт", "series": "Ветролом", "speed": 78, "strength": 80, "intellect": 76, "file": "joker.jpeg", "exclusive": True},
 
-"hyek_kwon": {"name": "Хёк Квон", "rarity": "Эпическая 🟢", "style": "Хладнокровное доминирование", "series": "Ветролом", "speed": 80, "strength": 78, "intellect": 78, "file": "hyek_kwon.jpeg", "exclusive": False},
+"hyek_kwon": {"name": "Хёк Квон", "rarity": "Эпическая 🟢", "style": "Хладнокровное доминирование", "series": "Ветролом", "speed": 80, "strength": 78, "intellect": 78, "file": "hyek_kwon.jpeg", "exclusive": True},
 
-"uin_yu": {"name": "Уин Ю", "rarity": "Эпическая 🟢", "style": "Грязная стратегия", "series": "Ветролом", "speed": 76, "strength": 76, "intellect": 80, "file": "uin_yu.jpeg", "exclusive": False},
+"uin_yu": {"name": "Уин Ю", "rarity": "Эпическая 🟢", "style": "Грязная стратегия", "series": "Ветролом", "speed": 76, "strength": 76, "intellect": 80, "file": "uin_yu.jpeg", "exclusive": True},
 
-"shelly": {"name": "Шелли", "rarity": "Эпическая 🟢", "style": "Силовая поддержка", "series": "Ветролом", "speed": 76, "strength": 78, "intellect": 76, "file": "shelly.jpeg", "exclusive": False},
+"shelly": {"name": "Шелли", "rarity": "Эпическая 🟢", "style": "Силовая поддержка", "series": "Ветролом", "speed": 76, "strength": 78, "intellect": 76, "file": "shelly.jpeg", "exclusive": True},
 
-"kaneshiro": {"name": "Канеширо", "rarity": "Эпическая 🟢", "style": "Взрывной дрифт", "series": "Ветролом", "speed": 80, "strength": 80, "intellect": 77, "file": "kaneshiro.jpeg", "exclusive": False},
+"kaneshiro": {"name": "Канеширо", "rarity": "Эпическая 🟢", "style": "Взрывной дрифт", "series": "Ветролом", "speed": 80, "strength": 80, "intellect": 77, "file": "kaneshiro.jpeg", "exclusive": True},
 
-"noa": {"name": "Ноа", "rarity": "Эпическая 🟢", "style": "Агрессивная езда", "series": "Ветролом", "speed": 79, "strength": 80, "intellect": 77, "file": "noa.jpeg", "exclusive": False},
-
+"noa": {"name": "Ноа", "rarity": "Эпическая 🟢", "style": "Агрессивная езда", "series": "Ветролом", "speed": 79, "strength": 80, "intellect": 77, "file": "noa.jpeg", "exclusive": True},
 # =========== Борьба в эфире ХОВ ТУ ФАЙТ =====
 "yu_hobin_pass": {"name": "Ю Хобин", "rarity": "Легендарная 🔵", "style": "Универсал", "series": "Борьба в прямом эфире", "speed": 89, "strength": 89, "intellect": 90, "file": "yu_hobin_pass.jpeg", "exclusive": True},
 "samdak": {"name": "Самдак", "rarity": "Мифическая 🔴", "style": "Универсал", "series": "Борьба в прямом эфире", "speed": 99, "strength": 99, "intellect": 99, "file": "samdak.jpeg", "exclusive": False},
