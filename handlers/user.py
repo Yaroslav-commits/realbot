@@ -884,6 +884,7 @@ async def bgs_titles_cq(cq: CallbackQuery):
 
     bld = InlineKeyboardBuilder()
 
+    # Заполняем кнопки (это остается внутри цикла)
     for itm in item_ids:
         if is_bg:
             name = BGS[itm].get("name", itm)
@@ -894,11 +895,13 @@ async def bgs_titles_cq(cq: CallbackQuery):
 
         bld.button(text=name, callback_data=callback)
 
-        bld.adjust(1)
+    # ❗️ ВАЖНО: Вышли из цикла (сдвинули код влево)
+    bld.adjust(2) # 👈 Формируем сетку: по 2 кнопки в ряд
 
-        text_msg = "🌄 Выберите фон для просмотра:" if is_bg else "🔱 Выберите титул для просмотра:"
-        await cq.message.answer(text_msg, reply_markup=bld.as_markup())
-        await cq.answer()
+    # Отправляем один раз готовое меню со всеми кнопками
+    text_msg = "🌄 Выберите фон для просмотра:" if is_bg else "🔱 Выберите титул для просмотра:"
+    await cq.message.answer(text_msg, reply_markup=bld.as_markup())
+    await cq.answer()
 
 # ============ Предпросмотр фона/титула ============
 @router.callback_query(F.data.startswith("preview_"))
