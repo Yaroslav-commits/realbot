@@ -290,14 +290,19 @@ def ensure_multi_deck_tables():
     db_exec('''CREATE TABLE IF NOT EXISTS multi_decks (
         deck_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
-        name TEXT
+        name TEXT,
+        is_active INTEGER DEFAULT 0
     )''')
+    # Добавляем колонку is_active если её нет (для старых БД)
+    try:
+        db_exec("ALTER TABLE multi_decks ADD COLUMN is_active INTEGER DEFAULT 0")
+    except Exception:
+        pass  # колонка уже есть — ок
     db_exec('''CREATE TABLE IF NOT EXISTS multi_deck_slots (
         deck_id INTEGER,
         slot_index INTEGER,
         card_id TEXT
     )''')
-
 
 def sync_active_deck(user_id, deck_id):
     # Синхронизируем собранную колоду с основной таблицей decks для совместимости с боями
@@ -309,26 +314,30 @@ def sync_active_deck(user_id, deck_id):
 
 async def show_multi_deck_main(message, user_id):
     ensure_multi_deck_tables()
-    decks = db_exec("SELECT deck_id, name FROM multi_decks WHERE user_id = ?", (user_id,), fetchall=True)
+    decks = db_exec("SELECT deck_id, name, is_active FROM multi_decks WHERE user_id = ?", (user_id,), fetchall=True)
 
     bld = InlineKeyboardBuilder()
     if len(decks) == 0:
         bld.button(text="Добавить колоду 🆕", callback_data="mdeck_add")
-        bld.button(text="Назад 🔙", callback_data="view_deck")  # Возврат в меню колоды
-    elif len(decks) == 1:
-        bld.button(text=decks[0][1], callback_data=f"mdeck_view:{decks[0][0]}")
-        bld.button(text="Добавить колоду 🆕", callback_data="mdeck_add")
         bld.button(text="Назад 🔙", callback_data="view_deck")
+        bld.adjust(1)
     else:
         for d in decks:
-            bld.button(text=d[1], callback_data=f"mdeck_view:{d[0]}")
-        bld.button(text="Назад 🔙", callback_data="view_deck")
-
-    bld.adjust(1)
+            did, dname, is_active = d
+            active_mark = " ✅" if is_active else ""
+            bld.row(
+                InlineKeyboardButton(text=f"{dname}{active_mark}", callback_data=f"mdeck_view:{did}"),
+                InlineKeyboardButton(text="✅ Выбрать", callback_data=f"mdeck_select:{did}")
+            )
+        if len(decks) < 2:
+            bld.row(InlineKeyboardButton(text="Добавить колоду 🆕", callback_data="mdeck_add"))
+        bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="view_deck"))
 
     text = (
         "Здесь место для вашых колод 🎴\n\n"
-        "Можно иметь лишь две колоды. Нажмите на кнопку «Собрать колоду», для сбора своей боевой колоды."
+        "Можно иметь лишь две колоды. Выберите колоду и нажмите «✅ Выбрать» "
+        "чтобы сделать её активной для боёв.\n\n"
+        "Нажмите на название колоды, чтобы редактировать её."
     )
     if isinstance(message, types.Message):
         await message.answer(text, reply_markup=bld.as_markup())
@@ -340,6 +349,24 @@ async def show_multi_deck_main(message, user_id):
 async def manual_deck_start(cq: CallbackQuery):
     await show_multi_deck_main(cq.message, cq.from_user.id)
 
+@router.callback_query(F.data.startswith("mdeck_select:"))
+async def mdeck_select_cb(cq: CallbackQuery):
+    deck_id = int(cq.data.split(":")[1])
+    uid = cq.from_user.id
+
+    deck = db_exec("SELECT deck_id FROM multi_decks WHERE deck_id = ? AND user_id = ?", (deck_id, uid), fetch=True)
+    if not deck:
+        return await cq.answer("Колода не найдена!", show_alert=True)
+
+    # Сбрасываем активность у всех колод пользователя
+    db_exec("UPDATE multi_decks SET is_active = 0 WHERE user_id = ?", (uid,))
+    # Устанавливаем выбранную
+    db_exec("UPDATE multi_decks SET is_active = 1 WHERE deck_id = ?", (deck_id,))
+    # Синхронизируем с таблицей decks для боёв
+    sync_active_deck(uid, deck_id)
+
+    await cq.answer("✅ Колода выбрана как активная!", show_alert=True)
+    await show_multi_deck_main(cq.message, uid)
 
 @router.callback_query(F.data == "mdeck_add")
 async def mdeck_add_cb(cq: CallbackQuery, state: FSMContext):
@@ -348,10 +375,15 @@ async def mdeck_add_cb(cq: CallbackQuery, state: FSMContext):
         return await cq.answer("Максимум 2 колоды!", show_alert=True)
 
     bld = InlineKeyboardBuilder()
-    bld.button(text="Отменить", callback_data="manual_deck_start")
+    bld.button(text="Отменить", callback_data="mdeck_cancel_add")
     await cq.message.edit_text("🗞️ Введите название для колоды, максимум 10 букв..", reply_markup=bld.as_markup())
     await state.set_state(MultiDeckState.waiting_for_deck_name)
 
+@router.callback_query(F.data == "mdeck_cancel_add")
+async def mdeck_cancel_add_cb(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await show_multi_deck_main(cq.message, cq.from_user.id)
+    await cq.answer()
 
 @router.message(MultiDeckState.waiting_for_deck_name)
 async def mdeck_name_entered(msg: types.Message, state: FSMContext):
@@ -562,6 +594,10 @@ async def mdeck_rarity_cb(cq: CallbackQuery):
 
     if not avail:
         return await cq.answer("Нет доступных карт этой редкости для добавления!", show_alert=True)
+    # Сортируем от сильнейшего к слабейшему (по сумме статов)
+    avail.sort(key=lambda cid: (
+        CARDS[cid]['speed'] + CARDS[cid]['strength'] + CARDS[cid]['intellect']
+    ), reverse=True)
 
     items_per_page = 10
     total_pages = (len(avail) + items_per_page - 1) // items_per_page
@@ -2896,6 +2932,20 @@ async def stash_take_cb(cq: CallbackQuery):
 async def stash_do_take_cb(cq: CallbackQuery):
     _, cid, page = cq.data.split(":")
     uid = cq.from_user.id
+
+    # ✅ ПРОВЕРКА: если карта уже есть в инвентаре — не даём забрать
+    existing = db_exec(
+        "SELECT COUNT(*) FROM cards_inv WHERE user_id = ? AND card_id = ?",
+        (uid, cid), fetch=True
+    )
+    if existing and existing[0] > 0:
+        c = CARDS.get(cid, {})
+        return await cq.answer(
+            f"❌ У вас уже есть «{c.get('name', cid)}» в инвентаре!\n"
+            "Сначала обменяйте или потратьте её, чтобы забрать из сундука.",
+            show_alert=True
+        )
+
     ok = unstash_card(uid, cid)
     if not ok:
         return await cq.answer("Карты нет в сундуке.", show_alert=True)
