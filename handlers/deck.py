@@ -12,8 +12,8 @@ from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            CallbackQuery, LabeledPrice, PreCheckoutQuery,
                            FSInputFile)
 from aiogram.filters import Command, StateFilter
-from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
@@ -29,186 +29,407 @@ from media_cache import send_cached_video
 
 
 # ============ ИНВЕНТАРЬ И ТРЕЙД ============
-RARITY_ORDER = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2, "Обычная ⚪️": 1}
+RARITY_ORDER = {
+    "Божественная ⚫️": 6,
+    "Мифическая 🔴": 5,
+    "Легендарная 🔵": 4,
+    "Эпическая 🟢": 3,
+    "Редкая 🟡": 2,
+    "Обычная ⚪️": 1
+}
+
+RARITY_FILTERS = [
+    ("⚫️", "divine",      "Божественная ⚫️"),
+    ("🔴", "mythic",      "Мифическая 🔴"),
+    ("🔵", "legendary",   "Легендарная 🔵"),
+    ("🟢", "epic",        "Эпическая 🟢"),
+    ("🟡", "rare",        "Редкая 🟡"),
+    ("⚪️", "common",     "Обычная ⚪️"),
+]
+
+RARITY_SLUG_TO_LABEL = {slug: label for _, slug, label in RARITY_FILTERS}
+
+class SearchState(StatesGroup):
+    waiting_for_query = State()
+
+def _card_power(cid: str) -> int:
+    c = CARDS.get(cid)
+    if not c:
+        return 0
+    return c.get('speed', 0) + c.get('strength', 0) + c.get('intellect', 0)
+
+def _get_user_cids(uid: int) -> list[str]:
+    """Возвращает уникальные card_id из инвентаря пользователя."""
+    rows = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (uid,), fetchall=True)
+    seen = set()
+    result = []
+    for (cid,) in rows:
+        if cid not in seen:
+            seen.add(cid)
+            result.append(cid)
+    return result
+def _apply_filter(cids: list[str], rarity_filter: str) -> list[str]:
+    if rarity_filter == "all":
+        return cids
+    label = RARITY_SLUG_TO_LABEL.get(rarity_filter)
+    if not label:
+        return cids
+    return [cid for cid in cids if CARDS.get(cid, {}).get('rarity') == label]
+
+def _sort_cards(cids: list[str]) -> list[str]:
+    return sorted(
+        cids,
+        key=lambda cid: (RARITY_ORDER.get(CARDS.get(cid, {}).get('rarity', ''), 0), _card_power(cid)),
+        reverse=True
+    )
+def _build_inv_main_text(uid: int) -> str:
+    all_cids = _get_user_cids(uid)
+    total = len(all_cids)
+    total_all = len(CARDS)
+
+    lines = [
+        "🧳 <b>Мои Карты</b>",
+        "",
+        f"📦 Коллекция: <b>{total}</b> из <b>{total_all}</b> карт",
+        "",
+        "💎 По редкостям:",
+    ]
+    for _, slug, label in RARITY_FILTERS:
+        count = sum(1 for cid in all_cids if CARDS.get(cid, {}).get('rarity') == label)
+        if count:
+            lines.append(f"  {label}: <b>{count}</b>")
+
+    if total:
+        top_cids = _sort_cards(all_cids)[:3]
+        lines.append("")
+        lines.append("⚡️ Топ-3 по силе:")
+        for i, cid in enumerate(top_cids, 1):
+            c = CARDS.get(cid)
+            if c:
+                power = _card_power(cid)
+                lines.append(f"  {i}. {c['name']} {c['rarity'].split()[-1]} — {power} 💥")
+
+    lines.append("")
+    lines.append("Выбери раздел 👇")
+    return "\n".join(lines)
+
+def _build_inv_main_kb() -> InlineKeyboardMarkup:
+    bld = InlineKeyboardBuilder()
+    bld.button(text="🎴 Просмотр карт",    callback_data="inv_view:0:all")
+    bld.button(text="🔍 Поиск по названию", callback_data="inv_search_start")
+    bld.button(text="📊 Коллекция",         callback_data="inv_collection")
+    bld.adjust(1)
+    return bld.as_markup()
 
 @router.message(F.text == "🧳 Мои Карты")
-async def my_cards(msg: types.Message):
-    cards = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (msg.from_user.id,), fetchall=True)
-    if not cards: return await msg.answer("У вас пока нет карт.")
-
-    bld = InlineKeyboardBuilder()
-    bld.button(text="🎴 Карты", callback_data="inv_view:0:all")
-    bld.button(text="📊 Коллекция", callback_data="inv_collection")
-    bld.adjust(2)
-
-    await msg.answer("🧳 Ваш инвентарь карт. Выберите раздел:", reply_markup=bld.as_markup())
+async def my_cards(msg: types.Message, state: FSMContext):
+    await state.clear()
+    cids = _get_user_cids(msg.from_user.id)
+    if not cids:
+        return await msg.answer(
+            "🧳 <b>Мои Карты</b>\n\nУ вас пока нет карт. Попробуйте получить их через крутку!",
+            parse_mode="HTML"
+        )
+    await msg.answer(
+        _build_inv_main_text(msg.from_user.id),
+        parse_mode="HTML",
+        reply_markup=_build_inv_main_kb()
+    )
 
 @router.callback_query(F.data == "inv_main")
-async def inv_main_cb(cq: CallbackQuery):
-    bld = InlineKeyboardBuilder()
-    bld.button(text="🎴 Карты", callback_data="inv_view:0:all")
-    bld.button(text="📊 Коллекция", callback_data="inv_collection")
-    bld.adjust(2)
+async def inv_main_cb(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
+    cids = _get_user_cids(cq.from_user.id)
+    if not cids:
+        text = "🧳 <b>Мои Карты</b>\n\nУ вас пока нет карт."
+        kb = None
+    else:
+        text = _build_inv_main_text(cq.from_user.id)
+        kb = _build_inv_main_kb()
+
     try:
-        await cq.message.edit_text("🧳 Ваш инвентарь карт. Выберите раздел:", reply_markup=bld.as_markup())
-    except:
+        await cq.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except Exception:
         await cq.message.delete()
-        await cq.message.answer("🧳 Ваш инвентарь карт. Выберите раздел:", reply_markup=bld.as_markup())
+        await cq.message.answer(text, parse_mode="HTML", reply_markup=kb)
     await cq.answer()
+
+# ── Поиск по названию ──────────────────────────────────────────────────
+
+@router.callback_query(F.data == "inv_search_start")
+async def inv_search_start(cq: CallbackQuery, state: FSMContext):
+    await state.set_state(SearchState.waiting_for_query)
+    bld = InlineKeyboardBuilder()
+    bld.button(text="❌ Отмена", callback_data="inv_main")
+    try:
+        await cq.message.edit_text(
+            "🔍 <b>Поиск карты</b>\n\nВведите название (или его часть):",
+            parse_mode="HTML",
+            reply_markup=bld.as_markup()
+        )
+    except Exception:
+        await cq.message.delete()
+        await cq.message.answer(
+            "🔍 <b>Поиск карты</b>\n\nВведите название (или его часть):",
+            parse_mode="HTML",
+            reply_markup=bld.as_markup()
+        )
+    await cq.answer()
+
+@router.message(StateFilter(SearchState.waiting_for_query))
+async def inv_search_query(msg: types.Message, state: FSMContext):
+    await state.clear()
+    query = (msg.text or "").strip().lower()
+    if not query:
+        return await msg.answer("Пустой запрос. Попробуйте ещё раз.", parse_mode="HTML")
+
+    user_cids = _get_user_cids(msg.from_user.id)
+    matched = [
+        cid for cid in user_cids
+        if query in CARDS.get(cid, {}).get('name', '').lower()
+    ]
+    matched = _sort_cards(matched)
+    if not matched:
+        bld = InlineKeyboardBuilder()
+        bld.button(text="🔙 Назад", callback_data="inv_main")
+        return await msg.answer(
+            f"🔍 По запросу «<b>{msg.text}</b>» карт не найдено.",
+            parse_mode="HTML",
+            reply_markup=bld.as_markup()
+        )
+
+    # Сохраняем результаты поиска и показываем первую страницу
+    await _send_search_results(msg, matched, page=0, query=msg.text)
+
+async def _send_search_results(target, matched: list, page: int, query: str):
+    """Отправляет страницу результатов поиска (работает и с Message, и с CallbackQuery)."""
+    items_per_page = 12
+    total_pages = max(1, (len(matched) + items_per_page - 1) // items_per_page)
+    page = max(0, min(page, total_pages - 1))
+
+    start = page * items_per_page
+    page_cids = matched[start:start + items_per_page]
+
+    bld = InlineKeyboardBuilder()
+
+    for cid in page_cids:
+        c = CARDS.get(cid)
+        if c:
+            emoji = c['rarity'].split()[-1] if len(c['rarity'].split()) > 1 else ""
+            power = _card_power(cid)
+            bld.row(types.InlineKeyboardButton(
+                text=f"{c['name']} {emoji} · {power}💥",
+                callback_data=f"viewcard:{cid}:{page}:all"
+            ))
+
+    # Навигация
+    nav = []
+    if page > 0:
+        nav.append(types.InlineKeyboardButton(text="⬅️", callback_data=f"inv_search_page:{page - 1}:{query}"))
+    nav.append(types.InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="ignore"))
+    if page < total_pages - 1:
+        nav.append(types.InlineKeyboardButton(text="➡️", callback_data=f"inv_search_page:{page + 1}:{query}"))
+    if nav:
+        bld.row(*nav)
+
+    bld.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="inv_main"))
+
+    txt = f"🔍 Результаты по «<b>{query}</b>»: {len(matched)} карт"
+
+    if isinstance(target, types.Message):
+        await target.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
+    else:
+        try:
+            await target.message.edit_text(txt, parse_mode="HTML", reply_markup=bld.as_markup())
+        except Exception:
+            await target.message.delete()
+            await target.message.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
+
+@router.callback_query(F.data.startswith("inv_search_page:"))
+async def inv_search_page(cq: CallbackQuery):
+    parts = cq.data.split(":", 2)
+    page = int(parts[1])
+    query = parts[2] if len(parts) > 2 else ""
+
+    user_cids = _get_user_cids(cq.from_user.id)
+    matched = _sort_cards([
+        cid for cid in user_cids
+        if query.lower() in CARDS.get(cid, {}).get('name', '').lower()
+    ])
+    await _send_search_results(cq, matched, page=page, query=query)
+    await cq.answer()
+
+# ── Просмотр с фильтром и листалкой ───────────────────────────────────
 
 @router.callback_query(F.data.startswith("inv_view:"))
 async def inv_view_paginated(cq: CallbackQuery):
-    _, page_str, rarity_filter = cq.data.split(":")
-    page = int(page_str)
+    parts = cq.data.split(":")
+    page = int(parts[1])
+    rarity_filter = parts[2] if len(parts) > 2 else "all"
 
-    cards_db = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
-    if not cards_db:
+    all_cids = _get_user_cids(cq.from_user.id)
+    if not all_cids:
         return await cq.answer("У вас нет карт.", show_alert=True)
 
-    user_cids = [row[0] for row in cards_db]
-
-    rev_map = {
-        "divine": "Божественная ⚫️",
-        "mythic": "Мифическая 🔴",
-        "legendary": "Легендарная 🔵",
-        "epic": "Эпическая 🟢",
-        "rare": "Редкая 🟡",
-        "common": "Обычная ⚪️"
-    }
-
-    target_rarity = rev_map.get(rarity_filter, "all")
-    if target_rarity != "all":
-        user_cids = [cid for cid in user_cids if CARDS.get(cid, {}).get('rarity') == target_rarity]
-
-    def card_power(cid):
-        c = CARDS.get(cid)
-        if not c: return 0
-        return c.get('speed', 0) + c.get('strength', 0) + c.get('intellect', 0)
-
-    user_cids.sort(key=lambda cid: (RARITY_ORDER.get(CARDS.get(cid, {}).get('rarity'), 0), card_power(cid)), reverse=True)
+    filtered = _apply_filter(all_cids, rarity_filter)
+    sorted_cids = _sort_cards(filtered)
 
     items_per_page = 12
-    total_pages = (len(user_cids) + items_per_page - 1) // items_per_page if user_cids else 1
-    if page >= total_pages: page = max(0, total_pages - 1)
-    if page < 0: page = 0
+    total_pages = max(1, (len(sorted_cids) + items_per_page - 1) // items_per_page)
+    page = max(0, min(page, total_pages - 1))
 
-    start_idx = page * items_per_page
-    page_cids = user_cids[start_idx:start_idx + items_per_page]
+    start = page * items_per_page
+    page_cids = sorted_cids[start:start + items_per_page]
 
     bld = InlineKeyboardBuilder()
-    bld.button(text="⚫️", callback_data="inv_view:0:divine")
-    bld.button(text="🔴", callback_data="inv_view:0:mythic")
-    bld.button(text="🔵", callback_data="inv_view:0:legendary")
-    bld.button(text="🟢", callback_data="inv_view:0:epic")
-    bld.button(text="🟡", callback_data="inv_view:0:rare")
-    bld.button(text="⚪️", callback_data="inv_view:0:common")
-    bld.button(text="Все", callback_data="inv_view:0:all")
-    bld.adjust(7)
+    # ── Строка фильтров ──
+    filter_row = []
+    for emoji, slug, _ in RARITY_FILTERS:
+        count = sum(1 for cid in all_cids if CARDS.get(cid, {}).get('rarity') == RARITY_SLUG_TO_LABEL[slug])
+        active = "›" if slug == rarity_filter else ""
+        btn_text = f"{active}{emoji}{count}{active}" if count else f"{emoji}—"
+        filter_row.append(types.InlineKeyboardButton(
+            text=btn_text,
+            callback_data=f"inv_view:0:{slug}"
+        ))
+    # Кнопка «Все»
+    all_mark = "›" if rarity_filter == "all" else ""
+    filter_row.append(types.InlineKeyboardButton(
+        text=f"{all_mark}Все{all_mark}",
+        callback_data="inv_view:0:all"
+    ))
+    bld.row(*filter_row)
 
+    # ── Карточки ──
     card_buttons = []
     for cid in page_cids:
         c = CARDS.get(cid)
         if c:
             emoji = c['rarity'].split()[-1] if len(c['rarity'].split()) > 1 else ""
-            card_buttons.append(types.InlineKeyboardButton(text=f"{c['name']} {emoji}", callback_data=f"viewcard:{cid}:{page_str}:{rarity_filter}"))
+            power = _card_power(cid)
+            card_buttons.append(types.InlineKeyboardButton(
+                text=f"{c['name']} {emoji}",
+                callback_data=f"viewcard:{cid}:{page}:{rarity_filter}"
+            ))
 
     for i in range(0, len(card_buttons), 2):
         bld.row(*card_buttons[i:i + 2])
 
+    # ── Навигация ──
     nav_row = []
     if page > 0:
-        nav_row.append(types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"inv_view:{page - 1}:{rarity_filter}"))
+        nav_row.append(types.InlineKeyboardButton(
+            text="⬅️", callback_data=f"inv_view:{page - 1}:{rarity_filter}"
+        ))
     else:
-        nav_row.append(types.InlineKeyboardButton(text=" ", callback_data="ignore"))
+        nav_row.append(types.InlineKeyboardButton(text="⬅️", callback_data="ignore"))
 
-    nav_row.append(types.InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="ignore"))
+    nav_row.append(types.InlineKeyboardButton(
+        text=f"📄 {page + 1} / {total_pages}", callback_data="ignore"
+    ))
 
     if page < total_pages - 1:
-        nav_row.append(types.InlineKeyboardButton(text="Вперед ➡️", callback_data=f"inv_view:{page + 1}:{rarity_filter}"))
+        nav_row.append(types.InlineKeyboardButton(
+            text="➡️", callback_data=f"inv_view:{page + 1}:{rarity_filter}"
+        ))
     else:
-        nav_row.append(types.InlineKeyboardButton(text=" ", callback_data="ignore"))
+        nav_row.append(types.InlineKeyboardButton(text="➡️", callback_data="ignore"))
 
     bld.row(*nav_row)
-    bld.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="inv_main"))
 
-    filter_name = rev_map.get(rarity_filter, "Все")
-    txt = f"🎴 Ваши карты\nФильтр: {filter_name}"
+    # ── Нижние кнопки ──
+    bld.row(
+        types.InlineKeyboardButton(text="🔍 Поиск", callback_data="inv_search_start"),
+        types.InlineKeyboardButton(text="🔙 Назад", callback_data="inv_main")
+    )
+    bld.row(types.InlineKeyboardButton(text="📊 Коллекция", callback_data="inv_collection"))
+
+    # ── Текст ──
+    filter_label = RARITY_SLUG_TO_LABEL.get(rarity_filter, "Все")
+    shown = len(sorted_cids)
+    txt = (
+        f"🎴 <b>Мои Карты</b>\n"
+        f"Фильтр: {filter_label} · {shown} карт\n"
+        f"Сортировка: по редкости + силе ⬇️"
+    )
 
     try:
-        await cq.message.edit_text(txt, reply_markup=bld.as_markup())
+        await cq.message.edit_text(txt, parse_mode="HTML", reply_markup=bld.as_markup())
     except Exception:
         await cq.message.delete()
-        await cq.message.answer(txt, reply_markup=bld.as_markup())
+        await cq.message.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
     await cq.answer()
+
+# ── Коллекция ──────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "inv_collection")
 async def inv_collection_cb(cq: CallbackQuery):
-    cards_db = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
-    user_owned = set([row[0] for row in cards_db])
+    user_cids = _get_user_cids(cq.from_user.id)
+    user_owned = set(user_cids)
 
     total_cards = len(CARDS)
     owned_total = len(user_owned)
-    total_pct = int((owned_total / total_cards) * 100) if total_cards > 0 else 0
+    total_pct = int((owned_total / total_cards) * 100) if total_cards else 0
 
-    rarities = [
-        ("Божественная ⚫️", "⚫️ Божественная"),
-        ("Мифическая 🔴", "🔴 Мифическая"),
-        ("Легендарная 🔵", "🔵 Легендарная"),
-        ("Эпическая 🟢", "🟢 Эпическая"),
-        ("Редкая 🟡", "🟡 Редкая"),
-        ("Обычная ⚪️", "⚪️ Обычная")
-    ]
+    # Прогресс-бар
+    filled = total_pct // 10
+    bar = "█" * filled + "░" * (10 - filled)
 
     lines = [
-        "📊 Коллекция собранных карт\n",
-        f"Всего карт: {owned_total}/{total_cards} ({total_pct}%)\n",
-        "💎 Количество карт по редкостям:\n<blockquote>"
+        "📊 <b>Коллекция</b>",
+        "",
+        f"Прогресс: [{bar}] {total_pct}%",
+        f"Собрано: <b>{owned_total}</b> / {total_cards} карт",
+        "",
+        "💎 <b>По редкостям:</b>",
+        "<blockquote>"
     ]
-
     rarity_lines = []
-    for db_rarity, disp_name in rarities:
-        all_r = [cid for cid, c in CARDS.items() if c.get('rarity') == db_rarity]
+    for _, slug, label in RARITY_FILTERS:
+        all_r = [cid for cid, c in CARDS.items() if c.get('rarity') == label]
         t_r = len(all_r)
-        if t_r == 0: continue
+        if not t_r:
+            continue
+        o_t = sum(1 for cid in all_r if cid in user_owned)
+        pct = int((o_t / t_r) * 100)
+        r_bar_f = pct // 10
+        r_bar = "█" * r_bar_f + "░" * (10 - r_bar_f)
+        rarity_lines.append(f"{label}: {o_t}/{t_r}  [{r_bar}] {pct}%")
 
-        o_r = [cid for cid in all_r if cid in user_owned]
-        o_t = len(o_r)
-        pct = int((o_t / t_r) * 100) if t_r > 0 else 0
+    lines.append("\n".join(rarity_lines))
+    lines.append("</blockquote>")
 
-        rarity_lines.append(f"{disp_name}: {o_t}/{t_r} ({pct}%)")
-
-    lines.append("\n".join(rarity_lines) + "</blockquote>")
-
-    # ---- Вселенные ----
-    lines.append("\n🪐 Собранные вселленные:\n<blockquote>")
-
-    series_map = {}
+    # Вселенные
+    series_map: dict[str, dict] = {}
     for cid, c in CARDS.items():
         s = c.get('series', 'Неизвестно')
-        if s not in series_map:
-            series_map[s] = {'total': 0, 'owned': 0}
+        series_map.setdefault(s, {'total': 0, 'owned': 0})
         series_map[s]['total'] += 1
         if cid in user_owned:
             series_map[s]['owned'] += 1
 
-    # Сортировка наоборот: от большего к меньшему
-    sorted_series = sorted(series_map.items(), key=lambda x: x[1]['total'], reverse=True)
+    sorted_series = sorted(series_map.items(), key=lambda x: x[1]['owned'], reverse=True)
 
+    lines += ["", "🪐 <b>Вселенные:</b>", "<blockquote>"]
     series_lines = []
     for s_name, s_data in sorted_series:
-        series_lines.append(f"{s_name}: {s_data['owned']}/{s_data['total']}")
+        pct_s = int((s_data['owned'] / s_data['total']) * 100) if s_data['total'] else 0
+        mark = "✅" if pct_s == 100 else ("🔥" if pct_s >= 50 else "")
+        series_lines.append(f"{mark} {s_name}: {s_data['owned']}/{s_data['total']} ({pct_s}%)")
+    lines.append("\n".join(series_lines))
+    lines.append("</blockquote>")
 
-    lines.append("\n".join(series_lines) + "</blockquote>")
     txt = "\n".join(lines)
-
     bld = InlineKeyboardBuilder()
-    bld.button(text="🔙 Назад", callback_data="inv_main")
+    bld.button(text="🎴 К картам", callback_data="inv_view:0:all")
+    bld.button(text="🔙 Назад",    callback_data="inv_main")
+    bld.adjust(2)
 
     try:
-        await cq.message.edit_text(txt, reply_markup=bld.as_markup())
-    except:
+        await cq.message.edit_text(txt, parse_mode="HTML", reply_markup=bld.as_markup())
+    except Exception:
         await cq.message.delete()
-        await cq.message.answer(txt, reply_markup=bld.as_markup())
+        await cq.message.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
     await cq.answer()
 
 
@@ -219,15 +440,25 @@ async def view_card(cq: CallbackQuery):
     page = parts[2] if len(parts) > 2 else "0"
     r_filter = parts[3] if len(parts) > 3 else "all"
 
-    c = CARDS[cid]
-    txt = (f"🃏 Ваша боевая карта!\n\n"
-           f"🎴 Персонаж: {c['name']}\n"
-           f"🔮 Редкость: {c['rarity']}\n"
-           f"👊 Стиль боя: {c['style']}\n"
-           f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
-           f"⚡️ Скорость: {c['speed']}\n"
-           f"💪 Сила: {c['strength']}\n"
-           f"🧠 Интеллект: {c['intellect']}")
+    c = CARDS.get(cid)
+    if not c:
+        return await cq.answer("Карта не найдена.", show_alert=True)
+
+    power = _card_power(cid)
+    # Мини-бар силы (макс ~300)
+    power_filled = min(10, power // 30)
+    power_bar = "▰" * power_filled + "▱" * (10 - power_filled)
+
+    txt = (
+        f"🃏 <b>{c['name']}</b>\n\n"
+        f"🔮 Редкость: {c['rarity']}\n"
+        f"👊 Стиль боя: {c['style']}\n"
+        f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+        f"⚡️ Скорость:   <b>{c['speed']}</b>\n"
+        f"💪 Сила:       <b>{c['strength']}</b>\n"
+        f"🧠 Интеллект:  <b>{c['intellect']}</b>\n\n"
+        f"💥 Мощь: {power}  [{power_bar}]"
+    )
 
     bld = InlineKeyboardBuilder()
     bld.button(text="〽️ Трейд", callback_data=f"trade_init:{cid}")
@@ -235,10 +466,9 @@ async def view_card(cq: CallbackQuery):
     if is_divine(cid) and c.get("video"):
         bld.button(text="Показать арт 👀", callback_data=f"divshow:{cid}:art:{page}:{r_filter}")
 
-    bld.button(text="Назад", callback_data=f"inv_view:{page}:{r_filter}")
+    bld.button(text="🔙 Назад", callback_data=f"inv_view:{page}:{r_filter}")
     bld.adjust(1)
     await cq.message.delete()
-
     if is_divine(cid) and c.get("video"):
         await send_cached_video(
             cq.bot,
@@ -248,12 +478,14 @@ async def view_card(cq: CallbackQuery):
             width=c.get("width", 960),
             height=c.get("height", 1280),
             reply_markup=bld.as_markup(),
-            supports_streaming=True
+            supports_streaming=True,
+            parse_mode="HTML"
         )
     else:
         await cq.message.answer_photo(
             photo=FSInputFile(f"images/cards/{c['file']}"),
             caption=txt,
+            parse_mode="HTML",
             reply_markup=bld.as_markup()
         )
 
@@ -268,14 +500,16 @@ async def divine_toggle(cq: CallbackQuery):
     c = CARDS.get(cid)
     if not c: return await cq.answer("Карта не найдена.", show_alert=True)
 
-    txt = (f"🃏 Ваша боевая карта!\n\n"
-           f"🎴 Персонаж: {c['name']}\n"
-           f"🔮 Редкость: {c['rarity']}\n"
-           f"👊 Стиль боя: {c['style']}\n"
-           f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
-           f"⚡️ Скорость: {c['speed']}\n"
-           f"💪 Сила: {c['strength']}\n"
-           f"🧠 Интеллект: {c['intellect']}")
+    txt = (
+        f"🃏 <b>{c['name']}</b>\n\n"
+        f"🔮 Редкость: {c['rarity']}\n"
+        f"👊 Стиль боя: {c['style']}\n"
+        f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
+        f"⚡️ Скорость:   <b>{c['speed']}</b>\n"
+        f"💪 Сила:       <b>{c['strength']}</b>\n"
+        f"🧠 Интеллект:  <b>{c['intellect']}</b>\n\n"
+        f"💥 Мощь: {_card_power(cid)}  [{'▰' * min(10, _card_power(cid) // 30) + '▱' * (10 - min(10, _card_power(cid) // 30))}]"
+    )
 
     bld = InlineKeyboardBuilder()
     bld.button(text="〽️ Трейд", callback_data=f"trade_init:{cid}")
@@ -295,7 +529,7 @@ async def divine_toggle(cq: CallbackQuery):
     if mode == "art":
         await cq.message.answer_photo(
             photo=FSInputFile(f"images/cards/{c['file']}"),
-            caption=txt,
+            caption=txt, parse_mode="HTML",
             reply_markup=bld.as_markup()
         )
     else:
