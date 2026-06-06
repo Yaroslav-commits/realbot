@@ -669,13 +669,54 @@ async def shop_event_buy_cb(cq: CallbackQuery):
         return await cq.answer(f"❌ Карта «{info['name']}» ещё не добавлена в игру! Ожидайте обновления.",
                                show_alert=True)
 
-    from database.db import get_event_items, db_exec, give_card_to_user
+    from database.db import get_event_items, db_exec
     items = get_event_items(cq.from_user.id)
     cur_idx = 0 if currency == "cocktail" else (1 if currency == "icecream" else 2)
     user_bal = items[cur_idx]
 
     if user_bal < price:
         return await cq.answer(f"❌ Недостаточно ресурсов! Нужно: {price} {icon}", show_alert=True)
+
+    # Проверяем, есть ли уже такая карточка
+    has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (cq.from_user.id, card_key),
+                       fetch=True)
+
+    if has_card:
+        bld = InlineKeyboardBuilder()
+        bld.button(text="Уверен ✅", callback_data=f"shop:event_confirm_buy:{idx}")
+        bld.button(text="Отказаться ❌", callback_data="shop:event")
+        bld.adjust(2)
+
+        caption = f"У вас уже есть карточка <b>{info['name']}</b>!\nВы уверены, что хотите купить её повторно? (Она будет конвертирована в KRW 💴)"
+        try:
+            await cq.message.edit_caption(caption=caption, reply_markup=bld.as_markup(), parse_mode="HTML")
+        except Exception:
+            pass
+        return await cq.answer()
+
+    # Если карты нет, покупаем сразу без вопросов
+    await process_event_buy(cq, idx)
+
+
+@router.callback_query(F.data.startswith("shop:event_confirm_buy:"))
+async def shop_event_confirm_buy_cb(cq: CallbackQuery):
+    idx = int(cq.data.split(":")[2])
+    await process_event_buy(cq, idx)
+
+
+async def process_event_buy(cq: CallbackQuery, idx: int):
+    info = EVENT_CARDS.get(idx)
+    card_key = info["key"]
+    price = info["price"]
+    currency = info["currency"]
+
+    from database.db import get_event_items, db_exec, give_card_to_user
+
+    items = get_event_items(cq.from_user.id)
+    cur_idx = 0 if currency == "cocktail" else (1 if currency == "icecream" else 2)
+    if items[cur_idx] < price:
+        return await cq.answer("❌ Недостаточно ресурсов!", show_alert=True)
+
     # Списываем ресурс
     db_exec(f"UPDATE event_items SET {currency} = {currency} - ? WHERE user_id = ?", (price, cq.from_user.id))
 
@@ -701,6 +742,12 @@ async def shop_event_buy_cb(cq: CallbackQuery):
                f"🧠 Интеллект: {c['intellect']}")
 
     from aiogram.types import FSInputFile
+
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+
     await cq.message.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True)
     await cq.answer(f"✅ Вы успешно купили карту {c['name']}!", show_alert=True)
 
@@ -896,6 +943,9 @@ async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, 
 _selected_days: dict[int, dict] = {}
 # структура: { uid: { "p_type": str, "days": set[int] } }
 
+# ── Хранилище блокировок для защиты от спам-кликов ──────────
+_claim_locks = set()
+
 @router.callback_query(F.data.startswith("claim_pass:"))
 async def claim_pass(cq: CallbackQuery):
     _, p_type, day_str, page_str = cq.data.split(":")
@@ -904,40 +954,53 @@ async def claim_pass(cq: CallbackQuery):
     uid = cq.from_user.id
     now = datetime.now(MSK)
 
-    is_claimed = db_exec(
-        "SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = ?",
-        (uid, now.month, day, p_type), fetch=True
-    )
-    if is_claimed:
-        return await cq.answer("Вы уже забрали эту награду! ✅", show_alert=True)
+    # Защита от двойного клика
+    lock_key = f"{uid}_{p_type}_{day}"
+    if lock_key in _claim_locks:
+        return await cq.answer("⏳ Обработка... Не спамь!", show_alert=True)
+    _claim_locks.add(lock_key)
 
-    if day > now.day:
-        return await cq.answer("Этот день ещё не наступил! 🕓", show_alert=True)
+    try:
+        is_claimed = db_exec(
+            "SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = ?",
+            (uid, now.month, day, p_type), fetch=True
+        )
+        if is_claimed:
+            return await cq.answer("Вы уже забрали эту награду! ✅", show_alert=True)
 
-    if day < now.day:
-        return await cq.answer("День пропущен ❌\nИспользуй «Купить дни 💎»", show_alert=True)
+        if day > now.day:
+            return await cq.answer("Этот день ещё не наступил! 🕓", show_alert=True)
 
-    # Сегодняшний день — выдаём награду
-    data = ROYALE_PASS if p_type == "royale" else NORMAL_PASS
-    r_type, r_val = data.get(day, ('krw', 10))
-    icons = {'krw': '💴', 'atm': '💳', 'bc': '🪙', 'dia': '💎', 'pack': '🗃️'}
+        if day < now.day:
+            return await cq.answer("День пропущен ❌\nИспользуй «Купить дни 💎»", show_alert=True)
 
-    reward_msg = await _give_pass_reward(uid, p_type, day, r_type, r_val, cq.message)
-    db_exec(
-        "INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
-        (uid, now.month, day, p_type)
-    )
+        # ВАЖНО: Сразу записываем сбор в БД ДО выдачи награды, чтобы избежать абуза
+        db_exec(
+            "INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
+            (uid, now.month, day, p_type)
+        )
 
-    icon = icons.get(r_type, '')
-    val_str = r_val if r_type != 'pack' else '🗃️ Пак'
-    await cq.answer(f"✅ Награда получена: {val_str} {icon}", show_alert=True)
+        # Выдаём награду
+        data = ROYALE_PASS if p_type == "royale" else NORMAL_PASS
+        r_type, r_val = data.get(day, ('krw', 10))
+        icons = {'krw': '💴', 'atm': '💳', 'bc': '🪙', 'dia': '💎', 'pack': '🗃️'}
 
-    if reward_msg:
-        await cq.message.answer(reward_msg, parse_mode="HTML")
+        reward_msg = await _give_pass_reward(uid, p_type, day, r_type, r_val, cq.message)
 
-    u = get_user(uid)
-    _, days_in_month = calendar.monthrange(now.year, now.month)
-    await render_pass_page(cq, p_type, page, u, now, days_in_month)
+        icon = icons.get(r_type, '')
+        val_str = r_val if r_type != 'pack' else '🗃️ Пак'
+        await cq.answer(f"✅ Награда получена: {val_str} {icon}", show_alert=True)
+
+        if reward_msg:
+            await cq.message.answer(reward_msg, parse_mode="HTML")
+
+        # Обновляем менюшку
+        u = get_user(uid)
+        _, days_in_month = calendar.monthrange(now.year, now.month)
+        await render_pass_page(cq, p_type, page, u, now, days_in_month)
+    finally:
+        # Снимаем блокировку
+        _claim_locks.discard(lock_key)
 
 async def _give_pass_reward(uid, p_type, day, r_type, r_val, message=None):
     """Начисляет награду и возвращает текст для отправки в чат (или None)."""
@@ -1001,6 +1064,47 @@ async def _give_pass_reward(uid, p_type, day, r_type, r_val, message=None):
                     return card_txt
     return None
 
+async def _render_buy_days_menu(cq: CallbackQuery, uid: int, p_type: str, missed_days: list, bought_count: int,
+                                now: datetime):
+    # Получаем уже выбранные пользователем дни из памяти
+    sel = _selected_days.get(uid, {}).get("days", set())
+
+    txt = (
+        f"💎 <b>Покупка пропущенных дней</b>\n\n"
+        f"Выберите дни, которые хотите восстановить.\n"
+        f"<i>С каждым купленным днём в этом месяце цена возрастает на 15💎!</i>\n\n"
+        f"Уже куплено дней в этом месяце: <b>{bought_count}</b>"
+    )
+
+    bld = InlineKeyboardBuilder()
+
+    # Кнопки пропущенных дней
+    buttons = []
+    for d in missed_days:
+        mark = "✅ " if d in sel else ""
+        buttons.append(InlineKeyboardButton(text=f"{mark}День {d}", callback_data=f"toggle_missed_day:{p_type}:{d}"))
+
+    # Группируем их по 3 штуки в ряд
+    for i in range(0, len(buttons), 3):
+        bld.row(*buttons[i:i + 3])
+
+    # Если хоть один день выбран, показываем кнопку "Купить"
+    if sel:
+        # Считаем сумму с учётом прогрессии
+        costs = [(bought_count + i + 1) * 15 for i in range(len(sel))]
+        total = sum(costs)
+        bld.row(
+            InlineKeyboardButton(text=f"🛒 Купить выбранные ({total} 💎)", callback_data=f"confirm_buy_days:{p_type}"))
+
+    # Кнопка возврата в меню пасса
+    # Отправляем на нулевую страницу, чтобы избежать ошибок навигации
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"pass:{p_type}:0"))
+
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    except Exception:
+        pass
+
 @router.callback_query(F.data.startswith("buy_days_menu:"))
 async def buy_days_menu(cq: CallbackQuery):
     _, p_type = cq.data.split(":")
@@ -1018,66 +1122,17 @@ async def buy_days_menu(cq: CallbackQuery):
 
     if not missed_days:
         return await cq.answer("У вас нет пропущенных дней! 🎉", show_alert=True)
+
+    # Считаем общее количество купленных дней в этом месяце (без привязки к типу пасса)
     bought_count = db_exec(
-        "SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
-        (uid, now.month, p_type), fetch=True
+        "SELECT COUNT(DISTINCT day) FROM pass_bought_days WHERE user_id = ? AND month = ?",
+        (uid, now.month), fetch=True
     )[0]
 
-    # Сбрасываем выбор при входе в меню
     _selected_days[uid] = {"p_type": p_type, "days": set()}
-
     await _render_buy_days_menu(cq, uid, p_type, missed_days, bought_count, now)
     await cq.answer()
 
-async def _render_buy_days_menu(cq: CallbackQuery, uid: int, p_type: str, missed_days: list, bought_count: int, now):
-    selected = _selected_days.get(uid, {}).get("days", set())
-    n_sel = len(selected)
-
-    # Стоимость: каждый следующий купленный день дороже на 15
-    costs = [(bought_count + i + 1) * 15 for i in range(n_sel)] if n_sel else []
-    total_cost = sum(costs)
-
-    cost_lines = "\n".join(
-        [f"  {bought_count + i + 1}-й покупаемый день — {(bought_count + i + 1) * 15} 💎" for i in range(3)]
-    )
-
-    txt = (
-        "🔂 <b>Покупка пропущенных дней</b>\n\n"
-        "<blockquote>"
-        "Стоимость растёт с каждой покупкой (×15 💎 за каждый):\n"
-        f"{cost_lines}\n"
-        "и т.д."
-        "</blockquote>\n\n"
-    )
-
-    if selected:
-        days_str = ", ".join(str(d) for d in sorted(selected))
-        txt += f"✳️ Выбраны дни: <b>{days_str}</b>\nИтого: <b>{total_cost} 💎</b>\n\n"
-    else:
-        txt += "Нажми на день чтобы выбрать (можно несколько):\n"
-
-    bld = InlineKeyboardBuilder()
-    day_buttons = []
-    for d in missed_days:
-        star = "✳️" if d in selected else "❌"
-        day_buttons.append(
-            InlineKeyboardButton(text=f"{star} {d}", callback_data=f"toggle_missed_day:{p_type}:{d}")
-        )
-    for i in range(0, len(day_buttons), 4):
-        bld.row(*day_buttons[i:i + 4])
-
-    if selected:
-        bld.row(InlineKeyboardButton(
-            text=f"💎 Купить выбранные дни ({total_cost} 💎)",
-            callback_data=f"confirm_buy_days:{p_type}"
-        ))
-
-    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"pass:{p_type}:start"))
-
-    try:
-        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
 
 @router.callback_query(F.data.startswith("toggle_missed_day:"))
 async def toggle_missed_day(cq: CallbackQuery):
@@ -1086,7 +1141,6 @@ async def toggle_missed_day(cq: CallbackQuery):
     uid = cq.from_user.id
     now = datetime.now(MSK)
 
-    # Инициализируем если надо
     if uid not in _selected_days or _selected_days[uid].get("p_type") != p_type:
         _selected_days[uid] = {"p_type": p_type, "days": set()}
 
@@ -1098,7 +1152,6 @@ async def toggle_missed_day(cq: CallbackQuery):
         sel.add(day)
         await cq.answer(f"День {day} выбран ✳️")
 
-    # Пересчитываем пропущенные
     db_exec("CREATE TABLE IF NOT EXISTS pass_bought_days (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
     claims = db_exec(
         "SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
@@ -1108,10 +1161,11 @@ async def toggle_missed_day(cq: CallbackQuery):
     missed_days = [d for d in range(1, now.day) if d not in claimed_days]
 
     bought_count = db_exec(
-        "SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
-        (uid, now.month, p_type), fetch=True
+        "SELECT COUNT(DISTINCT day) FROM pass_bought_days WHERE user_id = ? AND month = ?",
+        (uid, now.month), fetch=True
     )[0]
     await _render_buy_days_menu(cq, uid, p_type, missed_days, bought_count, now)
+
 
 @router.callback_query(F.data.startswith("confirm_buy_days:"))
 async def confirm_buy_days(cq: CallbackQuery):
@@ -1124,9 +1178,10 @@ async def confirm_buy_days(cq: CallbackQuery):
         return await cq.answer("Не выбрано ни одного дня!", show_alert=True)
     selected = sorted(sel_data["days"])
     db_exec("CREATE TABLE IF NOT EXISTS pass_bought_days (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
+
     bought_count = db_exec(
-        "SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
-        (uid, now.month, p_type), fetch=True
+        "SELECT COUNT(DISTINCT day) FROM pass_bought_days WHERE user_id = ? AND month = ?",
+        (uid, now.month), fetch=True
     )[0]
 
     costs = [(bought_count + i + 1) * 15 for i in range(len(selected))]
@@ -1150,6 +1205,7 @@ async def confirm_buy_days(cq: CallbackQuery):
         pass
     await cq.answer()
 
+
 @router.callback_query(F.data.startswith("exec_buy_days:"))
 async def exec_buy_days(cq: CallbackQuery):
     _, p_type = cq.data.split(":")
@@ -1162,9 +1218,10 @@ async def exec_buy_days(cq: CallbackQuery):
 
     selected = sorted(sel_data["days"])
     db_exec("CREATE TABLE IF NOT EXISTS pass_bought_days (user_id INTEGER, month INTEGER, day INTEGER, pass_type TEXT)")
+
     bought_count = db_exec(
-        "SELECT COUNT(*) FROM pass_bought_days WHERE user_id = ? AND month = ? AND pass_type = ?",
-        (uid, now.month, p_type), fetch=True
+        "SELECT COUNT(DISTINCT day) FROM pass_bought_days WHERE user_id = ? AND month = ?",
+        (uid, now.month), fetch=True
     )[0]
 
     costs = [(bought_count + i + 1) * 15 for i in range(len(selected))]
@@ -1174,80 +1231,62 @@ async def exec_buy_days(cq: CallbackQuery):
     if u[3] < total_cost:
         return await cq.answer(f"❌ Недостаточно алмазов! Нужно: {total_cost} 💎", show_alert=True)
 
-    # Определяем, есть ли Рояль Пасс
     current_ym = int(now.strftime("%Y%m"))
     has_royale = (u[16] == current_ym)
 
-    # Списываем алмазы
     db_exec("UPDATE users SET diamond = diamond - ? WHERE id = ?", (total_cost, uid))
 
     reward_lines = []
 
     for day in selected:
-        # Проверяем, не куплен ли уже
-        already = db_exec(
-            "SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = ?",
-            (uid, now.month, day, p_type), fetch=True
+        # 1. Восстанавливаем Обычный Пасс
+        already_normal = db_exec(
+            "SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = 'normal'",
+            (uid, now.month, day), fetch=True
         )
-        if already:
-            continue
+        if not already_normal:
+            n_type, n_val = NORMAL_PASS.get(day, ('krw', 10))
+            n_text = await _give_pass_reward(uid, "normal", day, n_type, n_val, cq.message)
+            if n_text: reward_lines.append(n_text)
 
-        db_exec(
-            "INSERT INTO pass_bought_days (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
-            (uid, now.month, day, p_type)
-        )
+            db_exec("INSERT INTO pass_bought_days (user_id, month, day, pass_type) VALUES (?, ?, ?, 'normal')",
+                    (uid, now.month, day))
+            db_exec("INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, 'normal')",
+                    (uid, now.month, day))
 
-        # Начисляем награду основного пасса
-        data = ROYALE_PASS if p_type == "royale" else NORMAL_PASS
-        r_type, r_val = data.get(day, ('krw', 10))
-        reward_text = await _give_pass_reward(uid, p_type, day, r_type, r_val, cq.message)
-        if reward_text:
-            reward_lines.append(reward_text)
-
-        db_exec(
-            "INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
-            (uid, now.month, day, p_type)
-        )
-        # ── Если покупаем обычный пасс и есть Рояль Пасс — восстанавливаем и его ──
-        if p_type == "normal" and has_royale:
-            already_rp = db_exec(
+        # 2. Восстанавливаем Рояль Пасс (если он куплен)
+        if has_royale:
+            already_royale = db_exec(
                 "SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = 'royale'",
                 (uid, now.month, day), fetch=True
             )
-            if not already_rp:
-                rp_type, rp_val = ROYALE_PASS.get(day, ('krw', 10))
-                rp_text = await _give_pass_reward(uid, "royale", day, rp_type, rp_val, cq.message)
-                if rp_text:
-                    reward_lines.append(rp_text)
-                db_exec(
-                    "INSERT INTO pass_bought_days (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
-                    (uid, now.month, day, "royale")
-                )
-                db_exec(
-                    "INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, 'royale')",
-                    (uid, now.month, day)
-                )
+            if not already_royale:
+                r_type, r_val = ROYALE_PASS.get(day, ('krw', 10))
+                r_text = await _give_pass_reward(uid, "royale", day, r_type, r_val, cq.message)
+                if r_text: reward_lines.append(r_text)
 
-    # Очищаем выбор
+                db_exec("INSERT INTO pass_bought_days (user_id, month, day, pass_type) VALUES (?, ?, ?, 'royale')",
+                        (uid, now.month, day))
+                db_exec("INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, 'royale')",
+                        (uid, now.month, day))
+
     _selected_days.pop(uid, None)
 
-    # Отправляем итоговое сообщение в чат
     summary_days = ", ".join(str(d) for d in selected)
     result_txt = (
         f"✅ <b>Пропущенные дни восстановлены!</b>\n\n"
-        f"<blockquote>Дни: {summary_days}\nПотрачено: {total_cost} 💎</blockquote>"
+        f"<blockquote>Дни: {summary_days}\nПотрачено: {total_cost} 💎\n"
     )
-    if has_royale and p_type == "normal":
-        result_txt += "\n\n🌠 Рояль Пасс тоже обновлён — награды начислены в оба пасса!"
+    if has_royale:
+        result_txt += "\n🌠 Награды зачислены в ОБА пасса!"
+    result_txt += "</blockquote>"
 
     await cq.message.answer(result_txt, parse_mode="HTML")
     await cq.answer("✅ Готово!", show_alert=True)
 
-    # Возвращаемся в пасс
     u2 = get_user(uid)
     _, days_in_month = calendar.monthrange(now.year, now.month)
     await render_pass_page(cq, p_type, 0, u2, now, days_in_month)
-
 
 @router.callback_query(F.data.startswith("pass_main_prize:"))
 async def pass_main(cq: CallbackQuery):

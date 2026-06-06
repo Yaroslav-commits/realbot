@@ -205,7 +205,7 @@ async def get_card_cmd(msg: types.Message):
                    f"<b>🧠 Интеллект:</b> {c['intellect']}")
             # === ИВЕНТ: НАГРАДА ЗА КРУТКУ ===
         from database.db import add_event_item
-        ev_amount = random.randint(2, 6)
+        ev_amount = random.randint(2, 5)
         if random.choice([True, False]):
             add_event_item(uid, "icecream", ev_amount)
             txt += f"\n\n<b>🪎 Ивент:</b>\n🍨 Мороженое +{ev_amount}"
