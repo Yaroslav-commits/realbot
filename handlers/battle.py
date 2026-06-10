@@ -861,20 +861,7 @@ async def process_card_choice(gid, uid, card, bot):
                 reply_markup=bld.as_markup(),
                 supports_streaming=True
             )
-            opponent_id = g['p2'] if uid == g['p1'] else g['p1']
-            if opponent_id != -1:
-                try:
-                    await send_cached_video(
-                        bot,
-                        chat_id=opponent_id,
-                        file_path=f"images/cards/{card_data['video']}",
-                        caption=f"⚫️ Противник выбрасывает Божественную карту: {card_data['name']}!",
-                        width=card_data.get("width", 960),
-                        height=card_data.get("height", 1280),
-                        supports_streaming=True
-                    )
-                except Exception:
-                    pass
+            # Уведомление противнику убрано ради честной игры!
         else:
             msg = await bot.send_photo(
                 uid,
@@ -901,12 +888,13 @@ async def process_card_choice(gid, uid, card, bot):
         g['p2_s'] = random.choice(['spd', 'str', 'int'])
 
         if g['p1_s'] and g['p2_s']:
-            g['resolving'] = True
-            try:
-                await resolve_round(gid, bot)
-            except Exception as e:
-                logging.error(f"resolve_round failed (bot path): {e}")
-            if gid in GAMES: GAMES[gid]['resolving'] = False
+            if not g.get('resolving'):
+                g['resolving'] = True
+                try:
+                    await resolve_round(gid, bot)
+                except Exception as e:
+                    logging.error(f"resolve_round failed (bot path): {e}")
+                if gid in GAMES: GAMES[gid]['resolving'] = False
 
 
 async def process_style_choice(gid, uid, style, bot):
@@ -922,6 +910,12 @@ async def process_style_choice(gid, uid, style, bot):
         if g['p2_s'] is not None: return
         g['p2_s'] = style
 
+    # БЛОКИРОВКА: Проверяем и блокируем до любых await!
+    should_resolve = False
+    if g['p1_s'] and g['p2_s'] and not g.get('resolving'):
+        g['resolving'] = True
+        should_resolve = True
+
     try:
         msg = await bot.send_message(uid, "Ожидание противника...")
         if is_p1:
@@ -930,8 +924,9 @@ async def process_style_choice(gid, uid, style, bot):
             g['p2_wait_msg'] = msg.message_id
     except:
         pass
-    if g['p1_s'] and g['p2_s']:
-        g['resolving'] = True
+
+    # Если именно этот вызов закрыл раунд, он же его и решает
+    if should_resolve:
         try:
             if g.get('p1_wait_msg'): await bot.delete_message(g['p1'], g['p1_wait_msg'])
             if g.get('p2_wait_msg') and g['p2'] != -1: await bot.delete_message(g['p2'], g['p2_wait_msg'])
@@ -942,7 +937,7 @@ async def process_style_choice(gid, uid, style, bot):
             await resolve_round(gid, bot)
         except Exception as e:
             logging.error(f"Critical error in resolve_round: {e}")
-            # Fallback - если произошел сбой, просто переводим игру в следующий раунд, чтобы не зависла
+            # Fallback на случай сбоя
             if gid in GAMES:
                 GAMES[gid]['round'] += 1
                 GAMES[gid]['p1_c'] = GAMES[gid]['p2_c'] = GAMES[gid]['p1_s'] = GAMES[gid]['p2_s'] = None
@@ -963,7 +958,6 @@ async def process_style_choice(gid, uid, style, bot):
                         await send_card_choice(GAMES[gid]['p2'], GAMES[gid]['d2'], gid, bot)
 
         if gid in GAMES: GAMES[gid]['resolving'] = False
-
 
 async def send_card_choice(uid, deck_left, gid, bot):
     g = GAMES.get(gid)
@@ -1091,20 +1085,49 @@ async def resolve_round(gid, bot):
         t += f"Раунд завершился в ничью!" if winner_name == "Ничья" else f"Раунд выиграл {winner_name}"
         return t
 
+    # Локальная функция для динамической сборки медиа (фото/видео)
+    def create_media(card_main, card_secondary, caption_txt):
+        m = []
+        # Первая карточка (с текстом)
+        if is_divine(card_main) and card_main.get('video'):
+            m.append(types.InputMediaVideo(
+                media=FSInputFile(f"images/cards/{card_main['video']}"),
+                caption=caption_txt,
+                parse_mode="HTML",
+                width=card_main.get("width", 960),
+                height=card_main.get("height", 1280)
+            ))
+        else:
+            m.append(types.InputMediaPhoto(
+                media=FSInputFile(f"images/cards/{card_main['file']}"),
+                caption=caption_txt,
+                parse_mode="HTML"
+            ))
+
+        # Вторая карточка (без текста)
+        if is_divine(card_secondary) and card_secondary.get('video'):
+            m.append(types.InputMediaVideo(
+                media=FSInputFile(f"images/cards/{card_secondary['video']}"),
+                width=card_secondary.get("width", 960),
+                height=card_secondary.get("height", 1280)
+            ))
+        else:
+            m.append(types.InputMediaPhoto(
+                media=FSInputFile(f"images/cards/{card_secondary['file']}")
+            ))
+        return m
+
     try:
         txt1 = format_text(n1, n2_link, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1, val2, f1, f2, bonus_txt_1, emoji1, emoji2)
-        media1 = [types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c1['file']}"), caption=txt1, parse_mode="HTML"),
-                  types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c2['file']}"))]
+        media1 = create_media(c1, c2, txt1)
         await bot.send_media_group(g['p1'], media=media1)
     except Exception as e:
         logging.error(f"Error sending round result to p1: {e}")
 
     if g['p2'] != -1:
         try:
-            txt2 = format_text(n2_link, n1, g['score2'], g['score1'], g['p2_s'], g['p1_s'], val2, val1, f2, f1,
-                               bonus_txt_2, emoji2, emoji1)
-            media2 = [types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c2['file']}"), caption=txt2, parse_mode="HTML"),
-                      types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c1['file']}"))]
+            txt2 = format_text(n2_link, n1, g['score2'], g['score1'], g['p2_s'], g['p1_s'], val2, val1, f2, f1, bonus_txt_2, emoji2, emoji1)
+            media2 = create_media(c2, c1, txt2)
             await bot.send_media_group(g['p2'], media=media2)
         except Exception as e:
             logging.error(f"Error sending round result to p2: {e}")
@@ -1151,8 +1174,9 @@ async def finish_game(gid, bot):
                 pts = -1 if premium else -2
                 bc = 2 if premium else 1
 
+        # ДОБАВЛЕНО: season_wins = season_wins + 1
         db_exec(f"UPDATE users SET rank_points = MAX(0, rank_points + {pts}), battlecoin = battlecoin + {bc}, " +
-                ("wins = wins + 1" if is_win else ("draws = draws + 1" if is_draw else "losses = losses + 1")) +
+                ("wins = wins + 1, season_wins = season_wins + 1" if is_win else ("draws = draws + 1" if is_draw else "losses = losses + 1")) +
                 " WHERE id = ?", (uid,))
         return pts, bc
 
@@ -1181,7 +1205,6 @@ async def finish_game(gid, bot):
     if p2 != -1:
         await bot.send_message(p2,
                                f"Игра окончена!\nСчет: {n2} {s2} - {s1} {my_name}\nНаграда: {r2[0]}🏅, {r2[1]}🪙{ev_txt2}")
-
 
 # ============ ЗАЩИТА И БЛОКИРОВКА ВО ВРЕМЯ БОЯ ============
 from aiogram import BaseMiddleware
@@ -1410,16 +1433,19 @@ async def b_rank_claim_cb(cq: CallbackQuery):
 
 
 # === ТОП ПО ПОБЕДАМ И РАНГАМ ===
+# === ТОП ПО ПОБЕДАМ ===
 @router.callback_query(F.data == "b_top_wins")
 async def b_top_wins_cb(cq: CallbackQuery):
-    top_users = db_exec("SELECT id, nickname, wins FROM users ORDER BY wins DESC LIMIT 10", fetchall=True)
-    all_users = db_exec("SELECT id FROM users ORDER BY wins DESC", fetchall=True)
+    # Теперь ищем только по season_wins
+    top_users = db_exec("SELECT id, nickname, season_wins FROM users ORDER BY season_wins DESC LIMIT 10", fetchall=True)
+    all_users = db_exec("SELECT id FROM users ORDER BY season_wins DESC", fetchall=True)
     my_place = "Без места"
     for idx, (uid,) in enumerate(all_users):
         if uid == cq.from_user.id:
             my_place = idx + 1
             break
-    txt = "🏆 ТОП 10 по Победам:\n\n"
+
+    txt = "🏆 ТОП 10 по Победам (Сезон):\n\n"
     for i, user in enumerate(top_users):
         emoji = "👑" if is_premium(user[0]) else "🧩"
         txt += f"{i + 1}. <a href='tg://user?id={user[0]}'>{user[1]}</a> {emoji} — {user[2]} 🎖\n"
@@ -1454,7 +1480,6 @@ async def b_top_wins_cb(cq: CallbackQuery):
     else:
         await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
-
 
 @router.callback_query(F.data == "b_top_rankpts")
 async def b_top_rankpts_cb(cq: CallbackQuery):
@@ -2647,22 +2672,16 @@ async def b_dia_cancel_cb(cq: CallbackQuery, state: FSMContext):
     await b_shop_main_cb(cq)
 
 async def distribute_top_20_rewards(bot: Bot):
-    """
-    Функция для автоматической выдачи карты Дже Хван ТОП-20 игрокам по победам.
-    Её можно вызывать по команде админа или через планировщик.
-    """
-    top_20 = db_exec("SELECT id FROM users ORDER BY wins DESC LIMIT 20", fetchall=True)
+    top_20 = db_exec("SELECT id FROM users ORDER BY season_wins DESC LIMIT 20", fetchall=True)
     count = 0
     for (uid,) in top_20:
-        # Проверяем, есть ли уже эта карта у игрока (чтобы не дублировать)
         exists = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, PACK_CARD), fetch=True)
         if not exists:
             give_card_to_user(uid, PACK_CARD)
             count += 1
             try:
                 c = CARDS[PACK_CARD]
-                txt = f"🏆 <b>Поздравляем!</b>\nВы вошли в ТОП-20 по победам и получаете эксклюзивную награду!\n\n" + format_card_msg(
-                    c)
+                txt = f"🏆 <b>Поздравляем!</b>\nВы вошли в ТОП-20 по победам и получаете эксклюзивную награду!\n\n" + format_card_msg(c)
                 await bot.send_photo(uid, photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, parse_mode="HTML")
             except:
                 pass
@@ -2675,24 +2694,32 @@ async def cmd_distribute_top(msg: Message, bot: Bot):
     count = await distribute_top_20_rewards(bot)
     await msg.answer(f"✅ Награды выданы {count} игрокам из ТОП-20!")
 
+
 async def distribute_all_top_rewards(bot: Bot):
     """Распределяет награды и карты для ТОП 150 игроков по победам"""
-    top_users = db_exec("SELECT id, wins FROM users WHERE wins > 0 ORDER BY wins DESC LIMIT 150", fetchall=True)
+    top_users = db_exec("SELECT id, season_wins FROM users WHERE season_wins > 0 ORDER BY season_wins DESC LIMIT 150",
+                        fetchall=True)
     count_curr, count_cards = 0, 0
 
     for i, (uid, wins) in enumerate(top_users):
         place = i + 1
         dia, bc = 0, 0
 
-        # Награды в зависимости от места
-        if place == 1: dia, bc = 150, 2000
-        elif place == 2: dia, bc = 100, 1500
-        elif place == 3: dia, bc = 75, 1250
-        elif 4 <= place <= 10: dia, bc = 50, 750
-        elif 11 <= place <= 25: dia, bc = 10, 600
-        elif 26 <= place <= 75: dia, bc = 0, 400
-        elif 76 <= place <= 150: dia, bc = 0, 250
-        # Начисляем валюту
+        if place == 1:
+            dia, bc = 150, 2000
+        elif place == 2:
+            dia, bc = 100, 1500
+        elif place == 3:
+            dia, bc = 75, 1250
+        elif 4 <= place <= 10:
+            dia, bc = 50, 750
+        elif 11 <= place <= 25:
+            dia, bc = 10, 600
+        elif 26 <= place <= 75:
+            dia, bc = 0, 400
+        elif 76 <= place <= 150:
+            dia, bc = 0, 250
+
         if dia > 0 or bc > 0:
             db_exec("UPDATE users SET diamond = diamond + ?, battlecoin = battlecoin + ? WHERE id = ?", (dia, bc, uid))
             count_curr += 1
@@ -2703,7 +2730,6 @@ async def distribute_all_top_rewards(bot: Bot):
             except:
                 pass
 
-        # Выдаем карту за 1-20 место
         if place <= 20:
             exists = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, PACK_CARD), fetch=True)
             if not exists:
@@ -2723,14 +2749,14 @@ async def distribute_all_top_rewards(bot: Bot):
 
 @router.message(Command("reset_top"))
 async def cmd_reset_top(msg: Message, bot: Bot):
-    """Команда для полного сброса боевого сезона (Победы, Поражения, Очки)"""
+    """Команда для ручного сброса сезонного ТОПа"""
     if msg.from_user.id not in ADMIN_IDS: return
 
-    # Сбрасываем всю боевую статистику
-    db_exec("UPDATE users SET wins = 0, losses = 0, draws = 0")
+    # Сбрасываем ТОЛЬКО сезонные победы
+    db_exec("UPDATE users SET season_wins = 0")
 
     await msg.answer(
-        "🧨 <b>Сезон полностью сброшен!</b>\n\nВсе показатели (Победы, Поражения, Ничьи, Очки ранга) обнулены у всех игроков. Начинается новая битва за первенство! 🏆",
+        "🧨 <b>Сезон ТОПа сброшен!</b>\n\nСезонные победы обнулены у всех игроков. Общая статистика (победы, поражения) сохранена. Начинается новая битва за первенство! 🏆",
         parse_mode="HTML")
 
 @router.message(Command("distribute_top"))
@@ -2745,7 +2771,6 @@ async def auto_top_distributor(bot: Bot):
     """Фоновая задача для автоматической выдачи 17-го числа"""
     while True:
         now = datetime.now()
-        # Проверяем, 17-е ли число и время 12:00
         if now.day == 17 and now.hour == 12 and now.minute == 0:
             month_str = now.strftime("%Y-%m")
             already = db_exec("SELECT 1 FROM user_ranks_claims WHERE claim_date = ?", (f"top_reward_{month_str}",),
@@ -2755,7 +2780,9 @@ async def auto_top_distributor(bot: Bot):
                 await distribute_all_top_rewards(bot)
                 db_exec("INSERT INTO user_ranks_claims (user_id, claim_date) VALUES (?, ?)",
                         (0, f"top_reward_{month_str}"))
-                db_exec("UPDATE users SET wins = 0")  # Автоматический сброс ТОПА после выдачи
+
+                # Автоматический сброс ТОПА после выдачи (только сезонных побед)
+                db_exec("UPDATE users SET season_wins = 0")
 
         await asyncio.sleep(60)
 

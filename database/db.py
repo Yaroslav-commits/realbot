@@ -29,7 +29,7 @@ def init_db():
         active_bg TEXT DEFAULT 'default', active_title TEXT, join_date TEXT, royale_pass INTEGER DEFAULT 0,
         notifications INTEGER DEFAULT 1, referral_code TEXT, referred_by INTEGER, cooldown_notified INTEGER DEFAULT 1,
         premium_until TEXT DEFAULT NULL, battle_cooldown_notified INTEGER DEFAULT 1,
-        anonymous INTEGER DEFAULT 0
+        anonymous INTEGER DEFAULT 0, season_wins INTEGER DEFAULT 0
     )''')
     db_exec("CREATE TABLE IF NOT EXISTS cards_inv (user_id INTEGER, card_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS decks (user_id INTEGER, card_id TEXT, slot_index INTEGER)")
@@ -58,12 +58,8 @@ def init_db():
         referrer_id INTEGER,
         referred_id INTEGER PRIMARY KEY,
         rewarded INTEGER DEFAULT 0,
-        created_at TEXT DEFAULT (datetime('now'))
-    )''')
-    db_exec('''CREATE TABLE IF NOT EXISTS referrals (
-        referrer_id INTEGER,
-        referred_id INTEGER PRIMARY KEY,
-        rewarded INTEGER DEFAULT 0,
+        reward_krw INTEGER DEFAULT 0,
+        reward_attempts INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now'))
     )''')
 
@@ -116,6 +112,7 @@ def init_db():
         ('premium_until', 'TEXT DEFAULT NULL'),
         ('battle_cooldown_notified', 'INTEGER DEFAULT 1'),
         ('anonymous', 'INTEGER DEFAULT 0'),
+        ('season_wins', 'INTEGER DEFAULT 0'), # ДОБАВЛЕНО СЮДА
     ]:
         try:
             db_exec(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
@@ -134,7 +131,6 @@ def init_db():
 
     db_exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_bgs_inv_unique ON bgs_inv(user_id, bg_id)")
     db_exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_titles_inv_unique ON titles_inv(user_id, title_id)")
-
 
 def get_user(uid):
     return db_exec("SELECT * FROM users WHERE id = ?", (uid,), fetch=True)
@@ -292,11 +288,14 @@ def process_referral(referrer_id, referred_id):
         return None
 
     try:
-        # Записываем связь
-        db_exec("INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)", (referrer_id, referred_id))
-
         # Генерируем награду
         krw_reward = random.randint(500, 850)
+
+        # Записываем связь (сразу с суммой награды — для показа в WebApp)
+        db_exec(
+            "INSERT INTO referrals (referrer_id, referred_id, rewarded, reward_krw, reward_attempts) VALUES (?, ?, 1, ?, ?)",
+            (referrer_id, referred_id, krw_reward, 5)
+        )
 
         # Начисляем награду НОВОМУ игроку
         db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referred_id))

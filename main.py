@@ -13,10 +13,15 @@ import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from aiogram.types import WebAppInfo, MenuButtonWebApp
-from aiogram import Bot, Dispatcher
+from aiogram.types import (
+    WebAppInfo, MenuButtonWebApp,
+    CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton,
+)
+from aiogram import Bot, Dispatcher, Router, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+
+from pydantic import BaseModel
 
 from config import BOT_TOKEN, DB_PATH
 from database.db import init_db, is_premium, pull_random_card, give_card_to_user
@@ -29,6 +34,43 @@ from handlers import battle as _battle  # noqa: F401
 from handlers.pass_shop import shop as _shop  # noqa: F401
 from handlers.user import cooldown_notification_scheduler, battle_cooldown_notification_scheduler
 from handlers.battle import auto_top_distributor
+
+
+# ============================================================
+#  НАСТРОЙКИ РАЗДЕЛА «ЗАРАБОТОК»  (меняй значения тут)
+# ============================================================
+MSK = timezone(timedelta(hours=3))
+
+# Публичный @username канала (нужен для проверки подписки и буста).
+# Бот ОБЯЗАТЕЛЬНО должен быть администратором этого канала!
+CHANNEL_USERNAME = "@manhwcard"
+CHANNEL_LINK = "https://t.me/manhwcard"
+BOOST_LINK = "https://t.me/boost/manhwcard"
+TIKTOK_HASHTAG_LINK = "https://vt.tiktok.com/ZS92ocVcSbVA5-QEi0R/"
+
+# Куда приходят заявки на проверку TikTok-видео и Сторис (твой Telegram ID
+# или ID группы модерации). Узнать свой ID: напиши @userinfobot.
+MODERATION_CHAT_ID = 0  # <-- ОБЯЗАТЕЛЬНО ЗАМЕНИ НА СВОЙ ID
+
+# Кто имеет право жать «Одобрить / Отклонить» под заявкой.
+# Если заявки летят в группу — впиши сюда РЕАЛЬНЫЕ user_id админов.
+ADMIN_IDS = {MODERATION_CHAT_ID}
+
+# Награды за задания (₩ = krw, 💎 = diamond).
+REWARDS = {
+    "subscribe": {"krw": 1000, "dia": 5},    # подписка на канал (Партнёры)
+    "boost":     {"krw": 2000, "dia": 10},   # буст канала (раз в 7 дней)
+    "tiktok":    {"krw": 5000, "dia": 10},   # TikTok-видео (после модерации)
+    "story":     {"krw": 3000, "dia": 5},    # Сторис (после модерации)
+}
+BOOST_COOLDOWN_DAYS = 7
+
+# Глобальные ссылки на бота и его username (заполняются при старте).
+BOT_INSTANCE: Bot | None = None
+BOT_USERNAME: str = ""
+
+# Отдельный роутер для модерации соцзаданий (подключается в start_bot).
+mod_router = Router()
 
 
 # ============================================================
@@ -60,6 +102,140 @@ def migrate_daily():
         db_exec_sync("ALTER TABLE users ADD COLUMN last_daily_claim TEXT DEFAULT '2000-01-01'")
     except Exception:
         pass
+
+
+# ============================================================
+#  МИГРАЦИИ ДЛЯ «ЗАРАБОТКА»
+# ============================================================
+def migrate_earn():
+    # Выполненные одноразовые задания (например, подписка на канал)
+    db_exec_sync("""CREATE TABLE IF NOT EXISTS task_claims (
+        user_id INTEGER, task_key TEXT, claimed_at TEXT,
+        PRIMARY KEY (user_id, task_key))""")
+    # Последний клейм награды за буст (для кулдауна 7 дней)
+    db_exec_sync("""CREATE TABLE IF NOT EXISTS boost_claims (
+        user_id INTEGER PRIMARY KEY, last_claim TEXT)""")
+    # Заявки на проверку TikTok-видео и Сторис
+    db_exec_sync("""CREATE TABLE IF NOT EXISTS social_submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER, task_type TEXT, link TEXT, note TEXT,
+        status TEXT DEFAULT 'pending', created_at TEXT)""")
+    # Храним сумму выданной за реферала награды, чтобы показывать «заработано»
+    for col, col_def in [
+        ("reward_krw", "INTEGER DEFAULT 0"),
+        ("reward_attempts", "INTEGER DEFAULT 0"),
+    ]:
+        try:
+            db_exec_sync(f"ALTER TABLE referrals ADD COLUMN {col} {col_def}")
+        except Exception:
+            pass
+
+
+def _now_str():
+    return datetime.now(MSK).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _secs_left(next_str):
+    """Сколько секунд осталось до даты next_str (формат MSK). 0 если уже прошло."""
+    if not next_str:
+        return 0
+    try:
+        nxt = datetime.strptime(next_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=MSK)
+        d = (nxt - datetime.now(MSK)).total_seconds()
+        return int(d) if d > 0 else 0
+    except Exception:
+        return 0
+
+
+def _credit(user_id, krw=0, dia=0, attempts=0):
+    """Начисление валюты игроку."""
+    if krw:
+        db_exec_sync("UPDATE users SET krw = krw + ? WHERE id = ?", (krw, user_id))
+    if dia:
+        db_exec_sync("UPDATE users SET diamond = diamond + ? WHERE id = ?", (dia, user_id))
+    if attempts:
+        db_exec_sync("UPDATE users SET attempts = attempts + ? WHERE id = ?", (attempts, user_id))
+
+
+async def _is_subscribed(user_id) -> bool:
+    """Проверка подписки на канал через Bot API (бот должен быть админом канала)."""
+    if BOT_INSTANCE is None:
+        return False
+    try:
+        m = await BOT_INSTANCE.get_chat_member(CHANNEL_USERNAME, user_id)
+        return str(m.status) in ("member", "administrator", "creator", "ChatMemberStatus.MEMBER",
+                                  "ChatMemberStatus.ADMINISTRATOR", "ChatMemberStatus.CREATOR")
+    except Exception as e:
+        logging.error(f"is_subscribed error: {e}")
+        return False
+
+
+async def _is_boosting(user_id) -> bool:
+    """Проверка активного буста канала через Bot API (бот должен быть админом канала)."""
+    if BOT_INSTANCE is None:
+        return False
+    try:
+        res = await BOT_INSTANCE.get_user_chat_boosts(CHANNEL_USERNAME, user_id)
+        return bool(res and res.boosts and len(res.boosts) > 0)
+    except Exception as e:
+        logging.error(f"is_boosting error: {e}")
+        return False
+
+
+def _insert_submission(user_id, task_type, link, note, created_at) -> int:
+    conn = sqlite3.connect(DB_PATH, timeout=5.0)
+    try:
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO social_submissions (user_id, task_type, link, note, status, created_at) "
+            "VALUES (?, ?, ?, ?, 'pending', ?)",
+            (user_id, task_type, link, note, created_at)
+        )
+        conn.commit()
+        return c.lastrowid
+    finally:
+        conn.close()
+
+
+# ============================================================
+#  ПЛАНИРОВЩИК: Уведомления об окончании Premium
+# ============================================================
+async def premium_expiration_scheduler(bot: Bot):
+    """Фоновый task: уведомляет об окончании Premium-подписки."""
+    while True:
+        try:
+            now = datetime.now()
+            # Берем всех юзеров, у которых установлена дата према
+            users = db_exec_sync("SELECT id, premium_until FROM users WHERE premium_until IS NOT NULL", fetchall=True)
+
+            if users:
+                for uid, until_str in users:
+                    try:
+                        until_dt = datetime.strptime(until_str, "%Y-%m-%d %H:%M:%S")
+                        if until_dt < now:
+                            # Срок действия истек!
+                            try:
+                                await bot.send_message(
+                                    uid,
+                                    "🥀 <b>Срок действия Premium-подписки истёк...</b>\n\n"
+                                    "Премиум-бонусы больше недоступны. "
+                                    "Но ты всегда можешь вернуть свой статус 👑 в Магазине!",
+                                    parse_mode="HTML"
+                                )
+                            except Exception:
+                                pass # Игрок мог заблокировать бота
+
+                            # Обнуляем дату, чтобы уведа пришла только один раз
+                            db_exec_sync("UPDATE users SET premium_until = NULL WHERE id = ?", (uid,))
+                    except Exception:
+                        # Если дата кривая (ошибка парсинга), тоже сбрасываем
+                        db_exec_sync("UPDATE users SET premium_until = NULL WHERE id = ?", (uid,))
+
+        except Exception as e:
+            logging.error(f"Premium notification scheduler error: {e}")
+
+        # Проверяем каждые 5 минут
+        await asyncio.sleep(300)
 
 
 # ============================================================
@@ -124,9 +300,18 @@ def authed_user_id(user_id: int, x_telegram_init_data: str = Header(default=""))
 #  ЗАПУСК БОТА
 # ============================================================
 async def start_bot():
+    global BOT_INSTANCE, BOT_USERNAME
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    BOT_INSTANCE = bot
     dp = Dispatcher()
     dp.include_router(router)
+    dp.include_router(mod_router)  # <-- модерация TikTok/Сторис
+
+    try:
+        me = await bot.get_me()
+        BOT_USERNAME = me.username or ""
+    except Exception:
+        BOT_USERNAME = ""
 
     WEBAPP_URL = "https://yaroslav-commits.github.io/cards-catalog-manhw/"
 
@@ -136,9 +321,11 @@ async def start_bot():
 
     await bot.delete_webhook(drop_pending_updates=True)
 
+    # Запускаем все наши фоновые задачи
     asyncio.create_task(cooldown_notification_scheduler(bot))
     asyncio.create_task(battle_cooldown_notification_scheduler(bot))
     asyncio.create_task(auto_top_distributor(bot))
+    asyncio.create_task(premium_expiration_scheduler(bot)) # <-- Добавлен планировщик Premium!
 
     print("Бот успешно запущен в фоновом режиме!")
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
@@ -148,6 +335,7 @@ async def start_bot():
 async def lifespan(app: FastAPI):
     init_db()
     migrate_daily()
+    migrate_earn()
     # WAL заметно снижает конфликты блокировок при одновременном чтении/записи
     try:
         db_exec_sync("PRAGMA journal_mode=WAL")
@@ -328,6 +516,263 @@ def get_card_count(card_id: str):
     res = db_exec_sync("SELECT COUNT(*) FROM cards_inv WHERE card_id = ?", (card_id,), fetch=True)
     count = res[0] if res else 0
     return {"card_id": card_id, "count": count}
+
+
+# ============================================================
+#  РЕФЕРАЛЫ
+# ============================================================
+@app.get("/api/referral/{user_id}")
+def get_referral(user_id: int = Depends(authed_user_id)):
+    code_row = db_exec_sync("SELECT referral_code FROM users WHERE id = ?", (user_id,), fetch=True)
+    code = code_row[0] if code_row and code_row[0] else ""
+
+    cnt_row = db_exec_sync("SELECT COUNT(*) FROM referrals WHERE referrer_id = ?", (user_id,), fetch=True)
+    count = cnt_row[0] if cnt_row else 0
+
+    # Суммы заработанного с рефералов (если колонки заполнялись)
+    earned_krw = 0
+    earned_attempts = 0
+    try:
+        agg = db_exec_sync(
+            "SELECT COALESCE(SUM(reward_krw),0), COALESCE(SUM(reward_attempts),0) "
+            "FROM referrals WHERE referrer_id = ?", (user_id,), fetch=True
+        )
+        if agg:
+            earned_krw = agg[0] or 0
+            earned_attempts = agg[1] or 0
+    except Exception:
+        pass
+    # Подстраховка для старых записей без сохранённой награды: минимум 5 круток на реферала
+    if count and earned_attempts == 0:
+        earned_attempts = count * 5
+
+    return {
+        "count": count,
+        "code": code,
+        "bot_username": BOT_USERNAME,
+        "earned_krw": earned_krw,
+        "earned_attempts": earned_attempts,
+        "reward_krw_min": 500,
+        "reward_krw_max": 850,
+        "reward_attempts": 5,
+    }
+
+
+# ============================================================
+#  ЗАДАНИЯ: общий статус
+# ============================================================
+@app.get("/api/tasks/{user_id}")
+def get_tasks(user_id: int = Depends(authed_user_id)):
+    sub = db_exec_sync(
+        "SELECT 1 FROM task_claims WHERE user_id = ? AND task_key = 'subscribe'",
+        (user_id,), fetch=True
+    )
+    subscribe_done = bool(sub)
+
+    bc = db_exec_sync("SELECT last_claim FROM boost_claims WHERE user_id = ?", (user_id,), fetch=True)
+    boost_last = bc[0] if bc and bc[0] else None
+    boost_next = None
+    boost_secs = 0
+    boost_on_cd = False
+    if boost_last:
+        try:
+            last_dt = datetime.strptime(boost_last, "%Y-%m-%d %H:%M:%S").replace(tzinfo=MSK)
+            nxt = last_dt + timedelta(days=BOOST_COOLDOWN_DAYS)
+            boost_next = nxt.strftime("%Y-%m-%d %H:%M:%S")
+            boost_secs = _secs_left(boost_next)
+            boost_on_cd = boost_secs > 0
+        except Exception:
+            pass
+
+    def latest_status(t):
+        r = db_exec_sync(
+            "SELECT status FROM social_submissions WHERE user_id = ? AND task_type = ? "
+            "ORDER BY id DESC LIMIT 1", (user_id, t), fetch=True
+        )
+        return r[0] if r else "none"
+
+    return {
+        "subscribe_done": subscribe_done,
+        "boost_last_claim": boost_last,
+        "boost_next_claim": boost_next,
+        "boost_seconds_left": boost_secs,
+        "boost_on_cooldown": boost_on_cd,
+        "tiktok_status": latest_status("tiktok"),
+        "story_status": latest_status("story"),
+        "rewards": REWARDS,
+        "links": {"channel": CHANNEL_LINK, "boost": BOOST_LINK, "tiktok": TIKTOK_HASHTAG_LINK},
+    }
+
+
+# ============================================================
+#  ЗАДАНИЯ: проверка подписки (Партнёры)
+# ============================================================
+@app.post("/api/check_subscription/{user_id}")
+async def check_subscription(user_id: int = Depends(authed_user_id)):
+    if BOT_INSTANCE is None:
+        return {"ok": False, "error": "Бот ещё не запущен, попробуйте позже"}
+    subscribed = await _is_subscribed(user_id)
+    if not subscribed:
+        return {"ok": True, "subscribed": False, "rewarded": False}
+
+    already = db_exec_sync(
+        "SELECT 1 FROM task_claims WHERE user_id = ? AND task_key = 'subscribe'",
+        (user_id,), fetch=True
+    )
+    if already:
+        return {"ok": True, "subscribed": True, "rewarded": False}
+
+    r = REWARDS["subscribe"]
+    _credit(user_id, krw=r.get("krw", 0), dia=r.get("dia", 0))
+    db_exec_sync(
+        "INSERT OR IGNORE INTO task_claims (user_id, task_key, claimed_at) VALUES (?, 'subscribe', ?)",
+        (user_id, _now_str())
+    )
+    return {"ok": True, "subscribed": True, "rewarded": True, "reward": r}
+
+
+# ============================================================
+#  ЗАДАНИЯ: проверка буста (раз в 7 дней)
+# ============================================================
+@app.post("/api/check_boost/{user_id}")
+async def check_boost(user_id: int = Depends(authed_user_id)):
+    if BOT_INSTANCE is None:
+        return {"ok": False, "error": "Бот ещё не запущен, попробуйте позже"}
+
+    boosting = await _is_boosting(user_id)
+    if not boosting:
+        return {"ok": True, "boosting": False}
+
+    now = datetime.now(MSK)
+    bc = db_exec_sync("SELECT last_claim FROM boost_claims WHERE user_id = ?", (user_id,), fetch=True)
+    last = bc[0] if bc and bc[0] else None
+
+    if last:
+        try:
+            last_dt = datetime.strptime(last, "%Y-%m-%d %H:%M:%S").replace(tzinfo=MSK)
+            nxt = last_dt + timedelta(days=BOOST_COOLDOWN_DAYS)
+            if now < nxt:
+                nxt_str = nxt.strftime("%Y-%m-%d %H:%M:%S")
+                return {"ok": True, "boosting": True, "claimed": False,
+                        "boost_next_claim": nxt_str, "boost_seconds_left": _secs_left(nxt_str)}
+        except Exception:
+            pass
+
+    # Можно забирать награду
+    r = REWARDS["boost"]
+    _credit(user_id, krw=r.get("krw", 0), dia=r.get("dia", 0))
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    if last:
+        db_exec_sync("UPDATE boost_claims SET last_claim = ? WHERE user_id = ?", (now_str, user_id))
+    else:
+        db_exec_sync("INSERT INTO boost_claims (user_id, last_claim) VALUES (?, ?)", (user_id, now_str))
+    nxt_str = (now + timedelta(days=BOOST_COOLDOWN_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+    return {"ok": True, "boosting": True, "claimed": True, "reward": r,
+            "boost_next_claim": nxt_str, "boost_seconds_left": _secs_left(nxt_str)}
+
+
+# ============================================================
+#  ЗАДАНИЯ: отправка TikTok/Сторис на модерацию
+# ============================================================
+class SocialPayload(BaseModel):
+    task_type: str = ""
+    link: str = ""
+    note: str = ""
+
+
+@app.post("/api/submit_social/{user_id}")
+async def submit_social(payload: SocialPayload, user_id: int = Depends(authed_user_id)):
+    task_type = (payload.task_type or "").strip()
+    link = (payload.link or "").strip()
+    note = (payload.note or "").strip()
+
+    if task_type not in ("tiktok", "story"):
+        return {"ok": False, "error": "Неизвестный тип задания"}
+    if not link.startswith("http"):
+        return {"ok": False, "error": "Вставьте корректную ссылку (https://...)"}
+
+    sub_id = _insert_submission(user_id, task_type, link, note, _now_str())
+
+    # Отправляем заявку модератору с кнопками Одобрить/Отклонить
+    if BOT_INSTANCE is not None and MODERATION_CHAT_ID:
+        r = REWARDS.get(task_type, {})
+        label = "🎬 TikTok-видео" if task_type == "tiktok" else "📲 Сторис в Telegram"
+        txt = (f"<b>🆕 Новая заявка #{sub_id}</b>\n{label}\n\n"
+               f"👤 ID игрока: <code>{user_id}</code>\n"
+               f"🔗 Ссылка: {link}\n"
+               f"💬 Комментарий: {note or '—'}\n\n"
+               f"💰 При одобрении: {r.get('krw', 0)} ₩ + {r.get('dia', 0)} 💎")
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"ts:ok:{sub_id}"),
+            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"ts:no:{sub_id}"),
+        ]])
+        try:
+            await BOT_INSTANCE.send_message(MODERATION_CHAT_ID, txt, reply_markup=kb)
+        except Exception as e:
+            logging.error(f"Не удалось отправить заявку модератору: {e}")
+
+    return {"ok": True}
+
+
+# ============================================================
+#  МОДЕРАЦИЯ: кнопки Одобрить / Отклонить под заявкой
+# ============================================================
+@mod_router.callback_query(F.data.startswith("ts:"))
+async def moderate_submission(cq: CallbackQuery):
+    if cq.from_user.id not in ADMIN_IDS:
+        await cq.answer("⛔ У вас нет прав на модерацию.", show_alert=True)
+        return
+
+    try:
+        _, action, sid = cq.data.split(":")
+        sid = int(sid)
+    except Exception:
+        await cq.answer("Ошибка данных заявки.", show_alert=True)
+        return
+
+    row = db_exec_sync(
+        "SELECT user_id, task_type, status FROM social_submissions WHERE id = ?",
+        (sid,), fetch=True
+    )
+    if not row:
+        await cq.answer("Заявка не найдена.", show_alert=True)
+        return
+
+    uid, ttype, status = row[0], row[1], row[2]
+    if status != "pending":
+        await cq.answer("Эта заявка уже обработана.", show_alert=True)
+        return
+
+    if action == "ok":
+        r = REWARDS.get(ttype, {})
+        _credit(uid, krw=r.get("krw", 0), dia=r.get("dia", 0))
+        db_exec_sync("UPDATE social_submissions SET status = 'approved' WHERE id = ?", (sid,))
+        try:
+            await BOT_INSTANCE.send_message(
+                uid,
+                f"✅ <b>Твоя заявка одобрена!</b>\n\nНачислено: "
+                f"{r.get('krw', 0)} ₩ + {r.get('dia', 0)} 💎"
+            )
+        except Exception:
+            pass
+        try:
+            await cq.message.edit_text(cq.message.html_text + "\n\n<b>✅ ОДОБРЕНО</b>")
+        except Exception:
+            pass
+        await cq.answer("Одобрено ✅")
+    else:
+        db_exec_sync("UPDATE social_submissions SET status = 'rejected' WHERE id = ?", (sid,))
+        try:
+            await BOT_INSTANCE.send_message(
+                uid, "❌ <b>Твоя заявка отклонена модератором.</b>\nПопробуй ещё раз, соблюдая условия задания."
+            )
+        except Exception:
+            pass
+        try:
+            await cq.message.edit_text(cq.message.html_text + "\n\n<b>❌ ОТКЛОНЕНО</b>")
+        except Exception:
+            pass
+        await cq.answer("Отклонено")
 
 
 if __name__ == "__main__":
