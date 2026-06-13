@@ -90,6 +90,48 @@ async def pause_cmd(msg: types.Message):
     state_text = "приостановлен ⏸️" if _handlers.BATTLE_PAUSED else "возобновлён ▶️"
     await msg.answer(f"⚙️ Поиск боёв {state_text}.")
 
+
+@router.message(Command("add_wins"))
+async def admin_add_wins(msg: types.Message):
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    args = msg.text.split()
+    if len(args) != 3:
+        return await msg.answer("❌ Использование: /add_wins <id_игрока> <количество>")
+
+    try:
+        target_id = int(args[1])
+        amount = int(args[2])
+    except ValueError:
+        return await msg.answer("❌ ID игрока и количество должны быть числами!")
+
+    db_exec("UPDATE users SET wins = wins + ?, season_wins = season_wins + ? WHERE id = ?", (amount, amount, target_id))
+
+    await msg.answer(f"✅ <b>Успешно!</b>\nИгроку <code>{target_id}</code> тихо начислено <b>{amount}</b> побед.",
+                     parse_mode="HTML")
+
+
+@router.message(Command("add_points"))
+async def admin_add_points(msg: types.Message):
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    args = msg.text.split()
+    if len(args) != 3:
+        return await msg.answer("❌ Использование: /add_points <id_игрока> <количество>")
+
+    try:
+        target_id = int(args[1])
+        amount = int(args[2])
+    except ValueError:
+        return await msg.answer("❌ ID игрока и количество должны быть числами!")
+
+    db_exec("UPDATE users SET rank_points = rank_points + ? WHERE id = ?", (amount, target_id))
+
+    await msg.answer(f"✅ <b>Успешно!</b>\nИгроку <code>{target_id}</code> тихо начислено <b>{amount}</b> очков ранга.",
+                     parse_mode="HTML")
+
 @router.callback_query(F.data == "friendly_match_start")
 async def friendly_match_start(cq: CallbackQuery, state: FSMContext):
     bld = InlineKeyboardBuilder()
@@ -735,58 +777,60 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
 
     txt1 = f"Противник найден!\n\n· Имя: {name2} {emoji2}\n· Ранг: {rank2}\n· Награда: {pts1_txt}🏅, {bc1_txt} BattleCoin 🪙\n\nБитва начинается!"
 
-    if p2 != -1:
-        bg_key2 = u2[13] or 'default'
-        bg_data2 = BGS.get(bg_key2, BGS['default'])
-        bg_file2 = FSInputFile(f"images/backgrounds/{bg_data2.get('file')}")
-        try:
-            if bg_key2 in VIDEO_BGS:
-                await send_cached_video(
-                    bot,
-                    chat_id=p1,
-                    file_path=f"images/backgrounds/{bg_data2.get('file')}",
-                    caption=txt1,
-                    parse_mode="HTML",
-                    supports_streaming=True,
-                    width=bg_data2.get('width'),
-                    height=bg_data2.get('height')
-                )
-            else:
-                await bot.send_photo(p1, photo=bg_file2, caption=txt1, parse_mode="HTML")
-        except:
+    try:
+        if p2 != -1:
+            bg_key2 = u2[13] or 'default'
+            bg_data2 = BGS.get(bg_key2, BGS['default'])
+            bg_file2 = FSInputFile(f"images/backgrounds/{bg_data2.get('file')}")
+            try:
+                if bg_key2 in VIDEO_BGS:
+                    await send_cached_video(
+                        bot, chat_id=p1, file_path=f"images/backgrounds/{bg_data2.get('file')}",
+                        caption=txt1, parse_mode="HTML", supports_streaming=True,
+                        width=bg_data2.get('width'), height=bg_data2.get('height')
+                    )
+                else:
+                    await bot.send_photo(p1, photo=bg_file2, caption=txt1, parse_mode="HTML")
+            except:
+                await bot.send_message(p1, txt1, parse_mode="HTML")
+        else:
             await bot.send_message(p1, txt1, parse_mode="HTML")
-    else:
-        await bot.send_message(p1, txt1, parse_mode="HTML")
 
-    if p2 != -1:
-        prem2 = is_premium(p2)
-        pts2_txt = "0 очков" if friendly else f"{4 if prem2 else 3} очка"
-        bc2_txt = "3" if friendly else f"{10 if prem2 else 7}"
-        txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> {emoji1}\n· Ранг: {get_rank(u1[7])}\n· Награда: {pts2_txt}🏅, {bc2_txt} BattleCoin 🪙\n\nБитва начинается!"
-        bg_key1 = u1[13] or 'default'
-        bg_data1 = BGS.get(bg_key1, BGS['default'])
-        bg_file1 = FSInputFile(f"images/backgrounds/{bg_data1.get('file')}")
+        if p2 != -1:
+            prem2 = is_premium(p2)
+            pts2_txt = "0 очков" if friendly else f"{4 if prem2 else 3} очка"
+            bc2_txt = "3" if friendly else f"{10 if prem2 else 7}"
+            txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> {emoji1}\n· Ранг: {get_rank(u1[7])}\n· Награда: {pts2_txt}🏅, {bc2_txt} BattleCoin 🪙\n\nБитва начинается!"
+            bg_key1 = u1[13] or 'default'
+            bg_data1 = BGS.get(bg_key1, BGS['default'])
+            bg_file1 = FSInputFile(f"images/backgrounds/{bg_data1.get('file')}")
+            try:
+                if bg_key1 in VIDEO_BGS:
+                    await send_cached_video(
+                        bot, chat_id=p2, file_path=f"images/backgrounds/{bg_data1.get('file')}",
+                        caption=txt2, parse_mode="HTML", supports_streaming=True,
+                        width=bg_data1.get('width'), height=bg_data1.get('height')
+                    )
+                else:
+                    await bot.send_photo(p2, photo=bg_file1, caption=txt2, parse_mode="HTML")
+            except:
+                await bot.send_message(p2, txt2, parse_mode="HTML")
+
+        await asyncio.sleep(1)
+        await send_card_choice(p1, GAMES[gid]['d1'], gid, bot)
+        if p2 != -1:
+            await send_card_choice(p2, GAMES[gid]['d2'], gid, bot)
+
+    except Exception as e:
+        logging.error(f"Failed to start battle {gid} properly: {e}")
+        # Если была сетевая ошибка при старте — удаляем бой, чтобы избежать зависаний (Zombie Locks)
+        GAMES.pop(gid, None)
         try:
-            if bg_key1 in VIDEO_BGS:
-                await send_cached_video(
-                    bot,
-                    chat_id=p2,
-                    file_path=f"images/backgrounds/{bg_data1.get('file')}",
-                    caption=txt2,
-                    parse_mode="HTML",
-                    supports_streaming=True,
-                    width=bg_data1.get('width'),
-                    height=bg_data1.get('height')
-                )
-            else:
-                await bot.send_photo(p2, photo=bg_file1, caption=txt2, parse_mode="HTML")
+            await bot.send_message(p1, "⚠️ Ошибка инициализации битвы. Противник или сервер недоступен.")
+            if p2 != -1:
+                await bot.send_message(p2, "⚠️ Ошибка инициализации битвы. Противник или сервер недоступен.")
         except:
-            await bot.send_message(p2, txt2, parse_mode="HTML")
-
-    await asyncio.sleep(1)
-    await send_card_choice(p1, GAMES[gid]['d1'], gid, bot)
-    if p2 != -1:
-        await send_card_choice(p2, GAMES[gid]['d2'], gid, bot)
+            pass
 
 
 
@@ -1239,10 +1283,22 @@ router.callback_query.middleware(BattleLockMiddleware())
 async def surrender_battle(cq: CallbackQuery):
     _, gid = cq.data.split(":")
     g = GAMES.get(gid)
-    if not g:
-        return await cq.answer("Бой уже завершен.", show_alert=True)
 
     uid = cq.from_user.id
+
+    # ПРИНУДИТЕЛЬНАЯ ОЧИСТКА: Если игра зависла и удалилась, но игрок застрял в Middleware
+    if not g:
+        zombie_gids = [k for k, v in GAMES.items() if v['p1'] == uid or v['p2'] == uid]
+        for zg in zombie_gids:
+            GAMES.pop(zg, None)
+        if uid in MATCH_QUEUE:
+            MATCH_QUEUE.remove(uid)
+        try:
+            await cq.message.delete()
+        except:
+            pass
+        return await cq.answer("Бой завершен или был отменен.", show_alert=True)
+
     is_p1 = (uid == g['p1'])
     if is_p1:
         g['score1'] = -1

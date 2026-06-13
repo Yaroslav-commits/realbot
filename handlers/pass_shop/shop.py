@@ -67,11 +67,11 @@ SPIN_PACKS_KRW = [
 ]
 # Фоны в магазине: ключ, цена, валюта, дата окончания (ГГГГ-ММ-ДД), текст даты
 SHOP_BG_LIST = [
-    {"id": "veliki", "price": 500,  "currency": "bc", "icon": "🪙", "ends_at": "2026-06-01", "date_str": "1-го Июня"},
-    {"id": "yamzaki_clan", "price": 8500, "currency": "krw", "icon": "💴", "ends_at": "2026-06-01", "date_str": "1-го Июня"},
+    {"id": "yoo_han_kim", "price": 1500,  "currency": "krw", "icon": "💴", "ends_at": "2026-07-05", "date_str": "5-го Июля"},
+    {"id": "king_grey", "price": 12999, "currency": "krw", "icon": "💴", "ends_at": "2026-07-05", "date_str": "5-го Июля"},
 ]
 # ВИДЕО-ФОНЫ. Сюда кидаешь ключи тех фонов, которые у тебя загружены как видео.
-VIDEO_BGS = {"yamzaki_clan", "admin, jaehwan"}
+VIDEO_BGS = {"yamzaki_clan", "admin, jaehwan", "king_grey"}
 
 # ====== ЕВЕНТ ======
 EVENT_ENABLED = True  # Включаем ивент!
@@ -385,7 +385,7 @@ async def shop_bgs_cb(cq: CallbackQuery):
     # Формируем текст с названием, датой и цитатой цены
     caption = (
         f"🌄 Фон: {bg_data['name']}\n\n"
-        f"🗓️ До {item.get('date_str', '5-го Июня')}\n"
+        f"🗓️ До {item.get('date_str', '5-го Июля')}\n"
         f"<blockquote>💰 Цена: {item['price']}{item['icon']}</blockquote>"
     )
     # Навигация
@@ -488,28 +488,23 @@ async def shop_pack_select_cb(cq: CallbackQuery):
     is_leg = (kind == "leg")
     if is_leg:
         img = PACK_LEG_IMG
-        caption = ("🗃️ Легендарный Пак\n\n"
-                   "🔵 Легендарная: 100%\n\n"
-                   "Стоимость: 450 💴")
-        buy_btn = "🗃️ Купить легендарный пак"
+        caption = ("🗃️ Легендарный Пак\n\n🔵 Легендарная: 100%\n\nСтоимость: 450 💴")
+        buy_btn = "🗃️ Купить легендарный пак 🔵"
     else:
         img = PACK_EPIC_IMG
-        caption = ("🗃️ Эпический Пак\n\n"
-                   "🟢 Эпическая: 100%\n\n"
-                   "Стоимость: 150 💴")
-        buy_btn = "🗃️ Купить эпический пак"
+        caption = ("🗃️ Эпический Пак\n\n🟢 Эпическая: 100%\n\nСтоимость: 150 💴")
+        buy_btn = "🗃️ Купить эпический пак 🟢"
 
-    kb = ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text=buy_btn)],
-        [KeyboardButton(text="🔙 Назад к пакам")]
-    ], resize_keyboard=True)
+    bld = InlineKeyboardBuilder()
+    bld.button(text=buy_btn, callback_data=f"shop:buy_pack_exec:{kind}")
+    bld.button(text="🔙 Назад к пакам", callback_data="shop:packs")
+    bld.adjust(1)
 
     try:
         await cq.message.delete()
     except Exception:
         pass
-    await cq.message.answer_photo(photo=img, caption=caption)
-    await cq.message.answer("Выбери действие:", reply_markup=kb)
+    await cq.message.answer_photo(photo=img, caption=caption, reply_markup=bld.as_markup())
     await cq.answer()
 
 @router.message(F.text.in_(["🗃️ Купить легендарный пак", "🗃️ Купить эпический пак"]))
@@ -562,6 +557,60 @@ async def buy_pack(msg: types.Message):
             )
     except Exception:
         await msg.answer(txt, parse_mode="HTML")
+
+@router.callback_query(F.data.startswith("shop:buy_pack_exec:"))
+async def buy_pack_exec_cb(cq: CallbackQuery):
+    kind = cq.data.split(":")[2]
+    is_leg = (kind == "leg")
+    cost = 450 if is_leg else 150
+    rarity = "Легендарная 🔵" if is_leg else "Эпическая 🟢"
+
+    u = get_user(cq.from_user.id)
+    if u[4] < cost:
+        return await cq.answer(f"❌ Недостаточно KRW. Нужно: {cost} 💴", show_alert=True)
+
+    db_exec("UPDATE users SET krw = krw - ? WHERE id = ?", (cost, cq.from_user.id))
+    card_key = pull_random_card(force_rarity=rarity) or pull_random_card()
+    is_new, krw_earn, c = give_card_to_user(cq.from_user.id, card_key)
+
+    if is_new:
+        txt = (
+            "🃏 <b>Получена новая боевая карта!</b>\n\n"
+            f"<b>🎴 Персонаж:</b> {c['name']}\n"
+            f"<b>🔮 Редкость:</b> {c['rarity']}\n"
+            f"<b>👊 Стиль боя:</b> {c['style']}\n"
+            f"<b>🪐 Вселенная:</b> {c.get('series', 'Неизвестно')}\n\n"
+            f"<b>⚡️ Скорость:</b> {c['speed']}\n"
+            f"<b>💪 Сила:</b> {c['strength']}\n"
+            f"<b>🧠 Интеллект:</b> {c['intellect']}"
+        )
+    else:
+        txt = (
+            f"🛑 <b>Повторная карта!</b> Вы получаете <b>{krw_earn} 💴 KRW</b>\n\n"
+            f"<b>🎴 Персонаж:</b> {c['name']}\n"
+            f"<b>🔮 Редкость:</b> {c['rarity']}\n"
+            f"<b>👊 Стиль боя:</b> {c['style']}\n"
+            f"<b>🪐 Вселенная:</b> {c.get('series', 'Неизвестно')}\n\n"
+            f"<b>⚡️ Скорость:</b> {c['speed']}\n"
+            f"<b>💪 Сила:</b> {c['strength']}\n"
+            f"<b>🧠 Интеллект:</b> {c['intellect']}"
+        )
+    try:
+        if "Божественная" in c.get("rarity", "") and c.get("video"):
+            await cq.message.answer_video(
+                video=FSInputFile(f"images/cards/{c['video']}"),
+                caption=txt, parse_mode="HTML",
+                width=c.get("width", 960), height=c.get("height", 1280),
+                has_spoiler=True, supports_streaming=True
+            )
+        else:
+            await cq.message.answer_photo(
+                photo=FSInputFile(f"images/cards/{c['file']}"),
+                caption=txt, parse_mode="HTML", has_spoiler=True
+            )
+    except Exception:
+        await cq.message.answer(txt, parse_mode="HTML")
+    await cq.answer("Пак успешно открыт!", show_alert=False)
 
 @router.message(F.text == "🔙 Назад к пакам")
 async def back_to_packs(msg: types.Message):
@@ -974,19 +1023,39 @@ async def claim_pass(cq: CallbackQuery):
         if day < now.day:
             return await cq.answer("День пропущен ❌\nИспользуй «Купить дни 💎»", show_alert=True)
 
-        # ВАЖНО: Сразу записываем сбор в БД ДО выдачи награды, чтобы избежать абуза
+        u = get_user(uid)
+        current_ym = int(now.strftime("%Y%m"))
+        has_royale = (u[16] == current_ym)
+
+        # 1. Выдаем награду за выбранный пасс
+        data = ROYALE_PASS if p_type == "royale" else NORMAL_PASS
+        r_type, r_val = data.get(day, ('krw', 10))
+        reward_msg = await _give_pass_reward(uid, p_type, day, r_type, r_val, cq.message)
+
         db_exec(
             "INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
             (uid, now.month, day, p_type)
         )
 
-        # Выдаём награду
-        data = ROYALE_PASS if p_type == "royale" else NORMAL_PASS
-        r_type, r_val = data.get(day, ('krw', 10))
+        # 2. АВТО-СИНХРОНИЗАЦИЯ: Если есть Рояль, сразу собираем вторую награду (чтобы дни не пропускались)
+        other_p_type = "royale" if p_type == "normal" else "normal"
+        if has_royale:
+            is_claimed_other = db_exec(
+                "SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND day = ? AND pass_type = ?",
+                (uid, now.month, day, other_p_type), fetch=True
+            )
+            if not is_claimed_other:
+                other_data = ROYALE_PASS if other_p_type == "royale" else NORMAL_PASS
+                o_type, o_val = other_data.get(day, ('krw', 10))
+                o_msg = await _give_pass_reward(uid, other_p_type, day, o_type, o_val, cq.message)
+                db_exec(
+                    "INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)",
+                    (uid, now.month, day, other_p_type)
+                )
+                if o_msg:
+                    reward_msg = f"{reward_msg}\n\n{o_msg}" if reward_msg else o_msg
+
         icons = {'krw': '💴', 'atm': '💳', 'bc': '🪙', 'dia': '💎', 'pack': '🗃️'}
-
-        reward_msg = await _give_pass_reward(uid, p_type, day, r_type, r_val, cq.message)
-
         icon = icons.get(r_type, '')
         val_str = r_val if r_type != 'pack' else '🗃️ Пак'
         await cq.answer(f"✅ Награда получена: {val_str} {icon}", show_alert=True)
@@ -995,9 +1064,9 @@ async def claim_pass(cq: CallbackQuery):
             await cq.message.answer(reward_msg, parse_mode="HTML")
 
         # Обновляем менюшку
-        u = get_user(uid)
+        u2 = get_user(uid)
         _, days_in_month = calendar.monthrange(now.year, now.month)
-        await render_pass_page(cq, p_type, page, u, now, days_in_month)
+        await render_pass_page(cq, p_type, page, u2, now, days_in_month)
     finally:
         # Снимаем блокировку
         _claim_locks.discard(lock_key)
