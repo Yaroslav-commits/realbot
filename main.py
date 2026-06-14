@@ -50,7 +50,7 @@ TIKTOK_HASHTAG_LINK = "https://vt.tiktok.com/ZS92ocVcSbVA5-QEi0R/"
 
 # Куда приходят заявки на проверку TikTok-видео и Сторис (твой Telegram ID
 # или ID группы модерации). Узнать свой ID: напиши @userinfobot.
-MODERATION_CHAT_ID = 6378471773  # <-- ОБЯЗАТЕЛЬНО ЗАМЕНИ НА СВОЙ ID
+MODERATION_CHAT_ID = 0  # <-- ОБЯЗАТЕЛЬНО ЗАМЕНИ НА СВОЙ ID
 
 # Кто имеет право жать «Одобрить / Отклонить» под заявкой.
 # Если заявки летят в группу — впиши сюда РЕАЛЬНЫЕ user_id админов.
@@ -58,7 +58,7 @@ ADMIN_IDS = {MODERATION_CHAT_ID}
 
 # Награды за задания (₩ = krw, 💎 = diamond).
 REWARDS = {
-    "subscribe": {"krw": 1000, "dia": 15},    # подписка на канал (Партнёры)
+    "subscribe": {"krw": 1000, "dia": 5},    # подписка на канал (Партнёры)
     "boost":     {"krw": 2000, "dia": 10},   # буст канала (раз в 7 дней)
     "tiktok":    {"krw": 5000, "dia": 10},   # TikTok-видео (после модерации)
     "story":     {"krw": 3000, "dia": 5},    # Сторис (после модерации)
@@ -336,7 +336,6 @@ async def lifespan(app: FastAPI):
     init_db()
     migrate_daily()
     migrate_earn()
-    migrate_fav_cards() # <--- ДОБАВИТЬ ЭТУ СТРОКУ СЮДА
     # WAL заметно снижает конфликты блокировок при одновременном чтении/записи
     try:
         db_exec_sync("PRAGMA journal_mode=WAL")
@@ -385,14 +384,13 @@ DAILY_REWARDS = {
 @app.get("/api/profile/{user_id}")
 def get_profile(user_id: int = Depends(authed_user_id)):
     try:
-        # Добавили wins и active_title
         user = db_exec_sync(
-            "SELECT diamond, krw, battlecoin, wins, active_title FROM users WHERE id = ?",
+            "SELECT diamond, krw, battlecoin FROM users WHERE id = ?",
             (user_id,), fetch=True
         )
         if not user:
-            return {"diamond": 0, "krw": 0, "battlecoin": 0, "wins": 0, "is_premium": False,
-                    "owned_cards": [], "daily_day": 0, "can_claim_daily": False, "active_title": None, "favs": {}}
+            return {"diamond": 0, "krw": 0, "battlecoin": 0, "is_premium": False,
+                    "owned_cards": [], "daily_day": 0, "can_claim_daily": False}
 
         daily_day = 0
         last_claim_date = '2000-01-01'
@@ -413,10 +411,6 @@ def get_profile(user_id: int = Depends(authed_user_id)):
         )
         owned_cards = [row[0] for row in cards_rows] if cards_rows else []
 
-        # Получаем любимые карты
-        favs_rows = db_exec_sync("SELECT slot, card_id FROM user_fav_cards WHERE user_id = ?", (user_id,), fetchall=True)
-        favs = {str(row[0]): row[1] for row in favs_rows} if favs_rows else {}
-
         now_msk = datetime.now(timezone(timedelta(hours=3)))
         today_str = now_msk.strftime("%Y-%m-%d")
         can_claim_daily = (last_claim_date.split(" ")[0] != today_str)
@@ -425,53 +419,18 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             "diamond": user[0],
             "krw": user[1],
             "battlecoin": user[2],
-            "wins": user[3] or 0,
-            "active_title": user[4],
             "is_premium": is_prem,
             "owned_cards": owned_cards,
             "daily_day": daily_day,
-            "can_claim_daily": can_claim_daily,
-            "favs": favs
+            "can_claim_daily": can_claim_daily
         }
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"Error in get_profile: {e}")
-        return {"diamond": 0, "krw": 0, "battlecoin": 0, "wins": 0, "is_premium": False,
-                "owned_cards": [], "daily_day": 0, "can_claim_daily": False, "active_title": None, "favs": {}}
+        return {"diamond": 0, "krw": 0, "battlecoin": 0, "is_premium": False,
+                "owned_cards": [], "daily_day": 0, "can_claim_daily": False}
 
-# Создаем таблицу для любимых карт при старте
-def migrate_fav_cards():
-    db_exec_sync("""CREATE TABLE IF NOT EXISTS user_fav_cards (
-        user_id INTEGER, slot INTEGER, card_id TEXT,
-        PRIMARY KEY (user_id, slot))""")
-
-# Добавь вызов migrate_fav_cards() внутри async def lifespan(app: FastAPI):
-
-class FavPayload(BaseModel):
-    slot: int
-    card_id: str
-
-@app.post("/api/set_fav/{user_id}")
-def set_fav(payload: FavPayload, user_id: int = Depends(authed_user_id)):
-    db_exec_sync("INSERT OR REPLACE INTO user_fav_cards (user_id, slot, card_id) VALUES (?, ?, ?)",
-                 (user_id, payload.slot, payload.card_id))
-    return {"success": True}
-
-class TitlePayload(BaseModel):
-    title_id: str
-
-@app.post("/api/set_title/{user_id}")
-def set_title(payload: TitlePayload, user_id: int = Depends(authed_user_id)):
-    db_exec_sync("UPDATE users SET active_title = ? WHERE id = ?", (payload.title_id, user_id))
-    return {"success": True}
-
-@app.get("/api/user_titles/{user_id}")
-def get_user_titles(user_id: int = Depends(authed_user_id)):
-    # Отдаем титулы, которые есть у юзера (в db.py есть таблица titles_inv)
-    rows = db_exec_sync("SELECT title_id FROM titles_inv WHERE user_id = ?", (user_id,), fetchall=True)
-    owned = [r[0] for r in rows] if rows else []
-    return {"owned": owned}
 
 @app.post("/api/claim_daily/{user_id}")
 def claim_daily(user_id: int = Depends(authed_user_id)):
