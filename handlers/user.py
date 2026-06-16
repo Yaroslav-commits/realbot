@@ -1318,16 +1318,28 @@ async def cb_card_info(call: types.CallbackQuery):
 
     await call.answer()
 
+
 # ============ ФОНЫ (/fon) ============
 async def _send_bg_card(bot, chat_id, bg_id, bg_data):
-    """Отправляет карточку фона (фото или видео)."""
+    """Отправляет карточку фона (фото или видео) с количеством у игроков."""
     name = bg_data.get("name", bg_id)
     file = bg_data.get("file")
+
+    # Считаем количество таких фонов у игроков
+    if bg_id == "default":
+        count = "∞ (Базовый фон есть у всех)"
+    else:
+        count_res = db_exec("SELECT COUNT(*) FROM bgs_inv WHERE bg_id = ?", (bg_id,), fetch=True)
+        count = count_res[0] if count_res else 0
+
     text = (
-        f"🌄 Фон: {name}\n"
+        f"🌄 <b>Фон:</b> {name}\n"
+        f"<blockquote>♻️ <b>Количество в боте:</b> {count}</blockquote>"
     )
+
     try:
         if bg_id in VIDEO_BGS:
+            from media_cache import send_cached_video
             await send_cached_video(
                 bot,
                 chat_id=chat_id,
@@ -1348,11 +1360,22 @@ async def _send_bg_card(bot, chat_id, bg_id, bg_data):
     except Exception:
         await bot.send_message(chat_id, text, parse_mode="HTML")
 
+
 @router.message(Command("fon"))
 async def cmd_fon_info(msg: types.Message):
     args = msg.text.split(maxsplit=1)
+
+    # Если ввели просто /fon без аргументов
     if len(args) < 2:
-        return await msg.answer("Укажи название фона, пример: <code>/fon название</code>", parse_mode="HTML")
+        # Генерируем красивый список фонов
+        bg_list = "\n".join([f"🔸 <code>{bid}</code> — {bdata.get('name', bid)}" for bid, bdata in BGS.items()])
+        text = (
+            "ℹ️ <b>Как пользоваться:</b>\n"
+            "Введи команду <code>/fon [название или ID]</code>, чтобы посмотреть анимацию/картинку и узнать редкость фона.\n\n"
+            "📜 <b>Доступные фоны в игре:</b>\n"
+            f"<blockquote>{bg_list}</blockquote>"
+        )
+        return await msg.answer(text, parse_mode="HTML")
 
     query = args[1].strip().lower()
     bg_id = None
@@ -1379,15 +1402,16 @@ async def cmd_fon_info(msg: types.Message):
                 partial_matches.append((bid, name))
 
         if not partial_matches:
-            return await msg.answer(f"Фон по запросу «{args[1]}» не найден!")
+            return await msg.answer(f"❌ Фон по запросу «{args[1]}» не найден!")
 
         builder = InlineKeyboardBuilder()
         for bid, bname in partial_matches[:10]:
-            builder.button(text=f"{bname}", callback_data=f"f_inf:{bid}"[:64])
+            builder.button(text=f"{bname} 🌄", callback_data=f"f_inf:{bid}"[:64])
         builder.adjust(1)
         return await msg.answer("Найдено несколько фонов, выбери нужный:", reply_markup=builder.as_markup())
 
     await _send_bg_card(msg.bot, msg.chat.id, bg_id, bg_data)
+
 
 @router.callback_query(F.data.startswith("f_inf:"))
 async def cb_fon_info(call: types.CallbackQuery):
@@ -1395,7 +1419,7 @@ async def cb_fon_info(call: types.CallbackQuery):
     bg_data = BGS.get(bg_id)
 
     if not bg_data:
-        return await call.answer("Фон не найден!", show_alert=True)
+        return await call.answer("❌ Фон не найден!", show_alert=True)
 
     await call.message.delete()
     await _send_bg_card(call.bot, call.message.chat.id, bg_id, bg_data)
@@ -1469,6 +1493,39 @@ async def process_broadcast(msg: types.Message, state: FSMContext, bot: Bot):
         f"⚠️ Ошибок: {errors}",
         parse_mode="HTML"
     )
+
+
+@router.message(Command("stats"))
+async def cmd_stats(msg: types.Message):
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    # Собираем данные
+    total_users = db_exec("SELECT COUNT(*) FROM users", fetch=True)[0]
+    # Считаем активных (тех, кто крутил карты хотя бы раз за последние 7 дней)
+    active_users_7d = db_exec("SELECT COUNT(*) FROM users WHERE last_get >= datetime('now', '-7 days')", fetch=True)[0]
+    total_cards = db_exec("SELECT COUNT(*) FROM cards_inv", fetch=True)[0]
+    total_bgs = db_exec("SELECT COUNT(*) FROM bgs_inv", fetch=True)[0]
+
+    # Экономика (COALESCE/IFNULL не дадут вернуть None, если база пустая)
+    total_krw = db_exec("SELECT SUM(krw) FROM users", fetch=True)[0] or 0
+    total_dia = db_exec("SELECT SUM(diamond) FROM users", fetch=True)[0] or 0
+    total_battles = db_exec("SELECT SUM(wins + draws + losses) FROM users", fetch=True)[0] or 0
+
+    text = (
+        "📊 <b>Статистика бота:</b>\n\n"
+        f"👥 <b>Пользователи:</b>\n"
+        f"├ Всего юзеров: <b>{total_users}</b>\n"
+        f"└ Активные (7 дней): <b>{active_users_7d}</b>\n\n"
+        f"🎴 <b>Игровой процесс:</b>\n"
+        f"├ Карт на руках: <b>{total_cards}</b>\n"
+        f"├ Выдано фонов: <b>{total_bgs}</b>\n"
+        f"└ Сыграно боёв: <b>{total_battles}</b>\n\n"
+        f"💰 <b>Экономика (в обороте):</b>\n"
+        f"├ KRW: <b>{total_krw}</b> 💴\n"
+        f"└ Diamond: <b>{total_dia}</b> 💎"
+    )
+    await msg.answer(text, parse_mode="HTML")
 
 @router.message(
     Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "delete_diamond", "give_pass", "give_prem", "create_promo", "restore_pass_day"]))

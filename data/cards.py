@@ -556,12 +556,14 @@ BGS = {
     "jaehwan": {"name": "Дже Хван", "file": "jae_hwan.mp4", 'width': 1280, 'height': 720, "price": 99999},
     "yoo_han_kim": {"name": "ORV Street Trio", "file": "yoo_han_kim.jpeg", "price": 1500},
     "king_grey": {"name": "Король Грей", "file": "king_grey.mp4", 'width': 1280, 'height': 720, "price": 12999},
+    "shadow_slave": {"name": "Теневой раб", "file": "shadow_slave.mp4", 'width': 1280, 'height': 720, "price": 99999},
 }
 VIDEO_BGS = {
     "jaehwan": {"name": "Дже Хван", "file": "jae_hwan.mp4", 'width': 1280, 'height': 720, "price": 99999},
     "admin": {"name": "Ю Джунхёк и Ким Докча", "file": "admin.mp4", 'width': 1280, 'height': 720, "price": 99999},
     "yamzaki_clan": {"name": "Клан Ямадзаки", "file": "yamzaki_clan.mp4", 'width': 1280, 'height': 720, "price": 8500},
     "king_grey": {"name": "Король Грей", "file": "king_grey.mp4", 'width': 1280, 'height': 720, "price": 12999},
+    "shadow_slave": {"name": "Теневой раб", "file": "shadow_slave.mp4", 'width': 1280, 'height': 720, "price": 99999},
 }
 TITLES = {
     "title_pass_hero": "Герой Месяца 🏆",

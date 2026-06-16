@@ -1612,7 +1612,7 @@ async def b_shop_main_cb(cq: CallbackQuery):
 # === ВСТАВИТЬ В НАЧАЛО battle.py ПОСЛЕ ИМПОРТОВ (примерно строка 30) ===
 PACK_CARD = "sanless"
 PACK_BG1 = "yamzaki_clan"
-PACK_BG2 = "jaehwan"
+PACK_BG2 = "shadow_slave"
 PACK_TITLE = "title_pack"
 
 # === ЗАМЕНИТЬ ФУНКЦИИ b_shop_pack_cb И b_shop_pack_buy_cb (строки 1459-1533) ===
@@ -1635,7 +1635,7 @@ async def b_shop_pack_cb(cq: CallbackQuery):
         "🧪 Содержимое:\n"
         "<blockquote>🃏 Санлесс 1.5%\n"
         "🌄 Клан Ямадзаки 0.5%\n"
-        "🌄 Дже Хван 2.5%\n"
+        "🌄 Теневой раб 2.5%\n"
         "🔱 Лишенный света 🕯 2.5%\n"
         "🔴 Мифическая карта 6.5%\n"
         "🔵 Легендарная карта 84.5%</blockquote>\n\n"
@@ -1748,7 +1748,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
             except Exception:
                 reward_text = f"🌄 Получен новый фон: <b>{bg_name}</b>!"
         else:
-            reward_text = f"🌄 Получен новый фон: <b>Дже Хван</b>!"
+            reward_text = f"🌄 Получен новый фон: <b>Теневой раб</b>!"
     elif result == "title":
         exists = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?", (uid, PACK_TITLE),
                              fetch=True)
