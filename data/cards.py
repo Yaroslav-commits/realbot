@@ -549,7 +549,7 @@ PREMIUM_RARITIES = {
 
 BGS = {
     "default": {"name": "Стандартный", "file": "default.png", "price": 0},
-    "lookism_1": {"name": "Лукизм", "file": "lookism_1.png", "price": 500},
+    #"lookism_1": {"name": "Лукизм", "file": "lookism_1.png", "price": 500},
     "admin": {"name": "Ю Джунхёк и Ким Докча", "file": "admin.mp4", 'width': 1280, 'height': 720, "price": 99999},
     "veliki": {"name": "Sabbath Crew", "file": "veliki.jpeg", "price": 500},
     "yamzaki_clan": {"name": "Клан Ямадзаки", "file": "yamzaki_clan.mp4", 'width': 1280, 'height': 720, "price": 8500},
@@ -557,6 +557,7 @@ BGS = {
     "yoo_han_kim": {"name": "ORV Street Trio", "file": "yoo_han_kim.jpeg", "price": 1500},
     "king_grey": {"name": "Король Грей", "file": "king_grey.mp4", 'width': 1280, 'height': 720, "price": 12999},
     "shadow_slave": {"name": "Теневой раб", "file": "shadow_slave.mp4", 'width': 1280, 'height': 720, "price": 99999},
+    "sanny": {"name": "Санни", "file": "sanny.jpeg", "price": 99999},
 }
 VIDEO_BGS = {
     "jaehwan": {"name": "Дже Хван", "file": "jae_hwan.mp4", 'width': 1280, 'height': 720, "price": 99999},

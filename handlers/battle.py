@@ -1611,7 +1611,7 @@ async def b_shop_main_cb(cq: CallbackQuery):
 
 # === ВСТАВИТЬ В НАЧАЛО battle.py ПОСЛЕ ИМПОРТОВ (примерно строка 30) ===
 PACK_CARD = "sanless"
-PACK_BG1 = "yamzaki_clan"
+PACK_BG1 = "sanny"
 PACK_BG2 = "shadow_slave"
 PACK_TITLE = "title_pack"
 
@@ -1628,7 +1628,7 @@ async def b_shop_pack_cb(cq: CallbackQuery):
 
     txt = (
         "<b>Боевой Пак ⚡️</b>\n"
-        f"💵 Можно купить: <b>{5 - bought}</b>\n"
+        f"💵 Можно купить: <b>{50 - bought}</b>\n"
         f"💸 Куплено: <b>{bought}</b>\n\n"
         "<blockquote>Стоимость: 400 🪙</blockquote>\n\n"
         "🔥 Главный приз: <b>Санлесс</b>\n"
@@ -1668,7 +1668,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
     res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num), fetch=True)
     bought = res[0] if res else 0
 
-    if bought >= 5:
+    if bought >= 50:
         return await cq.answer("Вы уже купили этот пак 5 раз на этой неделе!", show_alert=True)
 
     u = get_user(uid)
@@ -1721,7 +1721,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
             except Exception:
                 reward_text = f"🌄 Получен новый фон: <b>{bg_name}</b>!"
         else:
-            reward_text = f"🌄 Получен новый фон: <b>Клан Ямадзаки</b>!"
+            reward_text = f"🌄 Получен новый фон: <b>Санни</b>!"
     elif result == "bg_jaehwan":
         db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG2))
         bg_key = PACK_BG2
