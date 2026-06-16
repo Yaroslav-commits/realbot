@@ -1527,6 +1527,158 @@ async def cmd_stats(msg: types.Message):
     )
     await msg.answer(text, parse_mode="HTML")
 
+# ============ ИНФО О ПАССЕ И МАССОВОЕ ВОССТАНОВЛЕНИЕ ============
+
+@router.message(Command("pass_info"))
+async def cmd_pass_info(msg: types.Message):
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    args = msg.text.split()
+    if len(args) < 2:
+        return await msg.answer("❌ Формат: /pass_info [ID]\nПример: /pass_info 123456789")
+
+    try:
+        uid = int(args[1])
+    except ValueError:
+        return await msg.answer("❌ Некорректный ID. Должен быть числом.")
+
+    u = get_user(uid)
+    if not u:
+        return await msg.answer("❌ Игрок с таким ID не найден в базе.")
+
+    now_msk = datetime.now(timezone(timedelta(hours=3)))
+    current_month = now_msk.month
+    today = now_msk.day
+
+    claims_normal = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = 'normal'", (uid, current_month), fetchall=True)
+    claimed_n = [d[0] for d in claims_normal] if claims_normal else []
+
+    claims_royale = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = 'royale'", (uid, current_month), fetchall=True)
+    claimed_r = [d[0] for d in claims_royale] if claims_royale else []
+
+    passed_days_this_month = [d for d in range(1, today + 1) if d in NORMAL_PASS]
+    missed_n = [str(d) for d in passed_days_this_month if d not in claimed_n]
+
+    has_royale = is_royale_active(u)
+    missed_r = []
+    if has_royale:
+        passed_days_royale = [d for d in range(1, today + 1) if d in ROYALE_PASS]
+        missed_r = [str(d) for d in passed_days_royale if d not in claimed_r]
+
+    txt = f"📊 <b>Инфо по пассу для ID {uid}</b>:\n\n"
+    txt += f"📅 <b>Текущий день месяца:</b> {today}\n\n"
+    txt += f"🏙️ <b>Обычный пасс:</b>\n"
+    txt += f"└ ❌ Пропущенные дни: {', '.join(missed_n) if missed_n else 'Нет'}\n\n"
+
+    txt += f"🌠 <b>Рояль пасс:</b> " + ("(Активен ✅)\n" if has_royale else "(Не активен ❌)\n")
+    if has_royale:
+        txt += f"└ ❌ Пропущенные дни: {', '.join(missed_r) if missed_r else 'Нет'}\n"
+
+    await msg.answer(txt, parse_mode="HTML")
+
+
+@router.message(Command("restore_pass_days"))
+async def cmd_restore_pass_days(msg: types.Message, bot: Bot):
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    args = msg.text.split()
+    # Ожидаем минимум 4 аргумента: команда, id, тип, и хотя бы один день
+    if len(args) < 4:
+        return await msg.answer(
+            "❌ Формат: /restore_pass_days [ID] [normal/royale] [день1] [день2] ...\n"
+            "Пример: /restore_pass_days 123456789 normal 1 2 3 5"
+        )
+
+    try:
+        uid = int(args[1])
+        p_type = args[2].lower()
+        days = [int(x) for x in args[3:]]
+    except ValueError:
+        return await msg.answer("❌ Некорректные аргументы. ID и ДНИ должны быть числами.")
+
+    if p_type not in ("normal", "royale"):
+        return await msg.answer("❌ Тип пасса должен быть: normal или royale")
+
+    u = get_user(uid)
+    if not u:
+        return await msg.answer("❌ Пользователь не найден.")
+
+    data = ROYALE_PASS if p_type == "royale" else NORMAL_PASS
+    now_msk = datetime.now(timezone(timedelta(hours=3)))
+    current_month = now_msk.month
+
+    # Получаем уже забранные дни
+    claims = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?", (uid, current_month, p_type), fetchall=True)
+    claimed = [d[0] for d in claims] if claims else []
+
+    rewards_summary = {'krw': 0, 'atm': 0, 'bc': 0, 'dia': 0, 'packs': 0}
+    restored_days = []
+    already_claimed_days = []
+    invalid_days = []
+
+    for day in days:
+        if day not in data:
+            invalid_days.append(str(day))
+            continue
+        if day in claimed:
+            already_claimed_days.append(str(day))
+            continue
+
+        # Выдаем награду
+        r_type, r_val = data.get(day, ('krw', 10))
+        if r_type == 'krw':
+            db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (r_val, uid))
+            rewards_summary['krw'] += r_val
+        elif r_type == 'atm':
+            db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (r_val, uid))
+            rewards_summary['atm'] += r_val
+        elif r_type == 'bc':
+            db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (r_val, uid))
+            rewards_summary['bc'] += r_val
+        elif r_type == 'dia':
+            db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (r_val, uid))
+            rewards_summary['dia'] += r_val
+        elif r_type == 'pack':
+            card_key = pull_random_card(force_rarity="Легендарная 🔵" if r_val == "leg" else "Эпическая 🟢")
+            if not card_key:
+                card_key = pull_random_card()
+            give_card_to_user(uid, card_key)
+            rewards_summary['packs'] += 1
+
+        # Отмечаем как полученный
+        db_exec("INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, ?, ?)", (uid, current_month, day, p_type))
+        restored_days.append(str(day))
+
+    # Формируем текст отчета для админа
+    lines = []
+    if rewards_summary['krw']: lines.append(f"• {rewards_summary['krw']} 💴 KRW")
+    if rewards_summary['atm']: lines.append(f"• {rewards_summary['atm']} 💳 попыток")
+    if rewards_summary['bc']: lines.append(f"• {rewards_summary['bc']} 🪙 BattleCoin")
+    if rewards_summary['dia']: lines.append(f"• {rewards_summary['dia']} 💎 Алмазов")
+    if rewards_summary['packs']: lines.append(f"• {rewards_summary['packs']} 🗃️ Паков")
+
+    res_txt = f"⚙️ <b>Отчет о восстановлении:</b>\n"
+    res_txt += f"✅ Восстановлены дни: {', '.join(restored_days) if restored_days else 'Ничего'}\n"
+    if already_claimed_days:
+        res_txt += f"⚠️ Уже были получены ранее: {', '.join(already_claimed_days)}\n"
+    if invalid_days:
+        res_txt += f"❌ Не существуют в пассе: {', '.join(invalid_days)}\n"
+
+    if restored_days:
+        res_txt += f"\n🎁 <b>Выдано суммарно:</b>\n" + ("\n".join(lines) if lines else "Ничего")
+
+        # Уведомляем игрока
+        pass_name = "Рояль пасс 🌠" if p_type == "royale" else "Обычный пасс 🏙️"
+        u_txt = f"🎁 Администратор восстановил пропущенные дни (<b>{', '.join(restored_days)}</b>) вашего {pass_name}!\nНачислена общая награда:\n" + "\n".join(lines)
+        try:
+            await bot.send_message(uid, u_txt, parse_mode="HTML")
+        except Exception:
+            pass
+
+    await msg.answer(res_txt, parse_mode="HTML")
+
 @router.message(
     Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "delete_diamond", "give_pass", "give_prem", "create_promo", "restore_pass_day"]))
 async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
