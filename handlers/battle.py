@@ -1633,12 +1633,12 @@ async def b_shop_pack_cb(cq: CallbackQuery):
         "<blockquote>Стоимость: 400 🪙</blockquote>\n\n"
         "🔥 Главный приз: <b>Санлесс</b>\n"
         "🧪 Содержимое:\n"
-        "<blockquote>🃏 Санлесс 1.5%\n"
-        "🌄 Клан Ямадзаки 0.5%\n"
+        "<blockquote>🃏 Санлесс 2%\n"
         "🌄 Теневой раб 2.5%\n"
-        "🔱 Лишенный света 🕯 2.5%\n"
+        "🔱 Лишенный света 🕯 3%\n"
+        "🌄 Санни (арт) 5%\n"
         "🔴 Мифическая карта 6.5%\n"
-        "🔵 Легендарная карта 84.5%</blockquote>\n\n"
+        "🔵 Легендарная карта 79%</blockquote>\n\n"
         "🏆 Главный приз выдается автоматически за ТОП 20 по победам!\n\n"
         "📅 Дата окончания пака: 17-го Июля 📆"
     )
@@ -1685,7 +1685,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
 
     # Логика шансов
     rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
-    weights = [1.5, 0.5, 2.5, 2.5, 6.5, 84.5]
+    weights = [2, 5, 2.8, 3.2, 6.5, 79]
     result = random.choices(rewards, weights=weights, k=1)[0]
 
     reward_text = ""
@@ -2288,7 +2288,7 @@ async def b_craft_reactor_cb(cq: CallbackQuery):
         "🎲 <b>Шансы:</b>\n"
         "🔴 Мифическая 55%\n"
         "🔵 Рандом Легендарная 35%\n"
-        "💥 Потеря материалов 8%\n\n"
+        "💥 Потеря материалов 8%\n"
         "✨ Шанс Exclusive карты 2%\n"
         "━━━━━━━━━━━━━━\n\n"
         f"🃏 <b>Слоты ({len(filled)}/{CRAFT_REQUIRED}):</b>\n"
@@ -2438,7 +2438,7 @@ async def b_craft_do_cb(cq: CallbackQuery):
 
     # Рулетка результата
     outcomes  = ["exclusive", "mythic", "legendary", "loss"]
-    weights   = [1.2, 55.8, 35.0, 8.0]
+    weights   = [2, 55.0, 35.0, 8.0]
     result    = random.choices(outcomes, weights=weights, k=1)[0]
 
     # --- Отправляем GIF-анимацию ---
