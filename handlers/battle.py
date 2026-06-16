@@ -1518,9 +1518,9 @@ async def b_top_wins_cb(cq: CallbackQuery):
         "Награда выдается автоматически каждого 17-го числа🎖\n\n"
         "🎁 Приз за 1-20 места лимитированная карта:\n"
         "<blockquote>🃏 Дже Хван</blockquote>\n\n"
-        "📅 Дата окончания: 17-го июня\n"
+        "📅 Дата окончания: 17-го июля\n"
         f"🏆 Ваше место в ТОП-е: {my_place}\n"
-        "🚸 ТОП обновляется каждые 3 часа."
+        "🚸 ТОП обновляется в режиме реального времени."
     )
     bld = InlineKeyboardBuilder()
     bld.button(text="Назад 🔙", callback_data="b_top_menu")
@@ -1610,7 +1610,7 @@ async def b_shop_main_cb(cq: CallbackQuery):
 
 
 # === ВСТАВИТЬ В НАЧАЛО battle.py ПОСЛЕ ИМПОРТОВ (примерно строка 30) ===
-PACK_CARD = "excluzive_card_jaehwan"
+PACK_CARD = "sanless"
 PACK_BG1 = "yamzaki_clan"
 PACK_BG2 = "jaehwan"
 PACK_TITLE = "title_pack"
@@ -1628,19 +1628,19 @@ async def b_shop_pack_cb(cq: CallbackQuery):
 
     txt = (
         "<b>Боевой Пак ⚡️</b>\n"
-        f"💵 Можно купить: <b>{3 - bought}</b>\n"
+        f"💵 Можно купить: <b>{5 - bought}</b>\n"
         f"💸 Куплено: <b>{bought}</b>\n\n"
         "<blockquote>Стоимость: 400 🪙</blockquote>\n\n"
-        "🔥 Главный приз: <b>Дже Хван</b>\n"
+        "🔥 Главный приз: <b>Санлесс</b>\n"
         "🧪 Содержимое:\n"
-        "<blockquote>🃏 Дже Хван 0.05%\n"
+        "<blockquote>🃏 Санлесс 1.5%\n"
         "🌄 Клан Ямадзаки 0.5%\n"
-        "🌄 Дже Хван 3.5%\n"
-        "🔱 Пронзающий судьбу 3.5%\n"
-        "🔴 Мифическая карта 6.45%\n"
-        "🔵 Легендарная карта 85%</blockquote>\n\n"
+        "🌄 Дже Хван 2.5%\n"
+        "🔱 Лишенный света 🕯 2.5%\n"
+        "🔴 Мифическая карта 6.5%\n"
+        "🔵 Легендарная карта 84.5%</blockquote>\n\n"
         "🏆 Главный приз выдается автоматически за ТОП 20 по победам!\n\n"
-        "📅 Дата окончания пака: 19-го Июня 📆"
+        "📅 Дата окончания пака: 17-го Июля 📆"
     )
 
     bld = InlineKeyboardBuilder()
@@ -1668,8 +1668,8 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
     res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num), fetch=True)
     bought = res[0] if res else 0
 
-    if bought >= 3:
-        return await cq.answer("Вы уже купили этот пак 3 раза на этой неделе!", show_alert=True)
+    if bought >= 5:
+        return await cq.answer("Вы уже купили этот пак 5 раз на этой неделе!", show_alert=True)
 
     u = get_user(uid)
     if u[5] < 400:
@@ -1685,7 +1685,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
 
     # Логика шансов
     rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
-    weights = [0.05, 0.5, 3.5, 3.5, 6.45, 85.0]
+    weights = [1.5, 0.5, 2.5, 2.5, 6.5, 84.5]
     result = random.choices(rewards, weights=weights, k=1)[0]
 
     reward_text = ""
@@ -1702,7 +1702,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         if bg_data:
             file_path = f"images/backgrounds/{bg_data.get('file')}"
             bg_name = bg_data.get('name', 'Новый фон')
-            caption_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b> {{joy}}"
+            caption_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
             try:
                 if bg_key in VIDEO_BGS:
                     await send_cached_video(
@@ -1729,7 +1729,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         if bg_data:
             file_path = f"images/backgrounds/{bg_data.get('file')}"
             bg_name = bg_data.get('name', 'Новый фон')
-            caption_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b> {{joy}}"
+            caption_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
             try:
                 if bg_key in VIDEO_BGS:
                     await send_cached_video(
@@ -1753,10 +1753,10 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         exists = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?", (uid, PACK_TITLE),
                              fetch=True)
         if exists:
-            reward_text = f"🔱 Вам выпал титул: <b>Пронзающий судьбу 🩸</b>, но, к сожалению, он у вас уже есть!"
+            reward_text = f"🔱 Вам выпал титул: <b>Лишенный света 🕯️</b>, но, к сожалению, он у вас уже есть!"
         else:
             db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, PACK_TITLE))
-            reward_text = f"🔱 Получен новый титул: <b>Пронзающий судьбу 🩸</b>!"
+            reward_text = f"🔱 Получен новый титул: <b>Лишенный света 🕯️</b>!"
     elif result == "mythic":
         card_key = pull_random_card(force_rarity="Мифическая 🔴")
         is_new, krw, card_c = give_card_to_user(uid, card_key)

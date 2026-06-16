@@ -5,7 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9e9a111f-dea5-49ef-9a80-af6150603ae2" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/images/cards/sanless.jpeg" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/cards.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/battle.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/battle.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/battlepack.jpeg" beforeDir="false" afterPath="$PROJECT_DIR$/images/shop/battlepack.jpeg" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/top_wins.jpeg" beforeDir="false" afterPath="$PROJECT_DIR$/images/shop/top_wins.jpeg" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

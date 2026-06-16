@@ -2,6 +2,7 @@
 
 # ================== БАЗА ДАННЫХ ==================
 CARDS = {
+"sanless": {"name": "Санлесс", "rarity": "Легендарная 🔵", "style": "Танец теней", "series": "Лукизм", "speed": 90, "strength": 87, "intellect": 90, "file": "sanless.jpeg", "exclusive": True},
     # ============ ВЕТРОЛОМ Лето ==========
 
 "ouen": {"name": "Оуэн", "rarity": "Эпическая 🟢", "style": "Ветряное чувство", "series": "Ветролом", "speed": 80, "strength": 80, "intellect": 80, "file": "ouen.jpeg", "exclusive": True},
@@ -568,6 +569,7 @@ TITLES = {
     "title_dev": "Создатель ⚜️",
     "title_pack": "Пронзающий судьбу 🩸",
     "title_pass_streem": "Стример 🎧",
+    "title_pack2": "Лишенный света 🕯️",
 }
 
 NORMAL_PASS = {1:('krw',150), 2:('atm',5), 3:('bc',120), 4:('atm',6), 5:('pack','epic'), 6:('dia',5), 7:('krw',190), 8:('atm',3), 9:('krw',100), 10:('bc',100), 11:('atm',4), 12:('pack','epic'), 13:('krw',75), 14:('dia',3), 15:('krw',60), 16:('atm',5), 17:('bc',100), 18:('krw',70), 19:('pack','epic'), 20:('atm',3), 21:('krw',300), 22:('dia',3), 23:('krw',90), 24:('bc',50), 25:('pack','leg'), 26:('krw',100), 27:('atm',5), 28:('krw',250), 29:('dia',4), 30:('krw',50), 31:('atm',10)}
