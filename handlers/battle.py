@@ -1516,8 +1516,8 @@ async def b_top_wins_cb(cq: CallbackQuery):
         "🏅 26-75 места: 400 🪙 BattleCoin\n"
         "🏅 76-150 места: 250 🪙 BattleCoin</blockquote>\n\n"
         "Награда выдается автоматически каждого 17-го числа🎖\n\n"
-        "🎁 Приз за 1-20 места лимитированная карта:\n"
-        "<blockquote>🃏 Дже Хван</blockquote>\n\n"
+        #"🎁 Приз за 1-20 места лимитированная карта:\n"
+        #"<blockquote>🃏 Дже Хван</blockquote>\n\n"
         "📅 Дата окончания: 17-го июля\n"
         f"🏆 Ваше место в ТОП-е: {my_place}\n"
         "🚸 ТОП обновляется в режиме реального времени."
@@ -1614,6 +1614,8 @@ PACK_CARD = "sanless"
 PACK_BG1 = "sanny"
 PACK_BG2 = "shadow_slave"
 PACK_TITLE = "title_pack"
+# Переключатель выдачи карты за ТОП-20 (True - выдавать, False - временно отключено)
+GIVE_TOP_20_CARD = False
 
 # === ЗАМЕНИТЬ ФУНКЦИИ b_shop_pack_cb И b_shop_pack_buy_cb (строки 1459-1533) ===
 
@@ -1628,7 +1630,7 @@ async def b_shop_pack_cb(cq: CallbackQuery):
 
     txt = (
         "<b>Боевой Пак ⚡️</b>\n"
-        f"💵 Можно купить: <b>{50 - bought}</b>\n"
+        f"💵 Можно купить: <b>{5 - bought}</b>\n"
         f"💸 Куплено: <b>{bought}</b>\n\n"
         "<blockquote>Стоимость: 400 🪙</blockquote>\n\n"
         "🔥 Главный приз: <b>Санлесс</b>\n"
@@ -1639,7 +1641,7 @@ async def b_shop_pack_cb(cq: CallbackQuery):
         "🌄 Санни (арт) 5%\n"
         "🔴 Мифическая карта 6.5%\n"
         "🔵 Легендарная карта 79%</blockquote>\n\n"
-        "🏆 Главный приз выдается автоматически за ТОП 20 по победам!\n\n"
+        #"🏆 Главный приз выдается автоматически за ТОП 20 по победам!\n\n"
         "📅 Дата окончания пака: 17-го Июля 📆"
     )
 
@@ -1668,7 +1670,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
     res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num), fetch=True)
     bought = res[0] if res else 0
 
-    if bought >= 50:
+    if bought >= 5:
         return await cq.answer("Вы уже купили этот пак 5 раз на этой неделе!", show_alert=True)
 
     u = get_user(uid)
@@ -2728,6 +2730,9 @@ async def b_dia_cancel_cb(cq: CallbackQuery, state: FSMContext):
     await b_shop_main_cb(cq)
 
 async def distribute_top_20_rewards(bot: Bot):
+    if not GIVE_TOP_20_CARD: # Если выдача отключена - просто выходим из функции
+        return 0
+
     top_20 = db_exec("SELECT id FROM users ORDER BY season_wins DESC LIMIT 20", fetchall=True)
     count = 0
     for (uid,) in top_20:
@@ -2786,7 +2791,7 @@ async def distribute_all_top_rewards(bot: Bot):
             except:
                 pass
 
-        if place <= 20:
+        if GIVE_TOP_20_CARD and place <= 20:
             exists = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, PACK_CARD), fetch=True)
             if not exists:
                 give_card_to_user(uid, PACK_CARD)
