@@ -1629,7 +1629,7 @@ async def b_shop_pack_cb(cq: CallbackQuery):
     bought = res[0] if res else 0
 
     txt = (
-        "<b>Боевой Пак ⚡️</b>\n"
+        "<b>Боевой Пак 🦇️</b>\n"
         f"💵 Можно купить: <b>{5 - bought}</b>\n"
         f"💸 Куплено: <b>{bought}</b>\n\n"
         "<blockquote>Стоимость: 400 🪙</blockquote>\n\n"
