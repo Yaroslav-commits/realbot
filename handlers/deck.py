@@ -68,13 +68,16 @@ def _get_user_cids(uid: int) -> list[str]:
             seen.add(cid)
             result.append(cid)
     return result
-def _apply_filter(cids: list[str], rarity_filter: str) -> list[str]:
-    if rarity_filter == "all":
-        return cids
-    label = RARITY_SLUG_TO_LABEL.get(rarity_filter)
-    if not label:
-        return cids
-    return [cid for cid in cids if CARDS.get(cid, {}).get('rarity') == label]
+
+def _apply_filter(cids: list[str], rarity_filter: str, excl_filter: int = 0) -> list[str]:
+    filtered = cids
+    if rarity_filter != "all":
+        label = RARITY_SLUG_TO_LABEL.get(rarity_filter)
+        if label:
+            filtered = [cid for cid in filtered if CARDS.get(cid, {}).get('rarity') == label]
+    if excl_filter == 1:
+        filtered = [cid for cid in filtered if CARDS.get(cid, {}).get('exclusive', False)]
+    return filtered
 
 def _sort_cards(cids: list[str]) -> list[str]:
     return sorted(
@@ -115,9 +118,10 @@ def _build_inv_main_text(uid: int) -> str:
 
 def _build_inv_main_kb() -> InlineKeyboardMarkup:
     bld = InlineKeyboardBuilder()
-    bld.button(text="🎴 Просмотр карт",    callback_data="inv_view:0:all")
+    bld.button(text="🎴 Просмотр карт",    callback_data="inv_view:0:all:0")
     bld.button(text="🔍 Поиск по названию", callback_data="inv_search_start")
     bld.button(text="📊 Коллекция",         callback_data="inv_collection")
+    bld.button(text="📦 Сундук",            callback_data="stash_menu:0:inv")
     bld.adjust(1)
     return bld.as_markup()
 
@@ -202,7 +206,7 @@ async def inv_search_query(msg: types.Message, state: FSMContext):
     await _send_search_results(msg, matched, page=0, query=msg.text)
 
 async def _send_search_results(target, matched: list, page: int, query: str):
-    """Отправляет страницу результатов поиска (работает и с Message, и с CallbackQuery)."""
+    """Отправляет страницу результатов поиска."""
     items_per_page = 12
     total_pages = max(1, (len(matched) + items_per_page - 1) // items_per_page)
     page = max(0, min(page, total_pages - 1))
@@ -219,10 +223,9 @@ async def _send_search_results(target, matched: list, page: int, query: str):
             power = _card_power(cid)
             bld.row(types.InlineKeyboardButton(
                 text=f"{c['name']} {emoji} · {power}💥",
-                callback_data=f"viewcard:{cid}:{page}:all"
+                callback_data=f"viewcard:{cid}:{page}:all:0"
             ))
 
-    # Навигация
     nav = []
     if page > 0:
         nav.append(types.InlineKeyboardButton(text="⬅️", callback_data=f"inv_search_page:{page - 1}:{query}"))
@@ -266,12 +269,13 @@ async def inv_view_paginated(cq: CallbackQuery):
     parts = cq.data.split(":")
     page = int(parts[1])
     rarity_filter = parts[2] if len(parts) > 2 else "all"
+    excl_filter = int(parts[3]) if len(parts) > 3 else 0
 
     all_cids = _get_user_cids(cq.from_user.id)
     if not all_cids:
         return await cq.answer("У вас нет карт.", show_alert=True)
 
-    filtered = _apply_filter(all_cids, rarity_filter)
+    filtered = _apply_filter(all_cids, rarity_filter, excl_filter)
     sorted_cids = _sort_cards(filtered)
 
     items_per_page = 12
@@ -282,23 +286,31 @@ async def inv_view_paginated(cq: CallbackQuery):
     page_cids = sorted_cids[start:start + items_per_page]
 
     bld = InlineKeyboardBuilder()
-    # ── Строка фильтров ──
+
+    # ── Строка фильтров редкости ──
     filter_row = []
     for emoji, slug, _ in RARITY_FILTERS:
-        count = sum(1 for cid in all_cids if CARDS.get(cid, {}).get('rarity') == RARITY_SLUG_TO_LABEL[slug])
+        # Считаем количество с учетом активного фильтра лимиток
+        count = sum(1 for cid in all_cids if CARDS.get(cid, {}).get('rarity') == RARITY_SLUG_TO_LABEL[slug] and (
+                    not excl_filter or CARDS.get(cid, {}).get('exclusive', False)))
         active = "›" if slug == rarity_filter else ""
         btn_text = f"{active}{emoji}{count}{active}" if count else f"{emoji}—"
         filter_row.append(types.InlineKeyboardButton(
             text=btn_text,
-            callback_data=f"inv_view:0:{slug}"
+            callback_data=f"inv_view:0:{slug}:{excl_filter}"
         ))
-    # Кнопка «Все»
+
     all_mark = "›" if rarity_filter == "all" else ""
     filter_row.append(types.InlineKeyboardButton(
         text=f"{all_mark}Все{all_mark}",
-        callback_data="inv_view:0:all"
+        callback_data=f"inv_view:0:all:{excl_filter}"
     ))
     bld.row(*filter_row)
+
+    # ── Кнопка-переключатель Лимиток ──
+    excl_text = "✨ Лимитированные: ВКЛ" if excl_filter else "✨ Лимитированные: ВЫКЛ"
+    new_excl = 0 if excl_filter else 1
+    bld.row(types.InlineKeyboardButton(text=excl_text, callback_data=f"inv_view:0:{rarity_filter}:{new_excl}"))
 
     # ── Карточки ──
     card_buttons = []
@@ -307,9 +319,10 @@ async def inv_view_paginated(cq: CallbackQuery):
         if c:
             emoji = c['rarity'].split()[-1] if len(c['rarity'].split()) > 1 else ""
             power = _card_power(cid)
+            is_excl = "✨" if c.get('exclusive') else ""
             card_buttons.append(types.InlineKeyboardButton(
-                text=f"{c['name']} {emoji}",
-                callback_data=f"viewcard:{cid}:{page}:{rarity_filter}"
+                text=f"{is_excl}{c['name']} {emoji}",
+                callback_data=f"viewcard:{cid}:{page}:{rarity_filter}:{excl_filter}"
             ))
 
     for i in range(0, len(card_buttons), 2):
@@ -319,7 +332,7 @@ async def inv_view_paginated(cq: CallbackQuery):
     nav_row = []
     if page > 0:
         nav_row.append(types.InlineKeyboardButton(
-            text="⬅️", callback_data=f"inv_view:{page - 1}:{rarity_filter}"
+            text="⬅️", callback_data=f"inv_view:{page - 1}:{rarity_filter}:{excl_filter}"
         ))
     else:
         nav_row.append(types.InlineKeyboardButton(text="⬅️", callback_data="ignore"))
@@ -330,7 +343,7 @@ async def inv_view_paginated(cq: CallbackQuery):
 
     if page < total_pages - 1:
         nav_row.append(types.InlineKeyboardButton(
-            text="➡️", callback_data=f"inv_view:{page + 1}:{rarity_filter}"
+            text="➡️", callback_data=f"inv_view:{page + 1}:{rarity_filter}:{excl_filter}"
         ))
     else:
         nav_row.append(types.InlineKeyboardButton(text="➡️", callback_data="ignore"))
@@ -344,12 +357,12 @@ async def inv_view_paginated(cq: CallbackQuery):
     )
     bld.row(types.InlineKeyboardButton(text="📊 Коллекция", callback_data="inv_collection"))
 
-    # ── Текст ──
     filter_label = RARITY_SLUG_TO_LABEL.get(rarity_filter, "Все")
+    excl_label = " + ✨ Лимитки" if excl_filter else ""
     shown = len(sorted_cids)
     txt = (
         f"🎴 <b>Мои Карты</b>\n"
-        f"Фильтр: {filter_label} · {shown} карт\n"
+        f"Фильтр: {filter_label}{excl_label} · {shown} карт\n"
         f"Сортировка: по редкости + силе ⬇️"
     )
 
@@ -439,13 +452,13 @@ async def view_card(cq: CallbackQuery):
     cid = parts[1]
     page = parts[2] if len(parts) > 2 else "0"
     r_filter = parts[3] if len(parts) > 3 else "all"
+    excl_filter = parts[4] if len(parts) > 4 else "0"
 
     c = CARDS.get(cid)
     if not c:
         return await cq.answer("Карта не найдена.", show_alert=True)
 
     power = _card_power(cid)
-    # Мини-бар силы (макс ~300)
     power_filled = min(10, power // 30)
     power_bar = "▰" * power_filled + "▱" * (10 - power_filled)
 
@@ -464,9 +477,9 @@ async def view_card(cq: CallbackQuery):
     bld.button(text="〽️ Трейд", callback_data=f"trade_init:{cid}")
 
     if is_divine(cid) and c.get("video"):
-        bld.button(text="Показать арт 👀", callback_data=f"divshow:{cid}:art:{page}:{r_filter}")
+        bld.button(text="Показать арт 👀", callback_data=f"divshow:{cid}:art:{page}:{r_filter}:{excl_filter}")
 
-    bld.button(text="🔙 Назад", callback_data=f"inv_view:{page}:{r_filter}")
+    bld.button(text="🔙 Назад", callback_data=f"inv_view:{page}:{r_filter}:{excl_filter}")
     bld.adjust(1)
     await cq.message.delete()
     if is_divine(cid) and c.get("video"):

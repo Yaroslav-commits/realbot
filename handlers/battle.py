@@ -255,7 +255,7 @@ async def my_deck_menu(cq: CallbackQuery):
     bld.button(text="Посмотреть колоду 🃏", callback_data="view_deck")
     bld.button(text="Автосбор 🔁", callback_data="auto_deck")
     bld.button(text="Собрать колоду 🆕", callback_data="manual_deck_start")
-    bld.button(text="📦 Сундук", callback_data="stash_menu:0")
+    bld.button(text="📦 Сундук", callback_data="stash_menu:0:deck")
     bld.adjust(1)
 
     text = "🗂 Меню колоды:\nВыберите действие:"
@@ -2848,26 +2848,29 @@ async def auto_top_distributor(bot: Bot):
         await asyncio.sleep(60)
 
 
-# ═══════════════════════════════════════════════════════════════
-# СУНДУК — отдельное хранилище карт
-# ═══════════════════════════════════════════════════════════════
+# =========================================================================
+# СУНДУК — обновленная система с возвратом в меню
+# =========================================================================
 
-STASH_PAGE_SIZE = 8
+STASH_PAGE_SIZE = 9
 
 
-def _stash_menu_kb(uid: int, page: int = 0):
+def _stash_menu_kb(uid: int, page: int = 0, source: str = "deck"):
     """Меню сундука: показывает что лежит, плюс кнопки."""
     bld = InlineKeyboardBuilder()
-    bld.button(text="➕ Положить карту", callback_data="stash_put:0")
-    bld.button(text="📤 Забрать карту", callback_data=f"stash_take:{page}")
-    bld.button(text="Гайд 📖", callback_data="stash_guide")
-    bld.button(text="Назад 🔙", callback_data="my_deck")
+    bld.button(text="➕ Положить карту", callback_data=f"stash_put:0:{source}")
+    bld.button(text="📤 Забрать карту", callback_data=f"stash_take:{page}:{source}")
+    bld.button(text="Гайд 📖", callback_data=f"stash_guide:{source}")
+    back_cb = "inv_main" if source == "inv" else "my_deck"
+    bld.button(text="Назад 🔙", callback_data=back_cb)
     bld.adjust(1)
     return bld.as_markup()
 
 
-@router.callback_query(F.data == "stash_guide")
+@router.callback_query(F.data.startswith("stash_guide:"))
 async def stash_guide_cb(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    source = parts[1] if len(parts) > 1 else "deck"
     text = (
         "📖 <b>Гайд по Сундуку</b>\n\n"
         "Сундук это ваше личное хранилище. Вот как его можно использовать:\n\n"
@@ -2877,7 +2880,7 @@ async def stash_guide_cb(cq: CallbackQuery):
         "<i>⚠️ Важно: из сундука нельзя забрать карту, если точно такая же уже лежит в вашем активном инвентаре.</i>"
     )
     bld = InlineKeyboardBuilder()
-    bld.button(text="Назад 🔙", callback_data="stash_menu:0")
+    bld.button(text="Назад 🔙", callback_data=f"stash_menu:0:{source}")
     try:
         await cq.message.edit_text(text, reply_markup=bld.as_markup(), parse_mode="HTML")
     except Exception:
@@ -2891,10 +2894,13 @@ async def stash_guide_cb(cq: CallbackQuery):
 
 @router.callback_query(F.data.startswith("stash_menu:"))
 async def stash_menu_cb(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    page = int(parts[1]) if len(parts) > 1 else 0
+    source = parts[2] if len(parts) > 2 else "deck"
+
     uid = cq.from_user.id
     stash = get_stash(uid)
 
-    # Считаем количество каждой карты
     counts = {}
     for cid in stash:
         counts[cid] = counts.get(cid, 0) + 1
@@ -2917,11 +2923,9 @@ async def stash_menu_cb(cq: CallbackQuery):
                 count_str = f" × {counts[cid]}" if counts[cid] > 1 else ""
                 lines.append(f"• {cid}{count_str}")
 
-        # Сортируем от сильных к слабым (от Божественных к Обычным)
         c_objs.sort(key=lambda x: rarity_order.get(x[1].get('rarity'), 0), reverse=True)
 
         for cid, c in c_objs:
-            # Показываем количество только если карт больше 1
             count_str = f" × {counts[cid]}" if counts[cid] > 1 else ""
             lines.append(f"• {c['name']} {c['rarity']}{count_str}")
     else:
@@ -2931,20 +2935,21 @@ async def stash_menu_cb(cq: CallbackQuery):
 
     text = "\n".join(lines)
     try:
-        await cq.message.edit_text(text, reply_markup=_stash_menu_kb(uid, 0), parse_mode="HTML")
+        await cq.message.edit_text(text, reply_markup=_stash_menu_kb(uid, page, source), parse_mode="HTML")
     except Exception:
         try:
             await cq.message.delete()
         except Exception:
             pass
-        await cq.message.answer(text, reply_markup=_stash_menu_kb(uid, 0), parse_mode="HTML")
+        await cq.message.answer(text, reply_markup=_stash_menu_kb(uid, page, source), parse_mode="HTML")
     await cq.answer()
 
 
 @router.callback_query(F.data.startswith("stash_put:"))
 async def stash_put_cb(cq: CallbackQuery):
-    """Показать список карт из инвентаря для перекладывания в сундук."""
-    page = int(cq.data.split(":")[1])
+    parts = cq.data.split(":")
+    page = int(parts[1])
+    source = parts[2] if len(parts) > 2 else "deck"
     uid = cq.from_user.id
 
     rows = db_exec("SELECT card_id, COUNT(*) FROM cards_inv WHERE user_id = ? GROUP BY card_id",
@@ -2959,9 +2964,8 @@ async def stash_put_cb(cq: CallbackQuery):
         c = CARDS.get(cid)
         if not c:
             continue
-        items.append((cid, c))
+        items.append((cid, c, cnt))
 
-    # СОРТИРОВКА: reverse=True делает от самых редких к обычным
     items.sort(key=lambda x: rarity_order.get(x[1].get('rarity'), 0), reverse=True)
 
     total_pages = max(1, (len(items) + STASH_PAGE_SIZE - 1) // STASH_PAGE_SIZE)
@@ -2969,21 +2973,22 @@ async def stash_put_cb(cq: CallbackQuery):
     chunk = items[page * STASH_PAGE_SIZE:(page + 1) * STASH_PAGE_SIZE]
 
     bld = InlineKeyboardBuilder()
-    for cid, c in chunk:
-        # Убрано отображение количества карт
-        bld.button(text=f"{c['name']} ({c['rarity'].split()[-1]})",
-                   callback_data=f"stash_do_put:{cid}:{page}")
+    for cid, c, cnt in chunk:
+        emoji = c['rarity'].split()[-1] if len(c['rarity'].split()) > 1 else ""
+        cnt_str = f" (в наличии: {cnt})" if cnt > 1 else ""
+        bld.button(text=f"{c['name']} {emoji}{cnt_str}",
+                   callback_data=f"stash_do_put:{cid}:{page}:{source}")
     bld.adjust(1)
 
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"stash_put:{page - 1}"))
+        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"stash_put:{page - 1}:{source}"))
     nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="ignore"))
     if page < total_pages - 1:
-        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"stash_put:{page + 1}"))
+        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"stash_put:{page + 1}:{source}"))
     if nav:
         bld.row(*nav)
-    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="stash_menu:0"))
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"stash_menu:0:{source}"))
 
     try:
         await cq.message.edit_text("🃏 Выберите карту, которую хотите положить в Сундук:",
@@ -2996,7 +3001,10 @@ async def stash_put_cb(cq: CallbackQuery):
 
 @router.callback_query(F.data.startswith("stash_do_put:"))
 async def stash_do_put_cb(cq: CallbackQuery):
-    _, cid, page = cq.data.split(":")
+    parts = cq.data.split(":")
+    cid = parts[1]
+    page = parts[2]
+    source = parts[3] if len(parts) > 3 else "deck"
     uid = cq.from_user.id
 
     in_deck = db_exec("SELECT 1 FROM decks WHERE user_id = ? AND card_id = ?", (uid, cid), fetch=True)
@@ -3009,21 +3017,26 @@ async def stash_do_put_cb(cq: CallbackQuery):
 
     c = CARDS.get(cid, {})
     await cq.answer(f"📦 {c.get('name', cid)} → в Сундук", show_alert=False)
-    cq.data = f"stash_put:{page}"
+    cq.data = f"stash_put:{page}:{source}"
     await stash_put_cb(cq)
 
 
 @router.callback_query(F.data.startswith("stash_take:"))
 async def stash_take_cb(cq: CallbackQuery):
-    """Показать список карт из сундука для возврата в инвентарь."""
-    page = int(cq.data.split(":")[1])
+    parts = cq.data.split(":")
+    page = int(parts[1])
+    source = parts[2] if len(parts) > 2 else "deck"
     uid = cq.from_user.id
 
     stash = get_stash(uid)
     if not stash:
         return await cq.answer("Сундук пуст.", show_alert=True)
 
-    unique_stash = list(set(stash))
+    counts = {}
+    for cid in stash:
+        counts[cid] = counts.get(cid, 0) + 1
+
+    unique_stash = list(counts.keys())
     rarity_order = {"Обычная ⚪️": 1, "Редкая 🟡": 2, "Эпическая 🟢": 3,
                     "Легендарная 🔵": 4, "Мифическая 🔴": 5, "Божественная ⚫️": 6}
     items = []
@@ -3031,9 +3044,8 @@ async def stash_take_cb(cq: CallbackQuery):
         c = CARDS.get(cid)
         if not c:
             continue
-        items.append((cid, c))
+        items.append((cid, c, counts[cid]))
 
-    # Сортировка от редких к обычным
     items.sort(key=lambda x: rarity_order.get(x[1].get('rarity'), 0), reverse=True)
 
     total_pages = max(1, (len(items) + STASH_PAGE_SIZE - 1) // STASH_PAGE_SIZE)
@@ -3041,21 +3053,23 @@ async def stash_take_cb(cq: CallbackQuery):
     chunk = items[page * STASH_PAGE_SIZE:(page + 1) * STASH_PAGE_SIZE]
 
     bld = InlineKeyboardBuilder()
-    for cid, c in chunk:
-        # Убрано отображение количества
-        bld.button(text=f"{c['name']} ({c['rarity'].split()[-1]})",
-                   callback_data=f"stash_do_take:{cid}:{page}")
+    for cid, c, cnt in chunk:
+        emoji = c['rarity'].split()[-1] if len(c['rarity'].split()) > 1 else ""
+        # Пишем '1 из X', чтобы игрок понимал, что забирает только одну карту
+        cnt_str = f" (1 из {cnt})" if cnt > 1 else ""
+        bld.button(text=f"{c['name']} {emoji}{cnt_str}",
+                   callback_data=f"stash_do_take:{cid}:{page}:{source}")
     bld.adjust(1)
 
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"stash_take:{page - 1}"))
+        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"stash_take:{page - 1}:{source}"))
     nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="ignore"))
     if page < total_pages - 1:
-        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"stash_take:{page + 1}"))
+        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"stash_take:{page + 1}:{source}"))
     if nav:
         bld.row(*nav)
-    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="stash_menu:0"))
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"stash_menu:0:{source}"))
 
     try:
         await cq.message.edit_text("📤 Выберите карту, которую хотите забрать из Сундука:",
@@ -3068,10 +3082,12 @@ async def stash_take_cb(cq: CallbackQuery):
 
 @router.callback_query(F.data.startswith("stash_do_take:"))
 async def stash_do_take_cb(cq: CallbackQuery):
-    _, cid, page = cq.data.split(":")
+    parts = cq.data.split(":")
+    cid = parts[1]
+    page = parts[2]
+    source = parts[3] if len(parts) > 3 else "deck"
     uid = cq.from_user.id
 
-    # ✅ ПРОВЕРКА: если карта уже есть в инвентаре — не даём забрать
     existing = db_exec(
         "SELECT COUNT(*) FROM cards_inv WHERE user_id = ? AND card_id = ?",
         (uid, cid), fetch=True
@@ -3089,5 +3105,5 @@ async def stash_do_take_cb(cq: CallbackQuery):
         return await cq.answer("Карты нет в сундуке.", show_alert=True)
     c = CARDS.get(cid, {})
     await cq.answer(f"📤 {c.get('name', cid)} → в инвентарь", show_alert=False)
-    cq.data = f"stash_take:{page}"
+    cq.data = f"stash_take:{page}:{source}"
     await stash_take_cb(cq)
