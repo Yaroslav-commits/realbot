@@ -131,6 +131,35 @@ def init_db():
 
     db_exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_bgs_inv_unique ON bgs_inv(user_id, bg_id)")
     db_exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_titles_inv_unique ON titles_inv(user_id, title_id)")
+    # skinchik
+    db_exec("CREATE TABLE IF NOT EXISTS skins_inv (user_id INTEGER, card_id TEXT, skin_type TEXT, is_active INTEGER DEFAULT 0)")
+
+def give_skin_to_user(uid: int, card_id: str, skin_type: str) -> bool:
+    """Выдает скин. skin_type должен быть 'awakened' или 'absolute'. Возвращает True, если скина не было."""
+    exists = db_exec("SELECT 1 FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?", (uid, card_id, skin_type), fetch=True)
+    if exists:
+        return False
+    db_exec("INSERT INTO skins_inv (user_id, card_id, skin_type, is_active) VALUES (?, ?, ?, 0)", (uid, card_id, skin_type))
+    return True
+
+def get_user_skins_for_card(uid: int, card_id: str):
+    """Возвращает список доступных скинов игрока для конкретной карты."""
+    rows = db_exec("SELECT skin_type, is_active FROM skins_inv WHERE user_id = ? AND card_id = ?", (uid, card_id), fetchall=True)
+    return rows if rows else []
+
+def get_active_skin(uid: int, card_id: str):
+    """Возвращает активный скин ('awakened' или 'absolute') или None."""
+    res = db_exec("SELECT skin_type FROM skins_inv WHERE user_id = ? AND card_id = ? AND is_active = 1", (uid, card_id), fetch=True)
+    return res[0] if res else None
+
+def equip_skin(uid: int, card_id: str, skin_type: str):
+    """Надевает скин (снимая остальные для этой карты)."""
+    db_exec("UPDATE skins_inv SET is_active = 0 WHERE user_id = ? AND card_id = ?", (uid, card_id))
+    db_exec("UPDATE skins_inv SET is_active = 1 WHERE user_id = ? AND card_id = ? AND skin_type = ?", (uid, card_id, skin_type))
+
+def unequip_skin(uid: int, card_id: str):
+    """Снимает любой активный скин с карты."""
+    db_exec("UPDATE skins_inv SET is_active = 0 WHERE user_id = ? AND card_id = ?", (uid, card_id))
 
 def get_user(uid):
     return db_exec("SELECT * FROM users WHERE id = ?", (uid,), fetch=True)
