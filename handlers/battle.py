@@ -1613,7 +1613,7 @@ async def b_shop_main_cb(cq: CallbackQuery):
 PACK_CARD = "sanless"
 PACK_BG1 = "sanny"
 PACK_BG2 = "shadow_slave"
-PACK_TITLE = "title_pack"
+PACK_TITLE = "title_pack2"
 # Переключатель выдачи карты за ТОП-20 (True - выдавать, False - временно отключено)
 GIVE_TOP_20_CARD = False
 
