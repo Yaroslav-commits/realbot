@@ -31,7 +31,7 @@ from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          get_notifications_enabled, is_anonymous, toggle_anonymity,
                          user_has_bg, user_has_title, give_bg_to_user, give_title_to_user,
                          is_premium, get_premium_until,
-                         get_users_for_battle_cooldown_notify, mark_battle_cooldown_notified, give_skin_to_user)
+                         get_users_for_battle_cooldown_notify, mark_battle_cooldown_notified)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 from media_cache import send_cached_video
@@ -1678,26 +1678,6 @@ async def cmd_restore_pass_days(msg: types.Message, bot: Bot):
             pass
 
     await msg.answer(res_txt, parse_mode="HTML")
-
-@router.message(Command("give_skin"))
-async def admin_give_skin(msg: types.Message):
-    if msg.from_user.id not in ADMIN_IDS:
-        return
-
-    args = msg.text.split()
-    if len(args) != 4:
-        return await msg.answer("❌ Формат: /give_skin <id_игрока> <card_id> <awakened/absolute>")
-
-    target_id, card_id, skin_type = int(args[1]), args[2], args[3]
-
-    if skin_type not in ["awakened", "absolute"]:
-        return await msg.answer("❌ Тип скина должен быть awakened или absolute.")
-
-    res = give_skin_to_user(target_id, card_id, skin_type)
-    if res:
-        await msg.answer(f"✅ Скин {skin_type} для {card_id} успешно выдан игроку {target_id}!")
-    else:
-        await msg.answer("❌ У игрока уже есть этот скин.")
 
 @router.message(
     Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "delete_diamond", "give_pass", "give_prem", "create_promo", "restore_pass_day"]))

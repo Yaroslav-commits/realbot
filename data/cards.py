@@ -575,18 +575,6 @@ TITLES = {
     "title_pack2": "Лишенный света 🕯️",
 }
 
-# ================== СКИНЫ НА КАРТЫ ==================
-AWAKENED_SKINS = {
-    # id_карточки : {"skin_art_file": "название_файла.jpg", "exclusive": False}
-    "sanless": {"skin_art_file": "sanless_awakened.jpg", "exclusive": False},
-}
-
-ABSOLUTE_SKINS = {
-    # id_карточки : {"skin_video_file": "название_файла.mp4", "exclusive": False}
-    "sanless": {"skin_video_file": "sanless_absolute.mp4", "exclusive": False},
-    "yu_hobin": {"skin_video_file": "yu_hobin_absolute.mp4", "exclusive": True},
-}
-
 NORMAL_PASS = {1:('krw',150), 2:('atm',5), 3:('bc',120), 4:('atm',6), 5:('pack','epic'), 6:('dia',5), 7:('krw',190), 8:('atm',3), 9:('krw',100), 10:('bc',100), 11:('atm',4), 12:('pack','epic'), 13:('krw',75), 14:('dia',3), 15:('krw',60), 16:('atm',5), 17:('bc',100), 18:('krw',70), 19:('pack','epic'), 20:('atm',3), 21:('krw',300), 22:('dia',3), 23:('krw',90), 24:('bc',50), 25:('pack','leg'), 26:('krw',100), 27:('atm',5), 28:('krw',250), 29:('dia',4), 30:('krw',50), 31:('atm',10)}
 ROYALE_PASS = {1:('krw',550), 2:('atm',20), 3:('bc',250), 4:('atm',18), 5:('pack','epic'), 6:('dia',25), 7:('krw',700), 8:('atm',16), 9:('krw',420), 10:('bc',500), 11:('atm',10), 12:('pack','epic'), 13:('krw',250), 14:('dia',150), 15:('krw',180), 16:('atm',12), 17:('bc',600), 18:('krw',200), 19:('pack','leg'), 20:('atm',25), 21:('krw',630), 22:('dia',50), 23:('krw',460), 24:('bc',90), 25:('pack','leg'), 26:('krw',500), 27:('atm',32), 28:('krw',850), 29:('dia',200), 30:('krw',400), 31:('atm',20)}
 
