@@ -107,7 +107,7 @@ CARDS = {
 "aleksey_amigochaz": {"name": "Алексей Амигочаз", "rarity": "Обычная ⚪️", "style": "Контроль", "series": "Башня Бога", "speed": 24, "strength": 20, "intellect": 27, "file": "aleksey_amigochaz.jpeg", "exclusive": False},
 "ron_mey": {"name": "Рон Мей", "rarity": "Обычная ⚪️", "style": "Поддержка", "series": "Башня Бога", "speed": 16, "strength": 15, "intellect": 25, "file": "ron_mey.jpeg", "exclusive": False},
 "yura_ha": {"name": "Юра Ха", "rarity": "Обычная ⚪️", "style": "Тактика", "series": "Башня Бога", "speed": 22, "strength": 18, "intellect": 28, "file": "yura_ha.jpeg", "exclusive": False},
-"vivi": {"name": "Виви", "rarity": "Обычная ⚪️", "style": "Манёвры", "series": "Башня Бога", "speed": 19, "strength": 14, "intellect": 19, "file": "vivi.jpeg", "exclusive": False},
+"vivi2": {"name": "Виви", "rarity": "Обычная ⚪️", "style": "Манёвры", "series": "Башня Бога", "speed": 19, "strength": 14, "intellect": 19, "file": "vivi2.jpeg", "exclusive": False},
 "grey": {"name": "Грей", "rarity": "Обычная ⚪️", "style": "Быстрые атаки", "series": "Башня Бога", "speed": 26, "strength": 17, "intellect": 16, "file": "grey.jpeg", "exclusive": False},
 "po_bidou_blan": {"name": "По Бидоу Блан", "rarity": "Обычная ⚪️", "style": "Силовой стиль", "series": "Башня Бога", "speed": 23, "strength": 12, "intellect": 30, "file": "po_bidou_blan.jpeg", "exclusive": False},
 "kvatro_blits": {"name": "Кватро Блиц", "rarity": "Обычная ⚪️", "style": "Рывки", "series": "Башня Бога", "speed": 29, "strength": 21, "intellect": 14, "file": "kvatro_blits.jpeg", "exclusive": False},
