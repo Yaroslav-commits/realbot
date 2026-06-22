@@ -32,6 +32,7 @@ def init_db():
         anonymous INTEGER DEFAULT 0, season_wins INTEGER DEFAULT 0
     )''')
     db_exec("CREATE TABLE IF NOT EXISTS cards_inv (user_id INTEGER, card_id TEXT)")
+    db_exec("CREATE TABLE IF NOT EXISTS favorite_cards (user_id INTEGER, card_id TEXT, slot_index INTEGER)")
     db_exec("CREATE TABLE IF NOT EXISTS decks (user_id INTEGER, card_id TEXT, slot_index INTEGER)")
     db_exec("CREATE TABLE IF NOT EXISTS bgs_inv (user_id INTEGER, bg_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS titles_inv (user_id INTEGER, title_id TEXT)")
@@ -92,14 +93,18 @@ def init_db():
 
     # Миграция — добавить слоты, если таблицы уже были созданы ранее
     for col, col_def in [
-        ('slot1', 'TEXT DEFAULT NULL'),
-        ('slot2', 'TEXT DEFAULT NULL'),
-        ('slot3', 'TEXT DEFAULT NULL'),
-        ('slot4', 'TEXT DEFAULT NULL'),
-        ('slot5', 'TEXT DEFAULT NULL'),
+        ('notifications', 'INTEGER DEFAULT 1'),
+        ('referral_code', 'TEXT'),
+        ('referred_by', 'INTEGER'),
+        ('cooldown_notified', 'INTEGER DEFAULT 1'),
+        ('premium_until', 'TEXT DEFAULT NULL'),
+        ('battle_cooldown_notified', 'INTEGER DEFAULT 1'),
+        ('anonymous', 'INTEGER DEFAULT 0'),
+        ('season_wins', 'INTEGER DEFAULT 0'),
+        ('max_streak', 'INTEGER DEFAULT 0'),  # <-- ДОБАВИЛИ СЮДА ТВОЙ СТРИК ИЗ МАКЕТА
     ]:
         try:
-            db_exec(f"ALTER TABLE craft_slots ADD COLUMN {col} {col_def}")
+            db_exec(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
         except sqlite3.OperationalError:
             pass
     # ==========================================
@@ -659,4 +664,31 @@ def get_event_items(uid):
 def add_event_item(uid, item_type, amount):
     get_event_items(uid)
     db_exec(f"UPDATE event_items SET {item_type} = {item_type} + ? WHERE user_id = ?", (amount, uid))
-# ==========================================================
+# ================== ЛЮБИМЫЕ КАРТЫ И ТИТУЛЫ ПРОФИЛЯ ==================
+
+def get_favorite_cards(uid: int):
+    """Возвращает список любимых карт игрока в виде словаря {slot_index: card_id}"""
+    rows = db_exec("SELECT card_id, slot_index FROM favorite_cards WHERE user_id = ?", (uid,), fetchall=True)
+    return {row[1]: row[0] for row in rows} if rows else {}
+
+def set_favorite_card(uid: int, card_id: str, slot_index: int):
+    """Устанавливает или обновляет любимую карту в конкретном слоте (0, 1, 2)"""
+    db_exec("DELETE FROM favorite_cards WHERE user_id = ? AND slot_index = ?", (uid, slot_index))
+    if card_id:
+        db_exec("INSERT INTO favorite_cards (user_id, card_id, slot_index) VALUES (?, ?, ?)", (uid, card_id, slot_index))
+
+def get_user_unlocked_titles(uid: int):
+    """Возвращает список ID титулов, которые есть у игрока в инвентаре"""
+    rows = db_exec("SELECT title_id FROM titles_inv WHERE user_id = ?", (uid,), fetchall=True)
+    return [row[0] for row in rows] if rows else []
+
+def set_user_active_title(uid: int, title_id: str) -> bool:
+    """Устанавливает активный титул, если он у игрока разблокирован (или снимает, если title_id=None)"""
+    if title_id:
+        # Проверяем, есть ли такой титул вообще в инвентаре
+        if not user_has_title(uid, title_id):
+            return False
+        db_exec("UPDATE users SET active_title = ? WHERE id = ?", (title_id, uid))
+    else:
+        db_exec("UPDATE users SET active_title = NULL WHERE id = ?", (uid,))
+    return True

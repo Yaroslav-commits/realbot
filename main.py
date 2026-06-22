@@ -384,14 +384,18 @@ DAILY_REWARDS = {
 @app.get("/api/profile/{user_id}")
 def get_profile(user_id: int = Depends(authed_user_id)):
     try:
+        # Достаём новые поля: победы, поражения, стрик и активный титул
         user = db_exec_sync(
-            "SELECT diamond, krw, battlecoin FROM users WHERE id = ?",
+            "SELECT diamond, krw, battlecoin, wins, losses, max_streak, active_title FROM users WHERE id = ?",
             (user_id,), fetch=True
         )
         if not user:
             return {"diamond": 0, "krw": 0, "battlecoin": 0, "is_premium": False,
-                    "owned_cards": [], "daily_day": 0, "can_claim_daily": False}
+                    "owned_cards": [], "daily_day": 0, "can_claim_daily": False,
+                    "wins": 0, "losses": 0, "winrate": 0, "max_streak": 0,
+                    "active_title": None, "fav_cards": {}, "unlocked_titles": []}
 
+        # Миграция ежедневных наград (оставляем как было)
         daily_day = 0
         last_claim_date = '2000-01-01'
         try:
@@ -415,6 +419,24 @@ def get_profile(user_id: int = Depends(authed_user_id)):
         today_str = now_msk.strftime("%Y-%m-%d")
         can_claim_daily = (last_claim_date.split(" ")[0] != today_str)
 
+        # Подсчёт статистики боёв
+        wins = user[3] or 0
+        losses = user[4] or 0
+        max_streak = user[5] or 0
+        active_title = user[6]
+
+        total_battles = wins + losses
+        winrate = int((wins / total_battles) * 100) if total_battles > 0 else 0
+
+        # Любимые карты
+        fav_rows = db_exec_sync("SELECT slot_index, card_id FROM favorite_cards WHERE user_id = ?", (user_id,),
+                                fetchall=True)
+        fav_cards = {str(row[0]): row[1] for row in fav_rows} if fav_rows else {}
+
+        # Титулы (какие есть у игрока)
+        titles_rows = db_exec_sync("SELECT title_id FROM titles_inv WHERE user_id = ?", (user_id,), fetchall=True)
+        unlocked_titles = [row[0] for row in titles_rows] if titles_rows else []
+
         return {
             "diamond": user[0],
             "krw": user[1],
@@ -422,16 +444,57 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             "is_premium": is_prem,
             "owned_cards": owned_cards,
             "daily_day": daily_day,
-            "can_claim_daily": can_claim_daily
+            "can_claim_daily": can_claim_daily,
+            "wins": wins,
+            "losses": losses,
+            "winrate": winrate,
+            "max_streak": max_streak,
+            "active_title": active_title,
+            "fav_cards": fav_cards,
+            "unlocked_titles": unlocked_titles
         }
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"Error in get_profile: {e}")
         return {"diamond": 0, "krw": 0, "battlecoin": 0, "is_premium": False,
-                "owned_cards": [], "daily_day": 0, "can_claim_daily": False}
+                "owned_cards": [], "daily_day": 0, "can_claim_daily": False,
+                "wins": 0, "losses": 0, "winrate": 0, "max_streak": 0,
+                "active_title": None, "fav_cards": {}, "unlocked_titles": []}
 
+# Модели для запросов
+class FavPayload(BaseModel):
+    card_id: str
+    slot_index: int
 
+class TitlePayload(BaseModel):
+    title_id: str
+
+@app.post("/api/profile/favorite/{user_id}")
+def set_favorite_card_api(payload: FavPayload, user_id: int = Depends(authed_user_id)):
+    try:
+        # Удаляем старую карту из этого слота
+        db_exec_sync("DELETE FROM favorite_cards WHERE user_id = ? AND slot_index = ?", (user_id, payload.slot_index))
+        # Ставим новую (если id передан)
+        if payload.card_id and payload.card_id != "none":
+            db_exec_sync("INSERT INTO favorite_cards (user_id, card_id, slot_index) VALUES (?, ?, ?)", (user_id, payload.card_id, payload.slot_index))
+        return {"success": True}
+    except Exception as e:
+        logging.error(f"Fav update error: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/profile/title/{user_id}")
+def set_active_title_api(payload: TitlePayload, user_id: int = Depends(authed_user_id)):
+    try:
+        if payload.title_id == "none" or not payload.title_id:
+            db_exec_sync("UPDATE users SET active_title = NULL WHERE id = ?", (user_id,))
+        else:
+            db_exec_sync("UPDATE users SET active_title = ? WHERE id = ?", (payload.title_id, user_id))
+        return {"success": True}
+    except Exception as e:
+        logging.error(f"Title update error: {e}")
+        return {"success": False, "error": str(e)}
+    
 @app.post("/api/claim_daily/{user_id}")
 def claim_daily(user_id: int = Depends(authed_user_id)):
     try:
