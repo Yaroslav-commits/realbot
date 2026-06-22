@@ -1210,13 +1210,13 @@ async def finish_game(gid, bot):
         else:
             if is_win:
                 pts = 4 if premium else 3
-                bc = 10 if premium else 7
+                bc = 14 if premium else 10
             elif is_draw:
                 pts = 2 if premium else 1
-                bc = 3 if premium else 2
+                bc = 6 if premium else 4
             else:
                 pts = -1 if premium else -2
-                bc = 2 if premium else 1
+                bc = 3 if premium else 2
 
         # ДОБАВЛЕНО: season_wins = season_wins + 1
         db_exec(f"UPDATE users SET rank_points = MAX(0, rank_points + {pts}), battlecoin = battlecoin + {bc}, " +
@@ -1233,13 +1233,13 @@ async def finish_game(gid, bot):
 
     # === ИВЕНТ: НАГРАДА ЗА БОЙ ===
     from database.db import add_event_item
-    cocktail_p1 = random.randint(3, 8)
+    cocktail_p1 = random.randint(5, 9)
     add_event_item(p1, "cocktail", cocktail_p1)
     ev_txt1 = f"\n🍹 Коктейль: +{cocktail_p1}"
 
     ev_txt2 = ""
     if p2 != -1:
-        cocktail_p2 = random.randint(3, 8)
+        cocktail_p2 = random.randint(5, 9)
         add_event_item(p2, "cocktail", cocktail_p2)
         ev_txt2 = f"\n🍹 Коктейль: +{cocktail_p2}"
     # =============================
@@ -1687,7 +1687,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
 
     # Логика шансов
     rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
-    weights = [2, 5, 2.8, 3.2, 6.5, 79]
+    weights = [1.5, 5, 3.6, 3.4, 6.5, 79]
     result = random.choices(rewards, weights=weights, k=1)[0]
 
     reward_text = ""
