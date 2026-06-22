@@ -69,14 +69,23 @@ def _get_user_cids(uid: int) -> list[str]:
             result.append(cid)
     return result
 
+
 def _apply_filter(cids: list[str], rarity_filter: str, excl_filter: int = 0) -> list[str]:
+    from data.cards import EVENT_CARDS_LIST
     filtered = cids
     if rarity_filter != "all":
         label = RARITY_SLUG_TO_LABEL.get(rarity_filter)
         if label:
             filtered = [cid for cid in filtered if CARDS.get(cid, {}).get('rarity') == label]
+
     if excl_filter == 1:
-        filtered = [cid for cid in filtered if CARDS.get(cid, {}).get('exclusive', False)]
+        # Лимитированные (exclusive=True, но НЕ ивентовые)
+        filtered = [cid for cid in filtered if
+                    CARDS.get(cid, {}).get('exclusive', False) and cid not in EVENT_CARDS_LIST]
+    elif excl_filter == 2:
+        # Только Ивентовые
+        filtered = [cid for cid in filtered if cid in EVENT_CARDS_LIST]
+
     return filtered
 
 def _sort_cards(cids: list[str]) -> list[str]:
@@ -288,11 +297,20 @@ async def inv_view_paginated(cq: CallbackQuery):
     bld = InlineKeyboardBuilder()
 
     # ── Строка фильтров редкости ──
+    from data.cards import EVENT_CARDS_LIST
     filter_row = []
     for emoji, slug, _ in RARITY_FILTERS:
-        # Считаем количество с учетом активного фильтра лимиток
-        count = sum(1 for cid in all_cids if CARDS.get(cid, {}).get('rarity') == RARITY_SLUG_TO_LABEL[slug] and (
-                    not excl_filter or CARDS.get(cid, {}).get('exclusive', False)))
+        # Считаем количество с учетом активного фильтра лимиток/ивента
+        if excl_filter == 1:
+            count = sum(1 for cid in all_cids if
+                        CARDS.get(cid, {}).get('rarity') == RARITY_SLUG_TO_LABEL[slug] and CARDS.get(cid, {}).get(
+                            'exclusive', False) and cid not in EVENT_CARDS_LIST)
+        elif excl_filter == 2:
+            count = sum(1 for cid in all_cids if
+                        CARDS.get(cid, {}).get('rarity') == RARITY_SLUG_TO_LABEL[slug] and cid in EVENT_CARDS_LIST)
+        else:
+            count = sum(1 for cid in all_cids if CARDS.get(cid, {}).get('rarity') == RARITY_SLUG_TO_LABEL[slug])
+
         active = "›" if slug == rarity_filter else ""
         btn_text = f"{active}{emoji}{count}{active}" if count else f"{emoji}—"
         filter_row.append(types.InlineKeyboardButton(
@@ -307,9 +325,17 @@ async def inv_view_paginated(cq: CallbackQuery):
     ))
     bld.row(*filter_row)
 
-    # ── Кнопка-переключатель Лимиток ──
-    excl_text = "✨ Лимитированные: ВКЛ" if excl_filter else "✨ Лимитированные: ВЫКЛ"
-    new_excl = 0 if excl_filter else 1
+    # ── Кнопка-переключатель Лимиток / Ивентовых ──
+    if excl_filter == 0:
+        excl_text = "✨ Лимитированные: ВЫКЛ"
+        new_excl = 1
+    elif excl_filter == 1:
+        excl_text = "✨ Лимитированные: ВКЛ"
+        new_excl = 2
+    elif excl_filter == 2:
+        excl_text = "❓ Ивентовые: ВКЛ"
+        new_excl = 0
+
     bld.row(types.InlineKeyboardButton(text=excl_text, callback_data=f"inv_view:0:{rarity_filter}:{new_excl}"))
 
     # ── Карточки ──
@@ -319,7 +345,8 @@ async def inv_view_paginated(cq: CallbackQuery):
         if c:
             emoji = c['rarity'].split()[-1] if len(c['rarity'].split()) > 1 else ""
             power = _card_power(cid)
-            is_excl = "✨" if c.get('exclusive') else ""
+            # Отмечаем карту нужным значком (❓ для ивента, ✨ для лимиток)
+            is_excl = "❓" if cid in EVENT_CARDS_LIST else ("✨" if c.get('exclusive') else "")
             card_buttons.append(types.InlineKeyboardButton(
                 text=f"{is_excl}{c['name']} {emoji}",
                 callback_data=f"viewcard:{cid}:{page}:{rarity_filter}:{excl_filter}"
@@ -358,7 +385,12 @@ async def inv_view_paginated(cq: CallbackQuery):
     bld.row(types.InlineKeyboardButton(text="📊 Коллекция", callback_data="inv_collection"))
 
     filter_label = RARITY_SLUG_TO_LABEL.get(rarity_filter, "Все")
-    excl_label = " + ✨ Лимитки" if excl_filter else ""
+    if excl_filter == 1:
+        excl_label = " + ✨ Лимитки"
+    elif excl_filter == 2:
+        excl_label = " + ❓ Ивентовые"
+    else:
+        excl_label = ""
     shown = len(sorted_cids)
     txt = (
         f"🎴 <b>Мои Карты</b>\n"

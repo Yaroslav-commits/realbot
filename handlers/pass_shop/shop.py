@@ -622,10 +622,20 @@ async def back_to_packs(msg: types.Message):
     )
 
 # ===== Евент =====
+@router.callback_query(F.data == "shop:ignore")
+async def shop_ignore_cb(cq: CallbackQuery):
+    # Пустой коллбэк для неактивных кнопок (например, номер страницы)
+    await cq.answer()
+
 @router.callback_query(F.data == "shop:event")
+@router.callback_query(F.data.startswith("shop:event_page:"))
 async def shop_event_cb(cq: CallbackQuery):
     if not EVENT_ENABLED:
         return await cq.answer("В данный момент нет активных событий", show_alert=True)
+
+    # Вычисляем текущую страницу
+    parts = cq.data.split(":")
+    page = int(parts[2]) if len(parts) > 2 and parts[1] == "event_page" else 0
 
     from database.db import get_event_items
     cocktail, icecream, dango = get_event_items(cq.from_user.id)
@@ -637,22 +647,51 @@ async def shop_event_cb(cq: CallbackQuery):
         f"🍹 Коктейль: <b>{cocktail}</b>\n"
         f"🍨 Мороженое: <b>{icecream}</b>\n"
         f"🍡 Данго: <b>{dango}</b>\n\n"
-        f"Выберите карту для покупки или обменяйте ресурсы на крутки (10 ресурсов = 1 💳):"
+        f"Выберите карту для покупки:"
     )
+
     bld = InlineKeyboardBuilder()
-    # Кнопки с картами
-    for idx, info in EVENT_CARDS.items():
-        bld.button(text=f"🎴 {info['name']} - {info['price']}{info['icon']}", callback_data=f"shop:event_buy:{idx}")
 
-    # Кнопки для покупки круток (3 варианта)
-    bld.button(text="1 💳 = 10 🍹", callback_data="shop:event_spin:cocktail")
-    bld.button(text="1 💳 = 10 🍨", callback_data="shop:event_spin:icecream")
-    bld.button(text="1 💳 = 10 🍡", callback_data="shop:event_spin:dango")
+    # --- Пагинация карт ---
+    cards_list = list(EVENT_CARDS.items())
+    CARDS_PER_PAGE = 3
+    total_pages = (len(cards_list) + CARDS_PER_PAGE - 1) // CARDS_PER_PAGE
 
-    bld.button(text="Назад 🔙", callback_data="shop:main")
+    # Защита от выхода за пределы страниц
+    if page < 0: page = 0
+    if page >= total_pages: page = total_pages - 1
 
-    # Расставляем кнопки красиво: 4 ряда по 2 карты, 5-й ряд 1 карта, затем 3 кнопки круток, затем кнопка назад
-    bld.adjust(2, 2, 2, 2, 2, 3, 1)
+    start_idx = page * CARDS_PER_PAGE
+    end_idx = start_idx + CARDS_PER_PAGE
+    current_cards = cards_list[start_idx:end_idx]
+
+    # Выводим карты (по 1 в ряд для идеальной читаемости)
+    for idx, info in current_cards:
+        bld.button(text=f"🎴 {info['name']} — {info['price']}{info['icon']}", callback_data=f"shop:event_buy:{idx}")
+
+    bld.adjust(1)
+
+    # --- Навигационные кнопки (Стрелочки) ---
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"shop:event_page:{page-1}"))
+    else:
+        nav_row.append(InlineKeyboardButton(text=" ", callback_data="shop:ignore"))
+
+    nav_row.append(InlineKeyboardButton(text=f"📄 {page+1} / {total_pages}", callback_data="shop:ignore"))
+
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton(text="Вперед ➡️", callback_data=f"shop:event_page:{page+1}"))
+    else:
+        nav_row.append(InlineKeyboardButton(text=" ", callback_data="shop:ignore"))
+
+    bld.row(*nav_row)
+
+    # --- Кнопка перехода к обмену круток ---
+    bld.row(InlineKeyboardButton(text="💳 Обмен на крутки", callback_data="shop:event_spins_menu"))
+
+    # --- Кнопка назад в главное меню магазина ---
+    bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="shop:main"))
 
     try:
         await cq.message.edit_media(
@@ -671,6 +710,37 @@ async def shop_event_cb(cq: CallbackQuery):
         await cq.answer()
     except:
         pass
+
+@router.callback_query(F.data == "shop:event_spins_menu")
+async def shop_event_spins_menu_cb(cq: CallbackQuery):
+    if not EVENT_ENABLED:
+        return await cq.answer("Событие неактивно.", show_alert=True)
+
+    from database.db import get_event_items
+    cocktail, icecream, dango = get_event_items(cq.from_user.id)
+
+    caption = (
+        f"💳 <b>Обмен ресурсов на крутки</b>\n\n"
+        f"Здесь вы можете обменять лишние ресурсы на дополнительные попытки 💳 (1 попытка = 10 ресурсов).\n\n"
+        f"<b>Ваши ресурсы:</b>\n"
+        f"🍹 Коктейль: <b>{cocktail}</b>\n"
+        f"🍨 Мороженое: <b>{icecream}</b>\n"
+        f"🍡 Данго: <b>{dango}</b>"
+    )
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="10 🍹 = 1 💳", callback_data="shop:event_spin:cocktail")
+    bld.button(text="10 🍨 = 1 💳", callback_data="shop:event_spin:icecream")
+    bld.button(text="10 🍡 = 1 💳", callback_data="shop:event_spin:dango")
+    bld.adjust(1) # Кнопки строго друг под другом
+
+    bld.row(InlineKeyboardButton(text="🔙 Назад в Ивент", callback_data="shop:event"))
+
+    try:
+        await cq.message.edit_caption(caption=caption, reply_markup=bld.as_markup(), parse_mode="HTML")
+    except Exception:
+        pass
+    await cq.answer()
 
 
 @router.callback_query(F.data.startswith("shop:event_spin:"))
@@ -694,8 +764,8 @@ async def shop_event_spin_cb(cq: CallbackQuery):
     db_exec("UPDATE users SET attempts = attempts + 1 WHERE id = ?", (cq.from_user.id,))
 
     await cq.answer(f"✅ Вы купили 1 попытку 💳 за 10 {icon}!", show_alert=True)
-    # Обновляем меню ивента, чтобы цифры баланса поменялись сразу на глазах
-    await shop_event_cb(cq)
+    # Обновляем меню круток, чтобы новые цифры баланса отобразились моментально
+    await shop_event_spins_menu_cb(cq)
 
 
 @router.callback_query(F.data.startswith("shop:event_buy:"))

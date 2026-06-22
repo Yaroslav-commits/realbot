@@ -1,9 +1,48 @@
 # База данных карт, редкостей, фонов, титулов и пассов
 
+# ===== ИВЕНТОВЫЕ КАРТЫ =====
+EVENT_CARDS_LIST = [
+    "ouen", "jae_hyen", "kaneshiro", "yubin", "noa", "letniy_gu_kim", "letnyaya_endorsi_zahard",
+    "hyek_kwon", "joker", "hannam", "uin_yu", "shelly", "letniy_dzhin_vu" , "letnyaya_cha_he_in",
+    "letnyaya_yu_hva_yeon", "letnyaya_rahil", "letniy_sedzhin", "letnyaya_hanyl", "letnyaya_son_hi",
+    "tszinlyu", "svetlyachok", "yao_guan", "chornyy_lebed", "mortenaks_bleyd", "voskresenye", "tszin_yuan",
+    "kirena", "linsha", "bronya", "kafka", "aheron", "faenon", "dan_hen", "velikaya_gerta", "avantyurin",
+    "anaksa", "kastoriya"
+]
 # ================== БАЗА ДАННЫХ ==================
 CARDS = {
+# ============== Summer Drop ========
+"letniy_dzhin_vu": {"name": "Летний Джин-Ву", "rarity": "Эпическая 🟢", "style": "Вайб теней", "series": "Поднятие уровня в одиночку", "speed": 80, "strength": 80, "intellect": 80, "file": "letniy_dzhin_vu.jpeg", "exclusive": False},
+"letnyaya_cha_he_in": {"name": "Летняя Ча Хэ-Ин", "rarity": "Эпическая 🟢", "style": "Летний танец", "series": "Поднятие уровня в одиночку", "speed": 80, "strength": 77, "intellect": 78, "file": "letnyaya_cha_he_in.jpeg", "exclusive": False},
+"letniy_gu_kim": {"name": "Летний Гу Ким", "rarity": "Эпическая 🟢", "style": "Пляжный разрез", "series": "Лукизм", "speed": 80, "strength": 79, "intellect": 78, "file": "letniy_gu_kim.jpeg", "exclusive": False},
+"letnyaya_endorsi_zahard": {"name": "Летняя Эндорси Захард", "rarity": "Эпическая 🟢", "style": "Морской Ураган", "series": "Башня Бога", "speed": 79, "strength": 78, "intellect": 77, "file": "letnyaya_endorsi_zahard.jpeg", "exclusive": False},
+"letnyaya_yu_hva_yeon": {"name": "Летняя Ю Хва Йеон", "rarity": "Эпическая 🟢", "style": "Адский пляж", "series": "Башня Бога", "speed": 77, "strength": 77, "intellect": 80, "file": "letnyaya_yu_hva_yeon.jpeg", "exclusive": False},
+"letnyaya_rahil": {"name": "Летняя Рахиль", "rarity": "Эпическая 🟢", "style": "Стратегия пляжного зонта", "series": "Башня Бога", "speed": 78, "strength": 76, "intellect": 79, "file": "letnyaya_rahil.jpeg", "exclusive": False},
+"letniy_sedzhin": {"name": "Летний Седжин", "rarity": "Эпическая 🟢", "style": "Отсутствует", "series": "Лукизм", "speed": 77, "strength": 76, "intellect": 78, "file": "letniy_sedzhin.jpeg", "exclusive": False},
+"letnyaya_hanyl": {"name": "Летняя Ханыль", "rarity": "Эпическая 🟢", "style": "Отсутствует", "series": "Лукизм", "speed": 80, "strength": 60, "intellect": 60, "file": "letnyaya_hanyl.jpeg", "exclusive": False},
+"letnyaya_son_hi": {"name": "Летняя Сон Хи", "rarity": "Эпическая 🟢", "style": "Отсутствует", "series": "Лукизм", "speed": 75, "strength": 60, "intellect": 60, "file": "letnyaya_son_hi.jpeg", "exclusive": False},
+# ============== Honkai Star Rail Drop ========
+"tszinlyu": {"name": "Цзинлю", "rarity": "Эпическая 🟢", "style": "Ледяной мечник", "series": "Honkai: Star Rail", "speed": 79, "strength": 78, "intellect": 74, "file": "tszinlyu.jpeg", "exclusive": False},
+"svetlyachok": {"name": "Светлячок", "rarity": "Эпическая 🟢", "style": "Броня СЭМ", "series": "Honkai: Star Rail", "speed": 80, "strength": 79, "intellect": 75, "file": "svetlyachok.jpeg", "exclusive": False},
+"yao_guan": {"name": "Яо Гуан", "rarity": "Эпическая 🟢", "style": "Манипуляция энергией", "series": "Honkai: Star Rail", "speed": 77, "strength": 74, "intellect": 78, "file": "yao_guan.jpeg", "exclusive": False},
+"chornyy_lebed": {"name": "Чёрный Лебедь", "rarity": "Эпическая 🟢", "style": "Манипуляция памятью", "series": "Honkai: Star Rail", "speed": 79, "strength": 68, "intellect": 80, "file": "chornyy_lebed.jpeg", "exclusive": False},
+"mortenaks_bleyd": {"name": "Мортенакс Блэйд", "rarity": "Эпическая 🟢", "style": "Разрушительная сила", "series": "Honkai: Star Rail", "speed": 80, "strength": 80, "intellect": 73, "file": "mortenaks_bleyd.jpeg", "exclusive": False},
+"voskresenye": {"name": "Воскресенье", "rarity": "Эпическая 🟢", "style": "Контроль гармонии", "series": "Honkai: Star Rail", "speed": 78, "strength": 70, "intellect": 80, "file": "voskresenye.jpeg", "exclusive": False},
+"tszin_yuan": {"name": "Цзин Юань", "rarity": "Эпическая 🟢", "style": "Повелитель молний", "series": "Honkai: Star Rail", "speed": 78, "strength": 77, "intellect": 79, "file": "tszin_yuan.jpeg", "exclusive": False},
+"kirena": {"name": "Кирена", "rarity": "Эпическая 🟢", "style": "Божественная поддержка", "series": "Honkai: Star Rail", "speed": 77, "strength": 72, "intellect": 78, "file": "kirena.jpeg", "exclusive": False},
+"linsha": {"name": "Линша", "rarity": "Эпическая 🟢", "style": "Исцеление и алхимия", "series": "Honkai: Star Rail", "speed": 74, "strength": 68, "intellect": 79, "file": "linsha.jpeg", "exclusive": False},
+"bronya": {"name": "Броня", "rarity": "Эпическая 🟢", "style": "Тактическое командование", "series": "Honkai: Star Rail", "speed": 75, "strength": 70, "intellect": 80, "file": "bronya.jpeg", "exclusive": False},
+# ============== Honkai Star Rail Shop ========
+"kafka": {"name": "Кафка", "rarity": "Эпическая 🟢", "style": "Контроль разума", "series": "Honkai: Star Rail", "speed": 80, "strength": 80, "intellect": 80, "file": "kafka.jpeg", "exclusive": True},
+"aheron": {"name": "Ахерон", "rarity": "Эпическая 🟢", "style": "Чёрная дыра", "series": "Honkai: Star Rail", "speed": 80, "strength": 80, "intellect": 79, "file": "aheron.jpeg", "exclusive": True},
+"faenon": {"name": "Фаенон", "rarity": "Эпическая 🟢", "style": "Разрушение", "series": "Honkai: Star Rail", "speed": 78, "strength": 80, "intellect": 78, "file": "faenon.jpeg", "exclusive": True},
+"dan_hen": {"name": "Дань Хэн", "rarity": "Эпическая 🟢", "style": "Владение копьём", "series": "Honkai: Star Rail", "speed": 79, "strength": 77, "intellect": 78, "file": "dan_hen.jpeg", "exclusive": True},
+"velikaya_gerta": {"name": "Великая Герта", "rarity": "Эпическая 🟢", "style": "Ледяные атаки", "series": "Honkai: Star Rail", "speed": 77, "strength": 76, "intellect": 80, "file": "velikaya_gerta.jpeg", "exclusive": True},
+"avantyurin": {"name": "Авантюрин", "rarity": "Эпическая 🟢", "style": "Энергетический щит", "series": "Honkai: Star Rail", "speed": 76, "strength": 78, "intellect": 79, "file": "avantyurin.jpeg", "exclusive": True},
+"anaksa": {"name": "Анакса", "rarity": "Эпическая 🟢", "style": "Анализ противника", "series": "Honkai: Star Rail", "speed": 76, "strength": 74, "intellect": 79, "file": "anaksa.jpeg", "exclusive": True},
+"kastoriya": {"name": "Кастория", "rarity": "Эпическая 🟢", "style": "Дракон смерти", "series": "Honkai: Star Rail", "speed": 78, "strength": 80, "intellect": 77, "file": "kastoriya.jpeg", "exclusive": True},
 # ============== Tower of God ==========
-"enryu": {"name": "Энрю", "rarity": "Мифическая 🔴", "style": "Абсолютное подавление шинсу", "series": "Башня Бога", "speed": 99, "strength": 99, "intellect": 99, "file": "enryu.jpeg", "exclusive": False},
+"enryu": {"name": "Энрю", "rarity": "Мифическая 🔴", "style": "Абсолютное подавление шинсу", "series": "Башня Бога", "speed": 98, "strength": 100, "intellect": 99, "file": "enryu.jpeg", "exclusive": False},
 "zahard": {"name": "Захард", "rarity": "Мифическая 🔴", "style": "Контроль и доминация", "series": "Башня Бога", "speed": 97, "strength": 97, "intellect": 99, "file": "zahard.jpeg", "exclusive": False},
 "urek_mazino": {"name": "Урек Мазино", "rarity": "Мифическая 🔴", "style": "Молниеносный натиск", "series": "Башня Бога", "speed": 99, "strength": 97, "intellect": 96, "file": "urek_mazino.jpeg", "exclusive": False},
 "kun_edvan": {"name": "Кун Эдван", "rarity": "Мифическая 🔴", "style": "Копья и Тактика", "series": "Башня Бога", "speed": 97, "strength": 95, "intellect": 98, "file": "kun_edvan.jpeg", "exclusive": False},
@@ -128,9 +167,8 @@ CARDS = {
 "niya_nya": {"name": "Ния Ня", "rarity": "Обычная ⚪️", "style": "Контроль", "series": "Башня Бога", "speed": 13, "strength": 13, "intellect": 19, "file": "niya_nya.jpeg", "exclusive": False},
 "shopen": {"name": "Шопен", "rarity": "Обычная ⚪️", "style": "Тактика", "series": "Башня Бога", "speed": 10, "strength": 10, "intellect": 15, "file": "shopen.jpeg", "exclusive": False},
     # ============ Теневой Раб
-"sanless": {"name": "Санлесс", "rarity": "Легендарная 🔵", "style": "Танец теней", "series": "Лукизм", "speed": 90, "strength": 87, "intellect": 90, "file": "sanless.jpeg", "exclusive": True},
+"sanless": {"name": "Санлесс", "rarity": "Легендарная 🔵", "style": "Танец теней", "series": "Теневой раб", "speed": 90, "strength": 87, "intellect": 90, "file": "sanless.jpeg", "exclusive": True},
     # ============ ВЕТРОЛОМ Лето ==========
-
 "ouen": {"name": "Оуэн", "rarity": "Эпическая 🟢", "style": "Ветряное чувство", "series": "Ветролом", "speed": 80, "strength": 80, "intellect": 80, "file": "ouen.jpeg", "exclusive": True},
 
 "jae_hyen": {"name": "Джахён", "rarity": "Эпическая 🟢", "style": "Анализ траектории", "series": "Ветролом", "speed": 80, "strength": 79, "intellect": 80, "file": "jae_hyen.jpeg", "exclusive": True},

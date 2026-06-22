@@ -1230,7 +1230,14 @@ async def cmd_card_info(msg: types.Message):
     count_res = db_exec("SELECT COUNT(*) FROM cards_inv WHERE card_id = ?", (card_id,), fetch=True)
     count = count_res[0] if count_res else 0
 
-    is_exclusive = "Лимитированная" if card_data.get("exclusive") else "Стандартная"
+    from data.cards import EVENT_CARDS_LIST
+
+    if card_id in EVENT_CARDS_LIST:
+        is_exclusive = "Ивентовая 🪎"
+    elif card_data.get("exclusive"):
+        is_exclusive = "Лимитированная ✨"
+    else:
+        is_exclusive = "Стандартная 🧿"
 
     text = (
         f"🃏 Боевая карта: {card_data.get('name', 'Неизвестно')}\n"
@@ -1280,7 +1287,14 @@ async def cb_card_info(call: types.CallbackQuery):
     count_res = db_exec("SELECT COUNT(*) FROM cards_inv WHERE card_id = ?", (card_id,), fetch=True)
     count = count_res[0] if count_res else 0
 
-    is_exclusive = "Лимитированная" if card_data.get("exclusive") else "Стандартная"
+    from data.cards import EVENT_CARDS_LIST
+
+    if card_id in EVENT_CARDS_LIST:
+        is_exclusive = "Ивентовая 🪎"
+    elif card_data.get("exclusive"):
+        is_exclusive = "Лимитированная ✨"
+    else:
+        is_exclusive = "Стандартная 🧿"
 
     text = (
         f"🃏 Боевая карта: {card_data.get('name', 'Неизвестно')}\n"
