@@ -77,12 +77,12 @@ VIDEO_BGS = {"yamzaki_clan", "admin, jaehwan", "king_grey"}
 EVENT_ENABLED = True  # Включаем ивент!
 EVENT_CARDS = {
     1: {"key": "kafka", "price": 200, "currency": "cocktail", "icon": "🍹", "name": "Кафка"},
-    2: {"key": "aheron", "price": 200, "currency": "icecream", "icon": "🍡", "name": "Ахерон"},
-    3: {"key": "faenon", "price": 180, "currency": "dango", "icon": "🍨", "name": "Фаенон"},
-    4: {"key": "kastoriya", "price": 170, "currency": "cocktail", "icon": "🍡", "name": "Кастория"},
-    5: {"key": "velikaya_gerta", "price": 145, "currency": "icecream", "icon": "🍹", "name": "Великая Герта"},
-    6: {"key": "dan_hen", "price": 140, "currency": "dango", "icon": "🍨", "name": "Дань Хэн"},
-    7: {"key": "avantyurin", "price": 130, "currency": "icecream", "icon": "🍡", "name": "Авантюрин"},
+    2: {"key": "aheron", "price": 200, "currency": "dango", "icon": "🍡", "name": "Ахерон"},
+    3: {"key": "faenon", "price": 180, "currency": "icecream", "icon": "🍨", "name": "Фаенон"},
+    4: {"key": "kastoriya", "price": 170, "currency": "dango", "icon": "🍡", "name": "Кастория"},
+    5: {"key": "velikaya_gerta", "price": 145, "currency": "cocktail", "icon": "🍹", "name": "Великая Герта"},
+    6: {"key": "dan_hen", "price": 140, "currency": "icecream", "icon": "🍨", "name": "Дань Хэн"},
+    7: {"key": "avantyurin", "price": 130, "currency": "dango", "icon": "🍡", "name": "Авантюрин"},
     8: {"key": "anaksa", "price": 100, "currency": "cocktail", "icon": "🍹", "name": "Анакса"},
 }
 
