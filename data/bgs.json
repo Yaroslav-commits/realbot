@@ -1,0 +1,66 @@
+[
+    {
+        "name": "Стандартный",
+        "file": "default.png",
+        "price": 0,
+        "id": "default"
+    },
+    {
+        "name": "Ю Джунхёк и Ким Докча",
+        "file": "admin.mp4",
+        "width": 1280,
+        "height": 720,
+        "price": 99999,
+        "id": "admin"
+    },
+    {
+        "name": "Sabbath Crew",
+        "file": "veliki.jpeg",
+        "price": 500,
+        "id": "veliki"
+    },
+    {
+        "name": "Клан Ямадзаки",
+        "file": "yamzaki_clan.mp4",
+        "width": 1280,
+        "height": 720,
+        "price": 8500,
+        "id": "yamzaki_clan"
+    },
+    {
+        "name": "Дже Хван",
+        "file": "jae_hwan.mp4",
+        "width": 1280,
+        "height": 720,
+        "price": 99999,
+        "id": "jaehwan"
+    },
+    {
+        "name": "ORV Street Trio",
+        "file": "yoo_han_kim.jpeg",
+        "price": 1500,
+        "id": "yoo_han_kim"
+    },
+    {
+        "name": "Король Грей",
+        "file": "king_grey.mp4",
+        "width": 1280,
+        "height": 720,
+        "price": 12999,
+        "id": "king_grey"
+    },
+    {
+        "name": "Теневой раб",
+        "file": "shadow_slave.mp4",
+        "width": 1280,
+        "height": 720,
+        "price": 99999,
+        "id": "shadow_slave"
+    },
+    {
+        "name": "Санни",
+        "file": "sanny.jpeg",
+        "price": 99999,
+        "id": "sanny"
+    }
+]

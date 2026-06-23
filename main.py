@@ -393,7 +393,7 @@ def get_profile(user_id: int = Depends(authed_user_id)):
     try:
         # Достаём новые поля: победы, поражения, стрик и активный титул
         user = db_exec_sync(
-            "SELECT diamond, krw, battlecoin, wins, losses, max_streak, active_title FROM users WHERE id = ?",
+            "SELECT diamond, krw, battlecoin, wins, losses, max_streak, active_title, active_bg FROM users WHERE id = ?",
             (user_id,), fetch=True
         )
         if not user:
@@ -444,6 +444,10 @@ def get_profile(user_id: int = Depends(authed_user_id)):
         titles_rows = db_exec_sync("SELECT title_id FROM titles_inv WHERE user_id = ?", (user_id,), fetchall=True)
         unlocked_titles = [row[0] for row in titles_rows] if titles_rows else []
 
+        # Фоны (какие есть у игрока)
+        bgs_rows = db_exec_sync("SELECT bg_id FROM bgs_inv WHERE user_id = ?", (user_id,), fetchall=True)
+        unlocked_bgs = [row[0] for row in bgs_rows] if bgs_rows else []
+
         # --- ДОБАВЛЕНО: Мастер-список титулов напрямую из файла data.cards ---
         all_titles_list = [{"id": k, "name": v} for k, v in TITLES.items()]
 
@@ -462,7 +466,9 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             "active_title": active_title,
             "fav_cards": fav_cards,
             "unlocked_titles": unlocked_titles,
-            "all_titles": all_titles_list  # <--- Отправляем список на сайт
+            "all_titles": all_titles_list,
+            "active_bg": user[7] if len(user) > 7 and user[7] else "default",
+            "unlocked_bgs": unlocked_bgs
         }
     except HTTPException:
         raise
@@ -480,6 +486,26 @@ class FavPayload(BaseModel):
 
 class TitlePayload(BaseModel):
     title_id: str
+
+class BgPayload(BaseModel):
+    bg_id: str
+
+@app.post("/api/profile/bg/{user_id}")
+def set_active_bg_api(payload: BgPayload, user_id: int = Depends(authed_user_id)):
+    try:
+        if payload.bg_id == "default":
+            db_exec_sync("UPDATE users SET active_bg = 'default' WHERE id = ?", (user_id,))
+            return {"success": True}
+
+        has_bg = db_exec_sync("SELECT 1 FROM bgs_inv WHERE user_id = ? AND bg_id = ?", (user_id, payload.bg_id), fetch=True)
+        if not has_bg:
+            return {"success": False, "error": "У вас нет этого фона"}
+
+        db_exec_sync("UPDATE users SET active_bg = ? WHERE id = ?", (payload.bg_id, user_id))
+        return {"success": True}
+    except Exception as e:
+        logging.error(f"Bg update error: {e}")
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/profile/favorite/{user_id}")
 def set_favorite_card_api(payload: FavPayload, user_id: int = Depends(authed_user_id)):
