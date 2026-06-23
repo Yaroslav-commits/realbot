@@ -483,18 +483,25 @@ def set_favorite_card_api(payload: FavPayload, user_id: int = Depends(authed_use
         logging.error(f"Fav update error: {e}")
         return {"success": False, "error": str(e)}
 
+
 @app.post("/api/profile/title/{user_id}")
 def set_active_title_api(payload: TitlePayload, user_id: int = Depends(authed_user_id)):
     try:
         if payload.title_id == "none" or not payload.title_id:
             db_exec_sync("UPDATE users SET active_title = NULL WHERE id = ?", (user_id,))
         else:
+            # ПРОВЕРКА: есть ли этот титул у игрока в инвентаре?
+            has_title = db_exec_sync("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?",
+                                     (user_id, payload.title_id), fetch=True)
+            if not has_title:
+                return {"success": False, "error": "У вас нет этого титула"}
+
             db_exec_sync("UPDATE users SET active_title = ? WHERE id = ?", (payload.title_id, user_id))
         return {"success": True}
     except Exception as e:
         logging.error(f"Title update error: {e}")
         return {"success": False, "error": str(e)}
-    
+
 @app.post("/api/claim_daily/{user_id}")
 def claim_daily(user_id: int = Depends(authed_user_id)):
     try:

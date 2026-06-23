@@ -108,21 +108,6 @@ def init_db():
         except sqlite3.OperationalError:
             pass
     # ==========================================
-        # Миграция: добавляем новые колонки, если их ещё нет (для существующих БД)
-    for col, col_def in [
-        ('notifications', 'INTEGER DEFAULT 1'),
-        ('referral_code', 'TEXT'),
-        ('referred_by', 'INTEGER'),
-        ('cooldown_notified', 'INTEGER DEFAULT 1'),
-        ('premium_until', 'TEXT DEFAULT NULL'),
-        ('battle_cooldown_notified', 'INTEGER DEFAULT 1'),
-        ('anonymous', 'INTEGER DEFAULT 0'),
-        ('season_wins', 'INTEGER DEFAULT 0'), # ДОБАВЛЕНО СЮДА
-    ]:
-        try:
-            db_exec(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
-        except sqlite3.OperationalError:
-            pass  # колонка уже существует
 
     # Генерируем реферальные коды для существующих пользователей, у которых их нет
     users_no_code = db_exec("SELECT id FROM users WHERE referral_code IS NULL", fetchall=True)
