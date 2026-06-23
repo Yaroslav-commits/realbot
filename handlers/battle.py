@@ -2416,7 +2416,7 @@ EXCLUSIVE_CRAFT_CARD = "yunsu"   # 🗝️ ВСТАВЬ СЮДА card_id экс�
 
 @router.callback_query(F.data == "b_craft_do")
 async def b_craft_do_cb(cq: CallbackQuery):
-    uid   = cq.from_user.id
+    uid = cq.from_user.id
     slots = _get_craft_slots(uid)
     filled = [s for s in slots if s is not None]
 
@@ -2429,19 +2429,19 @@ async def b_craft_do_cb(cq: CallbackQuery):
             f"❌ Недостаточно BattleCoin! Нужно: {CRAFT_COIN_COST} 🪙", show_alert=True
         )
 
-    # Списание монет и удаление 5 карт из инвентаря
+    # БЕЗОПАСНОЕ СПИСАНИЕ МАТЕРИАЛОВ: удаляем по одному rowid
     db_exec("UPDATE users SET battlecoin = battlecoin - ? WHERE id = ?", (CRAFT_COIN_COST, uid))
     for cid in filled:
-        db_exec(
-            "DELETE FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1",
-            (uid, cid)
-        )
+        row = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (uid, cid), fetch=True)
+        if row:
+            db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row[0],))
+
     _clear_craft_slots(uid)
 
     # Рулетка результата
-    outcomes  = ["exclusive", "mythic", "legendary", "loss"]
-    weights   = [2, 55.0, 35.0, 8.0]
-    result    = random.choices(outcomes, weights=weights, k=1)[0]
+    outcomes = ["exclusive", "mythic", "legendary", "loss"]
+    weights = [2, 55.0, 35.0, 8.0]
+    result = random.choices(outcomes, weights=weights, k=1)[0]
 
     # --- Отправляем GIF-анимацию ---
     try:
@@ -2453,29 +2453,28 @@ async def b_craft_do_cb(cq: CallbackQuery):
     gif_msg = None
     _craft_caption = "⚗️ <b>Реактор запущен...</b>\n\nСинтез идёт..."
     try:
+        # ИСПОЛЬЗУЕМ send_video ВМЕСТО send_animation ДЛЯ MP4
         if _CRAFT_GIF_FILE_ID:
-            # отправляем по закешированному file_id — мгновенно, без загрузки файла
-            gif_msg = await cq.bot.send_animation(
+            gif_msg = await cq.bot.send_video(
                 uid,
-                animation=_CRAFT_GIF_FILE_ID,
+                video=_CRAFT_GIF_FILE_ID,
                 caption=_craft_caption,
                 parse_mode="HTML",
                 width=CRAFT_GIF_WIDTH,
                 height=CRAFT_GIF_HEIGHT
             )
         elif os.path.exists(CRAFT_GIF_PATH):
-            # первая отправка: грузим mp4 с диска и сохраняем file_id
-            gif_msg = await cq.bot.send_animation(
+            gif_msg = await cq.bot.send_video(
                 uid,
-                animation=FSInputFile(CRAFT_GIF_PATH),
+                video=FSInputFile(CRAFT_GIF_PATH),
                 caption=_craft_caption,
                 parse_mode="HTML",
                 width=CRAFT_GIF_WIDTH,
                 height=CRAFT_GIF_HEIGHT
             )
-            if gif_msg and gif_msg.animation:
-                _CRAFT_GIF_FILE_ID = gif_msg.animation.file_id
-                logging.info(f"[craft] cached animation file_id: {_CRAFT_GIF_FILE_ID}")
+            if gif_msg and gif_msg.video:
+                _CRAFT_GIF_FILE_ID = gif_msg.video.file_id
+                logging.info(f"[craft] cached video file_id: {_CRAFT_GIF_FILE_ID}")
         else:
             gif_msg = await cq.bot.send_message(
                 uid,
@@ -2483,36 +2482,17 @@ async def b_craft_do_cb(cq: CallbackQuery):
                 parse_mode="HTML"
             )
     except Exception as e:
-        # если file_id протух (например, бот пересоздан) — сбрасываем кеш и шлём заново с диска
-        logging.exception(f"[craft] send_animation failed, resetting cache: {e}")
+        logging.exception(f"[craft] send_video failed, resetting cache: {e}")
         _CRAFT_GIF_FILE_ID = None
-        try:
-            if os.path.exists(CRAFT_GIF_PATH):
-                gif_msg = await cq.bot.send_animation(
-                    uid,
-                    animation=FSInputFile(CRAFT_GIF_PATH),
-                    caption=_craft_caption,
-                    parse_mode="HTML",
-                    width=CRAFT_GIF_WIDTH,
-                    height=CRAFT_GIF_HEIGHT
-                )
-                if gif_msg and gif_msg.animation:
-                    _CRAFT_GIF_FILE_ID = gif_msg.animation.file_id
-            else:
-                gif_msg = await cq.bot.send_message(
-                    uid, _craft_caption, parse_mode="HTML"
-                )
-        except Exception as e2:
-            logging.exception(f"[craft] fallback also failed: {e2}")
-            gif_msg = await cq.bot.send_message(
-                uid, _craft_caption, parse_mode="HTML"
-            )
+        # Безопасный фоллбэк: если видео вообще не грузится, шлем текст, чтобы игрок не завис
+        gif_msg = await cq.bot.send_message(uid, _craft_caption, parse_mode="HTML")
 
-    await asyncio.sleep(8)   # держим ожидание
+    await asyncio.sleep(8)  # держим ожидание
 
     # --- Удаляем гифку ---
     try:
-        await gif_msg.delete()
+        if gif_msg:
+            await gif_msg.delete()
     except:
         pass
 
@@ -2527,8 +2507,8 @@ async def b_craft_do_cb(cq: CallbackQuery):
         await cq.answer()
         return
 
-    card_c   = None
-    is_excl  = False
+    card_c = None
+    is_excl = False
 
     if result == "exclusive" and EXCLUSIVE_CRAFT_CARD and EXCLUSIVE_CRAFT_CARD in CARDS:
         is_new, krw, card_c = give_card_to_user(uid, EXCLUSIVE_CRAFT_CARD)

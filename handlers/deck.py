@@ -58,12 +58,16 @@ def _card_power(cid: str) -> int:
         return 0
     return c.get('speed', 0) + c.get('strength', 0) + c.get('intellect', 0)
 
+
 def _get_user_cids(uid: int) -> list[str]:
-    """Возвращает уникальные card_id из инвентаря пользователя."""
+    """Возвращает уникальные card_id из инвентаря И сундука пользователя."""
     rows = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (uid,), fetchall=True)
+    stash_rows = db_exec("SELECT card_id FROM cards_stash WHERE user_id = ?", (uid,), fetchall=True)
+
     seen = set()
     result = []
-    for (cid,) in rows:
+    # Объединяем результаты обеих таблиц
+    for (cid,) in rows + stash_rows:
         if cid not in seen:
             seen.add(cid)
             result.append(cid)
@@ -862,15 +866,18 @@ async def trade_p1_final(cq: CallbackQuery):
             pass
         return
 
-    # Удаляем отданные карты из инвентаря
-    # Удаляем отданные карты из инвентаря и из всех возможных колод (активной и дополнительных)
+    # БЕЗОПАСНОЕ УДАЛЕНИЕ: Удаляем строго по одной копии карты (через rowid)
     # Для инициатора трейда (sender_id)
-    db_exec("DELETE FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
+    row1 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (sender_id, c1_id), fetch=True)
+    if row1:
+        db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row1[0],))
     db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
     db_exec("DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)", (c1_id, sender_id))
 
     # Для того, кто принял трейд (p2_id)
-    db_exec("DELETE FROM cards_inv WHERE user_id = ? AND card_id = ?", (p2_id, c2_id))
+    row2 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (p2_id, c2_id), fetch=True)
+    if row2:
+        db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row2[0],))
     db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (p2_id, c2_id))
     db_exec("DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)", (c2_id, p2_id))
 

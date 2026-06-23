@@ -1226,9 +1226,14 @@ async def cmd_card_info(msg: types.Message):
 
         return await msg.answer("Может вы имели ввиду кого-то из этих:", reply_markup=builder.as_markup())
 
-    # --- Если точное совпадение найдено, показываем карточку (как и раньше) ---
-    count_res = db_exec("SELECT COUNT(*) FROM cards_inv WHERE card_id = ?", (card_id,), fetch=True)
-    count = count_res[0] if count_res else 0
+    # --- Если точное совпадение найдено, показываем карточку ---
+    # Считаем сумму из активного инвентаря И сундука
+    count_res = db_exec("""
+        SELECT 
+            (SELECT COUNT(*) FROM cards_inv WHERE card_id = ?) + 
+            (SELECT COUNT(*) FROM cards_stash WHERE card_id = ?)
+    """, (card_id, card_id), fetch=True)
+    count = count_res[0] if count_res and count_res[0] is not None else 0
 
     from data.cards import EVENT_CARDS_LIST
 
@@ -1272,8 +1277,6 @@ async def cmd_card_info(msg: types.Message):
     except Exception:
         await msg.answer(text, parse_mode="HTML")
 
-
-# Новый обработчик для показа карты по клику из предложенных вариантов
 @router.callback_query(F.data.startswith("c_inf:"))
 async def cb_card_info(call: types.CallbackQuery):
     card_id = call.data.split(":", 1)[1]
@@ -1284,8 +1287,13 @@ async def cb_card_info(call: types.CallbackQuery):
 
     await call.message.delete()  # Убираем сообщение "Может вы имели ввиду..."
 
-    count_res = db_exec("SELECT COUNT(*) FROM cards_inv WHERE card_id = ?", (card_id,), fetch=True)
-    count = count_res[0] if count_res else 0
+    # Считаем сумму из активного инвентаря И сундука
+    count_res = db_exec("""
+        SELECT 
+            (SELECT COUNT(*) FROM cards_inv WHERE card_id = ?) + 
+            (SELECT COUNT(*) FROM cards_stash WHERE card_id = ?)
+    """, (card_id, card_id), fetch=True)
+    count = count_res[0] if count_res and count_res[0] is not None else 0
 
     from data.cards import EVENT_CARDS_LIST
 
