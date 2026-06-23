@@ -444,8 +444,7 @@ def get_profile(user_id: int = Depends(authed_user_id)):
         titles_rows = db_exec_sync("SELECT title_id FROM titles_inv WHERE user_id = ?", (user_id,), fetchall=True)
         unlocked_titles = [row[0] for row in titles_rows] if titles_rows else []
 
-        # Фоны (какие есть у игрока)
-        bgs_rows = db_exec_sync("SELECT bg_id FROM bgs_inv WHERE user_id = ?", (user_id,), fetchall=True)
+        bgs_rows = db_exec_sync("SELECT bg FROM bg_inv WHERE user_id = ?", (user_id,), fetchall=True)
         unlocked_bgs = [row[0] for row in bgs_rows] if bgs_rows else []
 
         # --- ДОБАВЛЕНО: Мастер-список титулов напрямую из файла data.cards ---
@@ -497,9 +496,10 @@ def set_active_bg_api(payload: BgPayload, user_id: int = Depends(authed_user_id)
             db_exec_sync("UPDATE users SET active_bg = 'default' WHERE id = ?", (user_id,))
             return {"success": True}
 
-        has_bg = db_exec_sync("SELECT 1 FROM bgs_inv WHERE user_id = ? AND bg_id = ?", (user_id, payload.bg_id), fetch=True)
+        # ИСПРАВЛЕНО: проверяем реальную таблицу инвентаря фонов bg_inv
+        has_bg = db_exec_sync("SELECT 1 FROM bg_inv WHERE user_id = ? AND bg = ?", (user_id, payload.bg_id), fetch=True)
         if not has_bg:
-            return {"success": False, "error": "У вас нет этого фона"}
+            return {"success": False, "error": "У вас нет этого фона в инвентаре бота"}
 
         db_exec_sync("UPDATE users SET active_bg = ? WHERE id = ?", (payload.bg_id, user_id))
         return {"success": True}

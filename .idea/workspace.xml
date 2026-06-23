@@ -42,6 +42,7 @@
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "Python.battle.executor": "Run",
     "Python.cards.executor": "Run",
+    "Python.compress.executor": "Run",
     "Python.export.executor": "Run",
     "Python.export2.executor": "Run",
     "Python.export3.executor": "Run",
