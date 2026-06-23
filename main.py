@@ -958,6 +958,49 @@ def get_leaderboard(category: str):
         logging.error(f"Error loading leaderboard {category}: {e}")
         return {"success": False, "error": str(e)}
 
+
+@app.get("/api/public_profile/{target_id}")
+def get_public_profile(target_id: int):
+    """Возвращает публичные данные профиля любого игрока."""
+    try:
+        user = db_exec_sync(
+            "SELECT id, username, nickname, diamond, krw, battlecoin, wins, losses, max_streak, active_title, active_bg, royale_pass FROM users WHERE id = ?",
+            (target_id,), fetch=True
+        )
+        if not user:
+            return {"success": False, "error": "Игрок не найден"}
+
+        wins = user[6] or 0
+        losses = user[7] or 0
+        total_games = wins + losses
+        winrate = int((wins / total_games) * 100) if total_games > 0 else 0
+
+        fav_rows = db_exec_sync("SELECT slot_index, card_id FROM favorite_cards WHERE user_id = ?", (target_id,),
+                                fetchall=True)
+        fav_cards = {row[0]: row[1] for row in fav_rows} if fav_rows else {}
+
+        return {
+            "success": True,
+            "profile": {
+                "id": user[0],
+                "username": user[1],
+                "nickname": user[2],
+                "diamond": user[3],
+                "krw": user[4],
+                "battlecoin": user[5],
+                "wins": wins,
+                "losses": losses,
+                "max_streak": user[8],
+                "winrate": winrate,
+                "active_title": user[9],
+                "active_bg": user[10] or "default",
+                "is_premium": bool(user[11]),
+                "fav_cards": fav_cards
+            }
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     port = int(os.environ.get("PORT", 8080))
