@@ -325,10 +325,16 @@ async def start_bot():
     asyncio.create_task(cooldown_notification_scheduler(bot))
     asyncio.create_task(battle_cooldown_notification_scheduler(bot))
     asyncio.create_task(auto_top_distributor(bot))
-    asyncio.create_task(premium_expiration_scheduler(bot)) # <-- Добавлен планировщик Premium!
+    asyncio.create_task(premium_expiration_scheduler(bot))  # <-- Добавлен планировщик Premium!
+
+    print("Ждём 3 секунды для отключения старых процессов...")
+    await asyncio.sleep(3)  # <-- Даем старому боту спокойно умереть
 
     print("Бот успешно запущен в фоновом режиме!")
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    try:
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    except Exception as e:
+        logging.error(f"Ошибка при поллинге (возможно, конфликт): {e}")
 
 
 @asynccontextmanager
