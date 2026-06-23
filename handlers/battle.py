@@ -4,7 +4,7 @@ import logging
 import sqlite3
 import random
 import calendar
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from html import escape
 
 from aiogram import Bot, F, types
@@ -2809,22 +2809,32 @@ async def cmd_distribute_top(msg: Message, bot: Bot):
 
 
 async def auto_top_distributor(bot: Bot):
-    """Фоновая задача для автоматической выдачи 17-го числа"""
+    """Фоновая задача для автоматической выдачи 17-го числа в 00:00 по МСК"""
+    # Создаем таймзону для Москвы (UTC+3)
+    msk_tz = timezone(timedelta(hours=3))
+
     while True:
-        now = datetime.now()
-        if now.day == 17 and now.hour == 12 and now.minute == 0:
-            month_str = now.strftime("%Y-%m")
+        # Получаем текущее время по Москве
+        now_msk = datetime.now(msk_tz)
+
+        # Проверяем: 17-е число, 00 часов, 00 минут
+        if now_msk.day == 17 and now_msk.hour == 0 and now_msk.minute == 0:
+            month_str = now_msk.strftime("%Y-%m")
             already = db_exec("SELECT 1 FROM user_ranks_claims WHERE claim_date = ?", (f"top_reward_{month_str}",),
                               fetch=True)
 
             if not already:
+                # 1. Сначала распределяем награды ВСЕМ игрокам
                 await distribute_all_top_rewards(bot)
+
+                # Записываем в базу, что награды за этот месяц успешно выданы
                 db_exec("INSERT INTO user_ranks_claims (user_id, claim_date) VALUES (?, ?)",
                         (0, f"top_reward_{month_str}"))
 
-                # Автоматический сброс ТОПА после выдачи (только сезонных побед)
+                # 2. Только ПОСЛЕ выдачи сбрасываем сезонные победы
                 db_exec("UPDATE users SET season_wins = 0")
 
+        # Проверяем раз в минуту
         await asyncio.sleep(60)
 
 

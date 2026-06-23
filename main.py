@@ -883,6 +883,76 @@ async def moderate_submission(cq: CallbackQuery):
         await cq.answer("Отклонено")
 
 
+# ============================================================
+#  ТОПЫ И РЕЙТИНГИ ИГРОКОВ (ВЫДАЧА ТОП-25)
+# ============================================================
+
+@app.get("/api/tops/time_left")
+def get_season_time_left():
+    """Высчитывает, сколько времени осталось до конца сезона (до конца воскресенья по МСК)."""
+    try:
+        now_msk = datetime.now(MSK)
+        # Находим следующее воскресенье, 23:59:59
+        days_until_sunday = (6 - now_msk.weekday()) % 7
+        next_sunday = now_msk + timedelta(days=days_until_sunday)
+        end_of_season = next_sunday.replace(hour=23, minute=59, second=59, microsecond=0)
+
+        seconds_left = int((end_of_season - now_msk).total_seconds())
+        return {"success": True, "seconds_left": max(0, seconds_left)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/tops/{category}")
+def get_leaderboard(category: str):
+    """Возвращает ТОП-25 игроков по выбранной категории."""
+    try:
+        if category == "krw":
+            # Топ по деньгам (KRW)
+            query = "SELECT id, nickname, username, krw FROM users ORDER BY krw DESC LIMIT 25"
+            rows = db_exec_sync(query, fetchall=True)
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]:,} ₩"} for r in rows]
+
+        elif category == "rank":
+            # Топ по рангам (Rank Points)
+            query = "SELECT id, nickname, username, rank_points FROM users ORDER BY rank_points DESC LIMIT 25"
+            rows = db_exec_sync(query, fetchall=True)
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} RP"} for r in rows]
+
+        elif category == "diamond":
+            # Топ по алмазам (Diamonds)
+            query = "SELECT id, nickname, username, diamond FROM users ORDER BY diamond DESC LIMIT 25"
+            rows = db_exec_sync(query, fetchall=True)
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} 💎"} for r in rows]
+
+        elif category == "pvp":
+            # Топ PvP (Сезонный по количеству побед)
+            query = "SELECT id, nickname, username, wins FROM users ORDER BY wins DESC LIMIT 25"
+            rows = db_exec_sync(query, fetchall=True)
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} побед"} for r in
+                           rows]
+
+        elif category == "cards":
+            # Топ по количеству собранных карт в инвентаре
+            query = """
+                SELECT u.id, u.nickname, u.username, COUNT(c.card_id) as cards_count 
+                FROM users u
+                LEFT JOIN cards_inv c ON u.id = c.user_id
+                GROUP BY u.id
+                ORDER BY cards_count DESC
+                LIMIT 25
+            """
+            rows = db_exec_sync(query, fetchall=True)
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} шт."} for r in rows]
+
+        else:
+            return {"success": False, "error": "Неизвестная категория рейтинга"}
+
+        return {"success": True, "leaderboard": leaderboard}
+    except Exception as e:
+        logging.error(f"Error loading leaderboard {category}: {e}")
+        return {"success": False, "error": str(e)}
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     port = int(os.environ.get("PORT", 8080))
