@@ -889,15 +889,20 @@ async def moderate_submission(cq: CallbackQuery):
 
 @app.get("/api/tops/time_left")
 def get_season_time_left():
-    """Высчитывает, сколько времени осталось до конца сезона (до конца воскресенья по МСК)."""
+    """Высчитывает, сколько времени осталось до 17-го числа 00:00 МСК."""
     try:
         now_msk = datetime.now(MSK)
-        # Находим следующее воскресенье, 23:59:59
-        days_until_sunday = (6 - now_msk.weekday()) % 7
-        next_sunday = now_msk + timedelta(days=days_until_sunday)
-        end_of_season = next_sunday.replace(hour=23, minute=59, second=59, microsecond=0)
+        # Если сегодня 17-е число или позже, то следующий сброс будет в следующем месяце
+        if now_msk.day >= 17:
+            if now_msk.month == 12:
+                next_reset = datetime(now_msk.year + 1, 1, 17, 0, 0, 0, tzinfo=MSK)
+            else:
+                next_reset = datetime(now_msk.year, now_msk.month + 1, 17, 0, 0, 0, tzinfo=MSK)
+        else:
+            # Сегодня до 17-го числа, сброс в этом месяце
+            next_reset = datetime(now_msk.year, now_msk.month, 17, 0, 0, 0, tzinfo=MSK)
 
-        seconds_left = int((end_of_season - now_msk).total_seconds())
+        seconds_left = int((next_reset - now_msk).total_seconds())
         return {"success": True, "seconds_left": max(0, seconds_left)}
     except Exception as e:
         return {"success": False, "error": str(e)}
