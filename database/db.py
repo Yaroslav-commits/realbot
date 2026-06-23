@@ -63,7 +63,15 @@ def init_db():
         reward_attempts INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now'))
     )''')
-
+    db_exec('''CREATE TABLE IF NOT EXISTS card_logs (
+            log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            card_id TEXT,
+            action TEXT,
+            user_id INTEGER,
+            target_id INTEGER,
+            details TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )''')
     # ========== ВСТАВИТЬ БЛОК 1 СЮДА ==========
     db_exec('''CREATE TABLE IF NOT EXISTS craft_slots (
         user_id   INTEGER PRIMARY KEY,
@@ -166,6 +174,12 @@ def add_user(uid, uname, fname, referred_by=None):
             return process_referral(referred_by, uid)
     return None
 
+def log_card_action(card_id: str, action: str, user_id: int, target_id: int = None, details: str = None):
+    """
+    action: 'DROP', 'TRADE', 'CRAFT', 'ADMIN', 'STASH'
+    """
+    db_exec("INSERT INTO card_logs (card_id, action, user_id, target_id, details) VALUES (?, ?, ?, ?, ?)",
+            (card_id, action, user_id, target_id, details))
 # ================== ФОНЫ / ТИТУЛЫ / АНОНИМНОСТЬ ==================
 def cleanup_visual_inventory():
     """

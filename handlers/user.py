@@ -1461,7 +1461,149 @@ async def cmd_premium(msg: types.Message):
     await msg.answer(text, parse_mode="HTML")
 
 
+import math
 
+
+# ============ ИСТОРИЯ КАРТ (АДМИН КОМАНДА) ============
+@router.message(Command("card_history"))
+async def cmd_card_history(msg: types.Message):
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    args = msg.text.split()
+    if len(args) < 2:
+        return await msg.answer(
+            "❌ Использование: <code>/card_history [card_id] [дней]</code>\n"
+            "Пример: <code>/card_history yunsu 7</code>\n"
+            "<i>(Если не указать дни, по умолчанию покажет за 7 дней)</i>",
+            parse_mode="HTML"
+        )
+
+    card_id = args[1]
+    days = int(args[2]) if len(args) > 2 and args[2].isdigit() else 7
+
+    if card_id not in CARDS:
+        return await msg.answer(f"❌ Карта <b>{card_id}</b> не найдена в системе.", parse_mode="HTML")
+
+    await send_card_history_page(msg, card_id, days, page=0)
+
+
+async def send_card_history_page(event, card_id: str, days: int, page: int):
+    """Генерация и отправка страницы истории карты"""
+    try:
+        logs = db_exec(
+            "SELECT action, user_id, target_id, details, created_at FROM card_logs "
+            "WHERE card_id = ? AND created_at >= datetime('now', ?) ORDER BY created_at DESC",
+            (card_id, f"-{days} days"), fetchall=True
+        )
+    except Exception:
+        text = "⚠️ <b>Ошибка:</b> Таблица логов (card_logs) не создана или пуста. Обновите базу данных!"
+        if isinstance(event, types.Message):
+            return await event.answer(text, parse_mode="HTML")
+        else:
+            return await event.message.edit_text(text, parse_mode="HTML")
+
+    if not logs:
+        logs = []
+
+    items_per_page = 10
+    total_pages = max(1, math.ceil(len(logs) / items_per_page))
+
+    # Защита от выхода за пределы
+    if page >= total_pages: page = total_pages - 1
+    if page < 0: page = 0
+
+    chunk = logs[page * items_per_page: (page + 1) * items_per_page]
+    c_name = CARDS[card_id].get('name', card_id)
+
+    txt = f"🗃 <b>История карты:</b> {c_name} (<code>{card_id}</code>)\n"
+    txt += f"📅 <b>Период:</b> последние {days} дней\n\n"
+
+    if not chunk:
+        txt += "<i>Движений по этой карте за указанный период не найдено. Начните записывать логи!</i>"
+    else:
+        for action, uid, tid, details, dt in chunk:
+            user_link = f"<a href='tg://user?id={uid}'>{uid}</a>"
+            date_short = dt.split()[0][5:] + " " + dt.split()[1][:5]  # Формат MM-DD HH:MM
+
+            if action == 'TRADE':
+                target_link = f"<a href='tg://user?id={tid}'>{tid}</a>"
+                txt += f"🤝 [{date_short}] {user_link} передал {target_link}\n"
+            elif action == 'DROP':
+                txt += f"🎁 [{date_short}] {user_link} выбил из гачи\n"
+            elif action == 'CRAFT':
+                txt += f"🧬 [{date_short}] {user_link} скрафтил в реакторе\n"
+            elif action == 'ADMIN':
+                txt += f"⚡️ [{date_short}] Выдано админом игроку {user_link}\n"
+            elif action == 'STASH':
+                txt += f"📦 [{date_short}] {user_link}: {details}\n"
+            else:
+                txt += f"📝 [{date_short}] {user_link}: {details}\n"
+
+    bld = InlineKeyboardBuilder()
+
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"ch_page:{card_id}:{days}:{page - 1}"))
+    nav_row.append(InlineKeyboardButton(text=f"Стр. {page + 1}/{total_pages}", callback_data="ignore"))
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton(text="➡️", callback_data=f"ch_page:{card_id}:{days}:{page + 1}"))
+
+    if nav_row:
+        bld.row(*nav_row)
+
+    bld.row(InlineKeyboardButton(text="👥 Кто владеет картой?", callback_data=f"ch_owners:{card_id}"))
+
+    markup = bld.as_markup()
+
+    if isinstance(event, types.Message):
+        await event.answer(txt, reply_markup=markup, parse_mode="HTML")
+    else:
+        await event.message.edit_text(txt, reply_markup=markup, parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("ch_page:"))
+async def cb_card_history_page(cq: CallbackQuery):
+    _, card_id, days_str, page_str = cq.data.split(":")
+    await send_card_history_page(cq, card_id, int(days_str), int(page_str))
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("ch_owners:"))
+async def cb_card_history_owners(cq: CallbackQuery):
+    _, card_id = cq.data.split(":")
+
+    owners_inv = db_exec("SELECT user_id, COUNT(*) FROM cards_inv WHERE card_id = ? GROUP BY user_id", (card_id,),
+                         fetchall=True)
+    owners_stash = db_exec("SELECT user_id, COUNT(*) FROM cards_stash WHERE card_id = ? GROUP BY user_id", (card_id,),
+                           fetchall=True)
+
+    total_owners = {}
+    for uid, count in (owners_inv or []):
+        total_owners[uid] = total_owners.get(uid, 0) + count
+    for uid, count in (owners_stash or []):
+        total_owners[uid] = total_owners.get(uid, 0) + count
+
+    c_name = CARDS[card_id].get('name', card_id)
+    txt = f"👥 <b>Владельцы карты:</b> {c_name} (<code>{card_id}</code>)\n\n"
+
+    if not total_owners:
+        txt += "<i>Этой карты сейчас ни у кого нет.</i>"
+    else:
+        sorted_owners = sorted(total_owners.items(), key=lambda x: x[1], reverse=True)
+        for uid, count in sorted_owners[:30]:
+            u = get_user(uid)
+            nick = u[2] if u else "Неизвестный"
+            txt += f"👤 <a href='tg://user?id={uid}'>{nick}</a> (<code>{uid}</code>) — {count} шт.\n"
+
+        if len(sorted_owners) > 30:
+            txt += f"\n<i>...и еще {len(sorted_owners) - 30} игроков.</i>"
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="🔙 Назад к истории", callback_data=f"ch_page:{card_id}:7:0")
+
+    await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
 # ============ АДМИН И ПРОМО ============
 # ============ КОМАНДА РАССЫЛКИ (NOTIFER) ============
 
