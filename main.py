@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from config import BOT_TOKEN, DB_PATH
 from database.db import init_db, is_premium, pull_random_card, give_card_to_user
+from data.cards import TITLES
 from handlers import router
 
 # Импорты хендлеров
@@ -443,6 +444,9 @@ def get_profile(user_id: int = Depends(authed_user_id)):
         titles_rows = db_exec_sync("SELECT title_id FROM titles_inv WHERE user_id = ?", (user_id,), fetchall=True)
         unlocked_titles = [row[0] for row in titles_rows] if titles_rows else []
 
+        # --- ДОБАВЛЕНО: Мастер-список титулов напрямую из файла data.cards ---
+        all_titles_list = [{"id": k, "name": v} for k, v in TITLES.items()]
+
         return {
             "diamond": user[0],
             "krw": user[1],
@@ -457,7 +461,8 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             "max_streak": max_streak,
             "active_title": active_title,
             "fav_cards": fav_cards,
-            "unlocked_titles": unlocked_titles
+            "unlocked_titles": unlocked_titles,
+            "all_titles": all_titles_list  # <--- Отправляем список на сайт
         }
     except HTTPException:
         raise
