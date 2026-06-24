@@ -962,7 +962,7 @@ def get_leaderboard(category: str):
 
 @app.get("/api/public_profile/{target_id}")
 def get_public_profile(target_id: int):
-    """Возвращает публичные данные профиля любого игрока (ИСПРАВЛЕН БАГ ПРЕМИУМА)."""
+    """Возвращает публичные данные профиля (ИСПРАВЛЕН БАГ ПРЕМИУМА)."""
     try:
         user = db_exec_sync(
             "SELECT id, username, nickname, diamond, krw, battlecoin, wins, losses, max_streak, active_title, active_bg, royale_pass FROM users WHERE id = ?",
@@ -976,7 +976,6 @@ def get_public_profile(target_id: int):
         total_games = wins + losses
         winrate = int((wins / total_games) * 100) if total_games > 0 else 0
 
-        # Вот та самая исправленная строчка без переносов:
         fav_rows = db_exec_sync("SELECT slot_index, card_id FROM favorite_cards WHERE user_id = ?", (target_id,), fetchall=True)
         fav_cards = {row[0]: row[1] for row in fav_rows} if fav_rows else {}
 
@@ -1002,25 +1001,21 @@ def get_public_profile(target_id: int):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-
 @app.get("/api/avatar/{user_id}")
 async def get_telegram_user_avatar(user_id: int):
-    """Умный шлюз: запрашивает аватарку любого игрока у Telegram по его ID и отдает сайту."""
+    """Умный шлюз: запрашивает аватарку любого игрока у Telegram."""
     try:
-        # Запрашиваем у Телеграма список профильных фото пользователя (максимум 1)
         photos = await BOT_INSTANCE.get_user_profile_photos(user_id=user_id, limit=1)
         if photos and photos.total_count > 0:
-            # Берем самое последнее фото в максимальном разрешении
             file_id = photos.photos[0][-1].file_id
             file = await BOT_INSTANCE.get_file(file_id)
             if file and file.file_path:
-                # Перенаправляем браузер Mini App на прямую защищенную ссылку скачивания изображения от Telegram
                 return RedirectResponse(url=f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}")
     except Exception as e:
         logging.error(f"Error fetching telegram avatar for user {user_id}: {e}")
-
-    # Если у пользователя нет аватарки или произошла ошибка — отдаем красивую стандартную заглушку
+    
     return RedirectResponse(url="https://placehold.co/150x150/1c1c28/8b5cf6?text=U")
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
