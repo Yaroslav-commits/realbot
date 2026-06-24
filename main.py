@@ -976,8 +976,8 @@ def get_public_profile(target_id: int):
         total_games = wins + losses
         winrate = int((wins / total_games) * 100) if total_games > 0 else 0
 
-        fav_rows = db_exec_sync("SELECT slot_index, card_id FROM favorite_cards WHERE user_id = ?", (target_id,),\n
-        fetchall = True)
+        # Вот та самая исправленная строчка без переносов:
+        fav_rows = db_exec_sync("SELECT slot_index, card_id FROM favorite_cards WHERE user_id = ?", (target_id,), fetchall=True)
         fav_cards = {row[0]: row[1] for row in fav_rows} if fav_rows else {}
 
         return {
@@ -995,7 +995,6 @@ def get_public_profile(target_id: int):
                 "winrate": winrate,
                 "active_title": user[9],
                 "active_bg": user[10] or "default",
-                # ФИКС БАГА: Теперь проверяем реальный премиум по дате, а не royale_pass!
                 "is_premium": is_premium(target_id),
                 "fav_cards": fav_cards
             }
