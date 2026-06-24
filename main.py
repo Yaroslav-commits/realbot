@@ -339,11 +339,39 @@ async def start_bot():
         logging.error(f"Ошибка при поллинге (возможно, конфликт): {e}")
 
 
+# ============================================================
+#  СПАСИТЕЛЬНАЯ МИГРАЦИЯ ДЛЯ БАЗЫ ДАННЫХ
+# ============================================================
+def migrate_profile_stats():
+    """Добавляет недостающие колонки в старую базу данных, чтобы профиль не крашился с нулями."""
+    columns = [
+        ("wins", "INTEGER DEFAULT 0"),
+        ("losses", "INTEGER DEFAULT 0"),
+        ("max_streak", "INTEGER DEFAULT 0"),
+        ("active_bg", "TEXT DEFAULT 'default'"),
+        ("active_title", "TEXT")
+    ]
+    for col, col_def in columns:
+        try:
+            db_exec_sync(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
+        except Exception:
+            pass
+
+    # Гарантируем, что новые таблицы для инвентаря тоже созданы
+    try:
+        db_exec_sync("CREATE TABLE IF NOT EXISTS bgs_inv (user_id INTEGER, bg_id TEXT)")
+        db_exec_sync("CREATE TABLE IF NOT EXISTS titles_inv (user_id INTEGER, title_id TEXT)")
+        db_exec_sync("CREATE TABLE IF NOT EXISTS favorite_cards (user_id INTEGER, card_id TEXT, slot_index INTEGER)")
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     migrate_daily()
     migrate_earn()
+    migrate_profile_stats()  # <--- ВОТ НАШ ФИКС!
     # WAL заметно снижает конфликты блокировок при одновременном чтении/записи
     try:
         db_exec_sync("PRAGMA journal_mode=WAL")
