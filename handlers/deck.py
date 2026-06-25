@@ -6,13 +6,15 @@ import random
 import calendar
 from datetime import datetime, timedelta
 from html import escape
+import base64
+from urllib.parse import quote
 
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            CallbackQuery, LabeledPrice, PreCheckoutQuery,
                            FSInputFile)
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command, StateFilter, CommandStart, CommandObject
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -600,33 +602,98 @@ async def divine_toggle(cq: CallbackQuery):
 
 @router.callback_query(F.data.startswith("trade_init:"))
 async def trade_init(cq: CallbackQuery, state: FSMContext):
-    await cq.answer()  # Обязательный ответ
+    await cq.answer()
     cid = cq.data.split(":")[1]
 
     c = CARDS.get(cid)
     if not c:
-        return await cq.message.answer("Ошибка: карта не найдена в базе данных.")
+        return await cq.message.answer("❌ Ошибка: карта не найдена в базе данных.")
 
+    # Сохраняем карту в стейт на случай выбора по ID
     await state.update_data(trade_card=cid)
-    await state.set_state(TradeState.waiting_for_trade_id)
 
     bld = InlineKeyboardBuilder()
-    bld.button(text="Отменить", callback_data="trade_cancel_init")
+    bld.button(text="👤 По ID игрока", callback_data=f"trade_method:id:{cid}")
+    bld.button(text="🔗 По ссылке", callback_data=f"trade_method:link:{cid}")
+    bld.button(text="❌ Отменить", callback_data="trade_cancel_init")
+    bld.adjust(2, 1)
 
-    await cq.message.delete()
-    # Используем локальный путь к картинке
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+
     photo_path = f"images/cards/{c['file']}"
+    caption = (
+        f"〽️ <b>Трейд карты</b> {c['name']} ({c['rarity']})\n\n"
+        f"Выберите удобный способ передачи предложения обмена 👇"
+    )
+
     if os.path.exists(photo_path):
         await cq.message.answer_photo(
             photo=FSInputFile(photo_path),
-            caption="⏳ Отправьте 🆔 игрока, которому хотите предложить обмен",
-            reply_markup=bld.as_markup()
+            caption=caption,
+            reply_markup=bld.as_markup(),
+            parse_mode="HTML"
         )
     else:
-        await cq.message.answer(
-            "⏳ Отправьте 🆔 игрока, которому хотите предложить обмен (изображение не найдено)",
-            reply_markup=bld.as_markup()
-        )
+        await cq.message.answer(caption, reply_markup=bld.as_markup(), parse_mode="HTML")
+
+
+# --- Обработка выбора: Трейд по ID ---
+@router.callback_query(F.data.startswith("trade_method:id:"))
+async def trade_method_id(cq: CallbackQuery, state: FSMContext):
+    await cq.answer()
+    await state.set_state(TradeState.waiting_for_trade_id)
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="❌ Отменить", callback_data="trade_cancel_init")
+
+    await cq.message.edit_caption(
+        caption="⏳ Отправьте 🆔 игрока, которому хотите предложить обмен:",
+        reply_markup=bld.as_markup(),
+        parse_mode="HTML"
+    )
+
+
+# --- Обработка выбора: Трейд по ссылке ---
+@router.callback_query(F.data.startswith("trade_method:link:"))
+async def trade_method_link(cq: CallbackQuery):
+    await cq.answer()
+    cid = cq.data.split(":")[2]
+    c = CARDS.get(cid)
+
+    if not c:
+        return await cq.message.answer("❌ Ошибка: карта не найдена.")
+
+    # Генерируем безопасный payload и саму ссылку
+    bot_info = await cq.bot.get_me()
+    raw_payload = f"trade:{cq.from_user.id}:{cid}"
+    b64_payload = base64.urlsafe_b64encode(raw_payload.encode()).decode().rstrip("=")
+    trade_link = f"https://t.me/{bot_info.username}?start={b64_payload}"
+
+    # Формируем текст для отправки другим
+    share_text = f"Привет! Давай меняться! Я предлагаю карту {c['name']} ({c['rarity']}) в боте. Переходи по ссылке и делай свое предложение!"
+    share_url = f"https://t.me/share/url?url={trade_link}&text={quote(share_text)}"
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Переслать в чат 🚀", url=share_url)
+    bld.button(text="❌ Отменить", callback_data="trade_cancel_init")
+    bld.adjust(1)
+
+    caption = (
+        f"🔗 <b>Ваша персональная трейд-ссылка создана!</b>\n\n"
+        f"🎴 Карточка: <b>{c['name']}</b> ({c['rarity']})\n\n"
+        f"Отправьте эту ссылку другому игроку, чтобы он смог предложить вам обмен:\n"
+        f"👉 <code>{trade_link}</code>\n\n"
+        f"<i>Вы можете скопировать ссылку, просто нажав на неё ☝️, или использовать кнопку ниже для быстрой пересылки.</i>"
+    )
+
+    await cq.message.edit_caption(
+        caption=caption,
+        reply_markup=bld.as_markup(),
+        parse_mode="HTML"
+    )
 
 
 @router.callback_query(F.data == "trade_cancel_init")
@@ -965,3 +1032,87 @@ async def trade_decline(cq: CallbackQuery):
 @router.callback_query(F.data == "ignore")
 async def ignore_cb(cq: CallbackQuery):
     await cq.answer()
+
+@router.message(CommandStart(deep_link=True))
+async def process_trade_link(msg: types.Message, command: CommandObject, state: FSMContext):
+    payload = command.args
+    if not payload:
+        return  # Если payload пустой, игнорируем (возможно, это обычный /start)
+
+    # Пытаемся расшифровать ссылку
+    try:
+        padding = 4 - (len(payload) % 4)
+        if padding != 4:
+            payload += "=" * padding
+        raw = base64.urlsafe_b64decode(payload.encode()).decode()
+        parts = raw.split(":")
+
+        if len(parts) == 3 and parts[0] == "trade":
+            sender_id = int(parts[1])
+            card_id = parts[2]
+        else:
+            return  # Ссылка не относится к трейду
+    except Exception:
+        return await msg.answer("❌ Недействительная или поврежденная ссылка для обмена.")
+
+    # Проверки логики трейда
+    if sender_id == msg.from_user.id:
+        return await msg.answer("❌ Вы не можете обмениваться сами с собой по своей же ссылке!")
+
+    # Проверяем, есть ли всё ещё эта карта у инициатора
+    sender_has = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, card_id), fetch=True)
+    if not sender_has:
+        return await msg.answer("❌ Трейд больше не актуален: у инициатора больше нет этой карты.")
+
+    c = CARDS.get(card_id)
+    if not c:
+        return await msg.answer("❌ Ошибка: карта не найдена в базе данных.")
+
+    # Записываем трейд в ожидание (перезапишет старый трейд инициатора, если он был)
+    PENDING_TRADES[sender_id] = {
+        'sender_card': card_id,
+        'receiver_id': msg.from_user.id,
+        'receiver_card': None
+    }
+
+    u_sender = get_user(sender_id)
+    sender_name = escape(u_sender[2] if u_sender and u_sender[2] else f"Игрок {sender_id}")
+
+    has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (msg.from_user.id, card_id),
+                       fetch=True)
+    warning = "\n<i>(⚠️ Осторожно: у вас уже есть копия этой карты)</i>" if has_card else ""
+
+    caption = (
+        f"⚖️ <b>Запрос на обмен по ссылке!</b>\n\n"
+        f"Игрок <a href='tg://user?id={sender_id}'>{sender_name}</a> предлагает вам обмен.\n"
+        f"<blockquote>🎁 <b>Он отдает:</b>\n"
+        f"🎴 {c['name']} ({c['rarity']})</blockquote>"
+        f"{warning}"
+    )
+
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Выбрать карту взамен 🎴", callback_data=f"trade_p2_select:{sender_id}")
+    bld.button(text="Отказаться ❌", callback_data=f"trade_decline:{sender_id}")
+    bld.adjust(1)
+
+    photo_path = f"images/cards/{c['file']}"
+    if os.path.exists(photo_path):
+        await msg.answer_photo(
+            photo=FSInputFile(photo_path),
+            caption=caption,
+            reply_markup=bld.as_markup(),
+            parse_mode="HTML"
+        )
+    else:
+        await msg.answer(caption, reply_markup=bld.as_markup(), parse_mode="HTML")
+
+    # Уведомляем создателя ссылки, что по ней перешли
+    try:
+        receiver_name = escape(msg.from_user.first_name)
+        await msg.bot.send_message(
+            sender_id,
+            f"🔔 Игрок <a href='tg://user?id={msg.from_user.id}'>{receiver_name}</a> перешел по вашей трейд-ссылке и сейчас выбирает карту взамен <b>{c['name']}</b>!",
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
