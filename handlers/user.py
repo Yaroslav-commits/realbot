@@ -14,7 +14,8 @@ from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            CallbackQuery, LabeledPrice, PreCheckoutQuery,
                            FSInputFile, Message)
-from aiogram.filters import Command, StateFilter
+import base64
+from aiogram.filters import Command, StateFilter, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -62,20 +63,41 @@ class BroadcastState(StatesGroup):
 class NicknameState(StatesGroup):
     waiting_for_nick = State()
 # ================== HANDLERS ==================
-@router.message(Command("start"))
-async def start_cmd(msg: types.Message):
-    args = msg.text.split()
+@router.message(CommandStart())
+async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContext):
+    payload = command.args  # Получаем данные из ссылки
     referred_by = None
-    if len(args) > 1:
-        ref_code = args[1]  # Берем код как он есть
-        referrer = get_user_by_ref_code(ref_code)
-        if referrer:
-            referred_by = referrer[0]
+    is_trade = False
+    trade_sender_id = None
+    trade_card_id = None
 
-    # Добавляем пользователя и получаем сумму награды, если это был реферал
+    if payload:
+        # 1. Проверяем, не трейд-ссылка ли это
+        try:
+            # Восстанавливаем паддинг base64, если нужно
+            padding = 4 - (len(payload) % 4)
+            padded_payload = payload + "=" * padding if padding != 4 else payload
+            raw = base64.urlsafe_b64decode(padded_payload.encode()).decode()
+
+            # ВАЖНОЕ ИСПРАВЛЕНИЕ: Делим ровно на 3 части, так как ID карты может содержать двоеточие (напр. battle:EPIC)
+            parts = raw.split(":", 2)
+
+            if len(parts) == 3 and parts[0] == "trade":
+                is_trade = True
+                trade_sender_id = int(parts[1])
+                trade_card_id = parts[2]
+        except Exception:
+            pass  # Если расшифровать не вышло, значит это не трейд
+
+        # 2. Если это не трейд, проверяем на рефералку
+        if not is_trade:
+            referrer = get_user_by_ref_code(payload)
+            if referrer:
+                referred_by = referrer[0]
+
+    # ДОБАВЛЯЕМ ЮЗЕРА В БАЗУ (даже если он перешел по трейд-ссылке впервые)
     reward_amount = add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name, referred_by)
 
-    # Если награда выдана, уведомляем владельца ссылки
     if reward_amount and referred_by:
         try:
             await msg.bot.send_message(
@@ -83,9 +105,75 @@ async def start_cmd(msg: types.Message):
                 f"🤝 По твоей ссылке зашёл новый игрок!\nТебе начислено: <b>{reward_amount}💴</b> и <b>5💳</b>"
             )
         except Exception:
-            pass  # Если у владельца бот заблокирован
+            pass
 
-    # В личке показываем reply-клавиатуру, в группах/чатах — убираем её
+    # === ЕСЛИ ЭТО ТРЕЙД, ЗАПУСКАЕМ МЕНЮ ОБМЕНА И ПРЕРЫВАЕМ СТАРТ ===
+    if is_trade:
+        if trade_sender_id == msg.from_user.id:
+            return await msg.answer("❌ Вы не можете обмениваться сами с собой по своей же ссылке!")
+
+        # Проверяем, есть ли всё ещё эта карта у инициатора
+        sender_has = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
+                             (trade_sender_id, trade_card_id), fetch=True)
+        if not sender_has:
+            return await msg.answer("❌ Трейд больше не актуален: у инициатора больше нет этой карты.")
+
+        c = CARDS.get(trade_card_id)
+        if not c:
+            return await msg.answer("❌ Ошибка: карта не найдена в базе данных.")
+
+        # Записываем трейд
+        PENDING_TRADES[trade_sender_id] = {
+            'sender_card': trade_card_id,
+            'receiver_id': msg.from_user.id,
+            'receiver_card': None
+        }
+
+        u_sender = get_user(trade_sender_id)
+        sender_name = escape(u_sender[2] if u_sender and u_sender[2] else f"Игрок {trade_sender_id}")
+
+        has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
+                           (msg.from_user.id, trade_card_id), fetch=True)
+        warning = "\n<i>(⚠️ Осторожно: у вас уже есть копия этой карты)</i>" if has_card else ""
+
+        caption = (
+            f"⚖️ <b>Запрос на обмен по ссылке!</b>\n\n"
+            f"Игрок <a href='tg://user?id={trade_sender_id}'>{sender_name}</a> предлагает вам обмен.\n"
+            f"<blockquote>🎁 <b>Он отдает:</b>\n"
+            f"🎴 {c['name']} ({c['rarity']})</blockquote>"
+            f"{warning}"
+        )
+
+        bld = InlineKeyboardBuilder()
+        bld.button(text="Выбрать карту взамен 🎴", callback_data=f"trade_p2_select:{trade_sender_id}")
+        bld.button(text="Отказаться ❌", callback_data=f"trade_decline:{trade_sender_id}")
+        bld.adjust(1)
+
+        photo_path = f"images/cards/{c.get('file', 'default.png')}"
+        if os.path.exists(photo_path):
+            await msg.answer_photo(
+                photo=FSInputFile(photo_path),
+                caption=caption,
+                reply_markup=bld.as_markup(),
+                parse_mode="HTML"
+            )
+        else:
+            await msg.answer(caption, reply_markup=bld.as_markup(), parse_mode="HTML")
+
+        # Уведомляем создателя ссылки
+        try:
+            receiver_name = escape(msg.from_user.first_name)
+            await msg.bot.send_message(
+                trade_sender_id,
+                f"🔔 Игрок <a href='tg://user?id={msg.from_user.id}'>{receiver_name}</a> перешел по вашей трейд-ссылке и сейчас выбирает карту взамен <b>{c['name']}</b>!",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+        return  # ВАЖНО: Прерываем функцию, чтобы бот не прислал обычное приветствие
+
+    # === ЕСЛИ ЭТО НЕ ТРЕЙД, ВЫВОДИМ ОБЫЧНОЕ ПРИВЕТСТВИЕ ===
     if msg.chat.type == "private":
         markup = kb_main()
     else:
