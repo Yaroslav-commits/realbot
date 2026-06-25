@@ -175,9 +175,9 @@ async def shop_dia_buy_cb(cq: CallbackQuery, bot: Bot):
 
 # ===== Premium =====
 PREMIUM_PRICE = 250  # алмазов
-PREMIUM_BONUS_ATTEMPTS = 10
-PREMIUM_BONUS_KRW = 500
-PREMIUM_CARD_KEY = "premium_card_1"
+PREMIUM_BONUS_ATTEMPTS = 15
+PREMIUM_BONUS_KRW = 1500
+PREMIUM_CARD_KEY = "premium_card_2"
 
 def _premium_kb():
     bld = InlineKeyboardBuilder()
@@ -199,8 +199,8 @@ async def shop_premium_cb(cq: CallbackQuery):
         "🪙 Получение большего количества BATTLECOIN;\n"
         "🏅 Увеличение количества очков ранга за победу и ничью в PVP +1;\n\n"
         "При покупке Premium подписки на 1 месяц вы получаете сразу:\n"
-        "10 круток 💳\n"
-        "500 KRW 💴\n"
+        "15 круток 💳\n"
+        "1500 KRW 💴\n"
         "Лимитированная карточка 🎴👑"
     )
     try:

@@ -11,12 +11,13 @@ EVENT_CARDS_LIST = [
 ]
 # ================== БАЗА ДАННЫХ ==================
 CARDS = {
+"premium_card_2": {"name": "Лу Гуан и Чэн Сяоши", "rarity": "Эпическая 🟢", "style": "Хроно-саботаж", "series": "Агенты времени", "speed": 80, "strength": 80, "intellect": 80, "file": "premium_card2.jpeg", "exclusive": True},
 # ============== Summer Drop ========
 "letniy_dzhin_vu": {"name": "Летний Джин-Ву", "rarity": "Эпическая 🟢", "style": "Вайб теней", "series": "Поднятие уровня в одиночку", "speed": 80, "strength": 80, "intellect": 80, "file": "letniy_dzhin_vu.jpeg", "exclusive": False},
 "letnyaya_cha_he_in": {"name": "Летняя Ча Хэ-Ин", "rarity": "Эпическая 🟢", "style": "Летний танец", "series": "Поднятие уровня в одиночку", "speed": 80, "strength": 77, "intellect": 78, "file": "letnyaya_cha_he_in.jpeg", "exclusive": False},
 "letniy_gu_kim": {"name": "Летний Гу Ким", "rarity": "Эпическая 🟢", "style": "Пляжный разрез", "series": "Лукизм", "speed": 80, "strength": 79, "intellect": 78, "file": "letniy_gu_kim.jpeg", "exclusive": False},
 "letnyaya_endorsi_zahard": {"name": "Летняя Эндорси Захард", "rarity": "Эпическая 🟢", "style": "Морской Ураган", "series": "Башня Бога", "speed": 79, "strength": 78, "intellect": 77, "file": "letnyaya_endorsi_zahard.jpeg", "exclusive": False},
-"letnyaya_yu_hva_yeon": {"name": "Летняя Ю Хва Йеон", "rarity": "Эпическая 🟢", "style": "Адский пляж", "series": "Башня Бога", "speed": 77, "strength": 77, "intellect": 80, "file": "letnyaya_yu_hva_yeon.jpeg", "exclusive": False},
+"letnyaya_yu_hva_yeon": {"name": "Летняя Йи-Хва Йеон", "rarity": "Эпическая 🟢", "style": "Адский пляж", "series": "Башня Бога", "speed": 77, "strength": 77, "intellect": 80, "file": "letnyaya_yu_hva_yeon.jpeg", "exclusive": False},
 "letnyaya_rahil": {"name": "Летняя Рахиль", "rarity": "Эпическая 🟢", "style": "Стратегия пляжного зонта", "series": "Башня Бога", "speed": 78, "strength": 76, "intellect": 79, "file": "letnyaya_rahil.jpeg", "exclusive": False},
 "letniy_sedzhin": {"name": "Летний Седжин", "rarity": "Эпическая 🟢", "style": "Отсутствует", "series": "Лукизм", "speed": 77, "strength": 76, "intellect": 78, "file": "letniy_sedzhin.jpeg", "exclusive": False},
 "letnyaya_hanyl": {"name": "Летняя Ханыль", "rarity": "Эпическая 🟢", "style": "Отсутствует", "series": "Лукизм", "speed": 80, "strength": 60, "intellect": 60, "file": "letnyaya_hanyl.jpeg", "exclusive": False},
@@ -93,7 +94,7 @@ CARDS = {
 "lilial_zahard": {"name": "Лилиал Захард", "rarity": "Эпическая 🟢", "style": "Тактический", "series": "Башня Бога", "speed": 65, "strength": 64, "intellect": 66, "file": "lilial_zahard.jpeg", "exclusive": False},
 "vang_nan": {"name": "Ванг Нан", "rarity": "Эпическая 🟢", "style": "Контроль и адаптация", "series": "Башня Бога", "speed": 64, "strength": 61, "intellect": 67, "file": "vang_nan.jpeg", "exclusive": False},
 "evan": {"name": "Эван", "rarity": "Эпическая 🟢", "style": "Поддержка", "series": "Башня Бога", "speed": 63, "strength": 60, "intellect": 66, "file": "evan.jpeg", "exclusive": False},
-"yeon_yu_hva": {"name": "Йеон Ю Хва", "rarity": "Эпическая 🟢", "style": "Контроль шинсу", "series": "Башня Бога", "speed": 63, "strength": 62, "intellect": 64, "file": "yeon_yu_hva.jpeg", "exclusive": False},
+"yeon_yu_hva": {"name": "Йеон Йи-Хва", "rarity": "Эпическая 🟢", "style": "Контроль шинсу", "series": "Башня Бога", "speed": 63, "strength": 62, "intellect": 64, "file": "yeon_yu_hva.jpeg", "exclusive": False},
 "kvant_blits": {"name": "Квант Блиц", "rarity": "Эпическая 🟢", "style": "Рывки и резкие атаки", "series": "Башня Бога", "speed": 63, "strength": 62, "intellect": 62, "file": "kvant_blits.jpeg", "exclusive": False},
 "denial_hetchid": {"name": "Дэниал Хэтчид", "rarity": "Эпическая 🟢", "style": "Быстрые атаки и маневры", "series": "Башня Бога", "speed": 65, "strength": 63, "intellect": 60, "file": "denial_hetchid.jpeg", "exclusive": False},
 "kun_hachuling": {"name": "Кун Хачулинг", "rarity": "Эпическая 🟢", "style": "Анализ и контроль", "series": "Башня Бога", "speed": 61, "strength": 62, "intellect": 63, "file": "kun_hachuling.jpeg", "exclusive": False},
