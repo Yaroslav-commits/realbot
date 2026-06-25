@@ -733,34 +733,68 @@ async def cancel_search(cq: CallbackQuery):
 async def wait_match(uid, bot, msg_to_edit):
     for _ in range(50):
         await asyncio.sleep(1)
+        # Если игрока нет в очереди, значит он либо нажал отмену, либо его забрал реальный игрок
         if uid not in MATCH_QUEUE:
-            try: await msg_to_edit.delete()
-            except: pass
-            return
+            # Проверяем, находится ли игрок сейчас в активном бою
+            in_game = any(g['p1'] == uid or g['p2'] == uid for g in GAMES.values())
+            if in_game:
+                try:
+                    await msg_to_edit.delete()
+                except:
+                    pass
+            return  # Тихо завершаем процесс
+
+    # Если прошло 50 секунд и игрок все еще в очереди - даем ему бота
     if uid in MATCH_QUEUE:
         MATCH_QUEUE.remove(uid)
-        try: await msg_to_edit.delete()
-        except: pass
+        try:
+            await msg_to_edit.delete()
+        except:
+            pass
         await start_battle(uid, -1, bot)
+
 
 async def start_battle(p1, p2, bot: Bot, friendly=False):
     gid = f"g_{random.randint(10000, 99999)}"
     deck1 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p1,), fetchall=True)]
 
+    # Получаем данные первого игрока и формируем строчку титула (если он есть)
+    u1 = get_user(p1)
+    title1_val = u1[14] if u1 else None
+    title1_str = TITLES.get(title1_val) if title1_val else None
+    title_line1 = f"· Титул: {title1_str}\n" if title1_str else ""
+
     if p2 == -1:
         deck2 = random.choices(list(CARDS.keys()), k=6)
-        name2 = random.choice(["Важни Гий", "Ли Джи Ху..", "Йена пик форма", "Злодей Васко", "Великий Мага", "Босс Табаско", "Срасул", "Брад", "Клон Хикса", "Король Бибизян"])
+        name2 = random.choice([
+            "Важни Гий", "Ли Джи Ху..", "Йена пик форма", "Злодей Васко",
+            "Великий Мага", "Босс Табаско", "Брад", "Клон Хикса", "Король Бибизян",
+            "Пак Хён Сок", "Сон Джин У", "Йегер Не..", "Ю Джунхёк",
+            "Чхве Дон Су", "Кан Даниэль", "Баек Юн Хо", "Скрытый Герой",
+            "Мастер Вжух", "Дед Инсайд", "Тапок Справедливости", "Гигачад",
+            "Мамин Киберспортсмен", "Шаурмичный Лорд", "Неуловимый Джо",
+            "Котлетка Ниндзя", "Капибара Киллер", "Агро Школьник",
+            "Пельмень Судьбы", "Безумный Фармер", "Хлебный Мякиш",
+            "Скрытый ге..", "Toxic Хантер", "Noob Slayer", "Shadow Fiend",
+            "Solo Player", "Cyber Ninja", "Dark Samurai", "ProGamer_2026",
+            "Киберкотлета", "Тёмный Властелин", "Азиат"
+        ])
         rank2 = "Бот"
+        title_line2 = ""  # У ботов титулов никогда нет, строка пустая
     else:
         deck2 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (p2,), fetchall=True)]
         u2 = get_user(p2)
         name2, rank2 = f"<a href='tg://user?id={p2}'>{u2[2]}</a>", get_rank(u2[7])
 
+        # Получаем данные второго игрока и формируем строчку титула (если он есть)
+        title2_val = u2[14] if u2 else None
+        title2_str = TITLES.get(title2_val) if title2_val else None
+        title_line2 = f"· Титул: {title2_str}\n" if title2_str else ""
+
     GAMES[gid] = {'p1': p1, 'p2': p2, 'd1': deck1.copy(), 'd2': deck2.copy(), 'n2': name2, 'r2': rank2,
                   'p1_c': None, 'p2_c': None, 'p1_s': None, 'p2_s': None, 'score1': 0, 'score2': 0, 'round': 1,
                   'friendly': friendly, 'resolving': False}
 
-    u1 = get_user(p1)
     if p2 == -1:
         db_exec("UPDATE users SET last_battle = ?, battle_cooldown_notified = 0 WHERE id = ?",
                 (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p1))
@@ -775,7 +809,8 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
     pts1_txt = "0 очков" if friendly else f"{4 if prem1 else 3} очка"
     bc1_txt = "3" if friendly else f"{10 if prem1 else 7}"
 
-    txt1 = f"Противник найден!\n\n· Имя: {name2} {emoji2}\n· Ранг: {rank2}\n· Награда: {pts1_txt}🏅, {bc1_txt} BattleCoin 🪙\n\nБитва начинается!"
+    # Вставляем динамическую строку титула {title_line2}
+    txt1 = f"Противник найден!\n\n· Имя: {name2} {emoji2}\n{title_line2}· Ранг: {rank2}\n· Награда: {pts1_txt}🏅, {bc1_txt} BattleCoin 🪙\n\nБитва начинается!"
 
     try:
         if p2 != -1:
@@ -800,7 +835,10 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
             prem2 = is_premium(p2)
             pts2_txt = "0 очков" if friendly else f"{4 if prem2 else 3} очка"
             bc2_txt = "3" if friendly else f"{10 if prem2 else 7}"
-            txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> {emoji1}\n· Ранг: {get_rank(u1[7])}\n· Награда: {pts2_txt}🏅, {bc2_txt} BattleCoin 🪙\n\nБитва начинается!"
+
+            # Вставляем динамическую строку титула {title_line1}
+            txt2 = f"Противник найден!\n\n· Имя: <a href='tg://user?id={p1}'>{u1[2]}</a> {emoji1}\n{title_line1}· Ранг: {get_rank(u1[7])}\n· Награда: {pts2_txt}🏅, {bc2_txt} BattleCoin 🪙\n\nБитва начинается!"
+
             bg_key1 = u1[13] or 'default'
             bg_data1 = BGS.get(bg_key1, BGS['default'])
             bg_file1 = FSInputFile(f"images/backgrounds/{bg_data1.get('file')}")
@@ -823,7 +861,6 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
 
     except Exception as e:
         logging.error(f"Failed to start battle {gid} properly: {e}")
-        # Если была сетевая ошибка при старте — удаляем бой, чтобы избежать зависаний (Zombie Locks)
         GAMES.pop(gid, None)
         try:
             await bot.send_message(p1, "⚠️ Ошибка инициализации битвы. Противник или сервер недоступен.")
@@ -1196,9 +1233,14 @@ async def resolve_round(gid, bot):
 
 
 async def finish_game(gid, bot):
-    g = GAMES.pop(gid)
+    # Используем .get() на случай, если игра уже удалилась (защита от двойного вызова)
+    g = GAMES.pop(gid, None)
+    if not g:
+        return
+
     p1, p2, s1, s2 = g['p1'], g['p2'], g['score1'], g['score2']
     friendly = g.get('friendly', False)
+    surrendered_uid = g.get('surrendered')
 
     def apply_res(uid, is_win, is_draw, friendly):
         if uid == -1: return 0, 0
@@ -1207,29 +1249,52 @@ async def finish_game(gid, bot):
         if friendly:
             pts = 0
             bc = 3 if is_win else 1
+            # В дружеских боях выдаем только копейки BattleCoin, стату не трогаем!
+            db_exec(f"UPDATE users SET battlecoin = battlecoin + {bc} WHERE id = ?", (uid,))
         else:
             if is_win:
                 pts = 4 if premium else 3
                 bc = 14 if premium else 10
+                stat_update = "wins = wins + 1, season_wins = season_wins + 1"
             elif is_draw:
                 pts = 2 if premium else 1
                 bc = 6 if premium else 4
+                stat_update = "draws = draws + 1"
             else:
                 pts = -1 if premium else -2
                 bc = 3 if premium else 2
+                stat_update = "losses = losses + 1"
 
-        # ДОБАВЛЕНО: season_wins = season_wins + 1
-        db_exec(f"UPDATE users SET rank_points = MAX(0, rank_points + {pts}), battlecoin = battlecoin + {bc}, " +
-                ("wins = wins + 1, season_wins = season_wins + 1" if is_win else ("draws = draws + 1" if is_draw else "losses = losses + 1")) +
-                " WHERE id = ?", (uid,))
+            # В обычных боях обновляем очки, коины и статистику
+            db_exec(
+                f"UPDATE users SET rank_points = MAX(0, rank_points + {pts}), battlecoin = battlecoin + {bc}, {stat_update} WHERE id = ?",
+                (uid,))
+
         return pts, bc
 
-    draw = (s1 == s2)
-    r1 = apply_res(p1, s1 > s2, draw, friendly)
-    r2 = apply_res(p2, s2 > s1, draw, friendly)
+    # Логика победителя с учетом сдачи
+    if surrendered_uid:
+        is_p1_surrendered = (surrendered_uid == p1)
+        p1_win = not is_p1_surrendered
+        p2_win = is_p1_surrendered
+        draw = False
+    else:
+        p1_win = s1 > s2
+        p2_win = s2 > s1
+        draw = (s1 == s2)
 
-    my_name = get_user(p1)[2]
-    n2 = g['n2'] if p2 == -1 else get_user(p2)[2]
+    r1 = apply_res(p1, p1_win, draw, friendly)
+    r2 = apply_res(p2, p2_win, draw, friendly)
+
+    # Формируем ссылки на профили игроков для красивого текста
+    my_name_raw = get_user(p1)[2]
+    n1_link = f"<a href='tg://user?id={p1}'>{my_name_raw}</a>"
+
+    if p2 == -1:
+        n2_link = g['n2'] # У бота нет ссылки, просто имя
+    else:
+        n2_raw = get_user(p2)[2]
+        n2_link = f"<a href='tg://user?id={p2}'>{n2_raw}</a>"
 
     # === ИВЕНТ: НАГРАДА ЗА БОЙ ===
     from database.db import add_event_item
@@ -1244,11 +1309,40 @@ async def finish_game(gid, bot):
         ev_txt2 = f"\n🍹 Коктейль: +{cocktail_p2}"
     # =============================
 
-    await bot.send_message(p1,
-                           f"Игра окончена!\nСчет: {my_name} {s1} - {s2} {n2}\nНаграда: {r1[0]}🏅, {r1[1]}🪙{ev_txt1}")
+    # --- КРАСИВЫЕ СООБЩЕНИЯ О ЗАВЕРШЕНИИ ---
+    score_text = f"📊 Финальный счет: <b>{s1} - {s2}</b>"
+
+    if surrendered_uid:
+        if surrendered_uid == p1:
+            title1 = f"🏳️ <b>Вы сдались... Поражение.</b>\nПротивник {n2_link} оказался слишком силен."
+            title2 = f"🏆 <b>ПОБЕДА!</b>\nПротивник {n1_link} трусливо сбежал с поля боя!"
+        else:
+            title1 = f"🏆 <b>ПОБЕДА!</b>\nПротивник {n2_link} не выдержал вашей мощи и сдался!"
+            title2 = f"🏳️ <b>Вы сдались... Поражение.</b>\nПротивник {n1_link} оказался слишком силен."
+    else:
+        if p1_win:
+            title1 = f"🏆 <b>ПОБЕДА!</b>\nВы эффектно растоптали оппонента {n2_link}!"
+            title2 = f"💀 <b>ПОРАЖЕНИЕ.</b>\nВ этот раз {n1_link} оказался сильнее..."
+        elif p2_win:
+            title1 = f"💀 <b>ПОРАЖЕНИЕ.</b>\nВ этот раз {n2_link} оказался сильнее..."
+            title2 = f"🏆 <b>ПОБЕДА!</b>\nВы эффектно растоптали оппонента {n1_link}!"
+        else:
+            title1 = f"🤝 <b>НИЧЬЯ.</b>\nДостойная битва двух равных соперников против {n2_link}."
+            title2 = f"🤝 <b>НИЧЬЯ.</b>\nДостойная битва двух равных соперников против {n1_link}."
+
+    msg1 = f"{title1}\n\n{score_text}\n<b>🎁 Награда:</b> {r1[0]} 🏅, {r1[1]} 🪙{ev_txt1}"
+    msg2 = f"{title2}\n\n{score_text}\n<b>🎁 Награда:</b> {r2[0]} 🏅, {r2[1]} 🪙{ev_txt2}"
+
+    try:
+        await bot.send_message(p1, msg1, parse_mode="HTML")
+    except Exception as e:
+        logging.error(f"Failed to send finish msg to p1: {e}")
+
     if p2 != -1:
-        await bot.send_message(p2,
-                               f"Игра окончена!\nСчет: {n2} {s2} - {s1} {my_name}\nНаграда: {r2[0]}🏅, {r2[1]}🪙{ev_txt2}")
+        try:
+            await bot.send_message(p2, msg2, parse_mode="HTML")
+        except Exception as e:
+            logging.error(f"Failed to send finish msg to p2: {e}")
 
 # ============ ЗАЩИТА И БЛОКИРОВКА ВО ВРЕМЯ БОЯ ============
 from aiogram import BaseMiddleware
@@ -1258,21 +1352,46 @@ class BattleLockMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         if isinstance(event, types.CallbackQuery):
             uid = event.from_user.id
-            in_battle = any(g['p1'] == uid or g['p2'] == uid for g in GAMES.values())
 
-            allowed = ('b_card:', 'b_style:', 'surrender:')
-            if in_battle and not event.data.startswith(allowed):
-                gid = next((k for k, v in GAMES.items() if v['p1'] == uid or v['p2'] == uid), None)
-                if gid:
-                    bld = InlineKeyboardBuilder()
-                    bld.button(text="Сдаться 🏳️", callback_data=f"surrender:{gid}")
+            # --- 1. ЗАЩИТА ВО ВРЕМЯ ПОИСКА ПРОТИВНИКА ---
+            from handlers import MATCH_QUEUE  # Импортируем очередь, если она в другом файле
+            if uid in MATCH_QUEUE:
+                # Разрешаем только кнопку отмены поиска
+                allowed_search = ('cancel_search',)
+                if not event.data.startswith(allowed_search):
                     try:
-                        await event.message.answer("Вы совершили недопустимое действие во время боя. Сдаться?",
-                                                   reply_markup=bld.as_markup())
-                        await event.answer()
+                        await event.answer(
+                            "⏳ Вы находитесь в поиске противника!\n\n"
+                            "Пожалуйста, сначала отмените поиск, "
+                            "чтобы воспользоваться другими функциями магазина или меню.",
+                            show_alert=True
+                        )
                     except:
                         pass
-                    return
+                    return  # Жестко блокируем выполнение любого другого кода
+
+            # --- 2. ЗАЩИТА ВО ВРЕМЯ БОЯ ---
+            in_battle = any(g['p1'] == uid or g['p2'] == uid for g in GAMES.values())
+            if in_battle:
+                # Разрешаем только кнопки выбора карты, стиля и сдачи
+                allowed_battle = ('b_card:', 'b_style:', 'surrender:')
+                if not event.data.startswith(allowed_battle):
+                    gid = next((k for k, v in GAMES.items() if v['p1'] == uid or v['p2'] == uid), None)
+                    if gid:
+                        bld = InlineKeyboardBuilder()
+                        bld.button(text="Сдаться 🏳️", callback_data=f"surrender:{gid}")
+                        try:
+                            # Уведомляем игрока прямо в чате, чтобы он не потерялся
+                            await event.message.answer(
+                                "⚔️ Вы сейчас находитесь в активном бою!\n"
+                                "Сделайте ход или сдайтесь, чтобы открыть меню.",
+                                reply_markup=bld.as_markup()
+                            )
+                            await event.answer()
+                        except:
+                            pass
+                        return  # Жестко блокируем выполнение
+
         return await handler(event, data)
 
 
@@ -1299,26 +1418,17 @@ async def surrender_battle(cq: CallbackQuery):
             pass
         return await cq.answer("Бой завершен или был отменен.", show_alert=True)
 
-    is_p1 = (uid == g['p1'])
-    if is_p1:
-        g['score1'] = -1
-        g['score2'] = 99
-    else:
-        g['score2'] = -1
-        g['score1'] = 99
+    # ЗАЩИТА: Нельзя сдаться, если раунд уже подсчитывается (защита от крашей)
+    if g.get('resolving'):
+        return await cq.answer("Сейчас идет вычисление результатов раунда, сбежать не получится!", show_alert=True)
+
+    # Ставим метку, кто именно сдался, вместо ломания счета
+    g['surrendered'] = uid
 
     try:
-        await cq.message.answer("Вы сдались! Поражение.")
         await cq.message.delete()
     except:
         pass
-
-    if g['p2'] != -1:
-        other_id = g['p2'] if is_p1 else g['p1']
-        try:
-            await cq.bot.send_message(other_id, "Противник сдался! Вы победили.")
-        except:
-            pass
 
     await finish_game(gid, cq.bot)
     await cq.answer()
@@ -1661,17 +1771,19 @@ async def b_shop_pack_cb(cq: CallbackQuery):
         await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
 
+
 @router.callback_query(F.data == "b_shop_pack_buy")
 async def b_shop_pack_buy_cb(cq: CallbackQuery):
     uid = cq.from_user.id
     now = datetime.now()
     week_num = now.isocalendar()[1]
 
-    res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num), fetch=True)
+    res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num),
+                  fetch=True)
     bought = res[0] if res else 0
 
     if bought >= 5:
-        return await cq.answer("Вы уже купили этот пак 5 раз на этой неделе!", show_alert=True)
+        return await cq.answer("На этой неделе вы уже скупили все паки!", show_alert=True)
 
     u = get_user(uid)
     if u[5] < 400:
@@ -1679,11 +1791,13 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
 
     # Списание валюты и обновление счетчика
     db_exec("UPDATE users SET battlecoin = battlecoin - 400 WHERE id = ?", (uid,))
+    bought += 1
     if res:
-        db_exec("UPDATE battle_shop_packs SET bought_count = bought_count + 1 WHERE user_id = ? AND week_number = ?",
-                (uid, week_num))
+        db_exec("UPDATE battle_shop_packs SET bought_count = ? WHERE user_id = ? AND week_number = ?",
+                (bought, uid, week_num))
     else:
-        db_exec("INSERT INTO battle_shop_packs (user_id, week_number, bought_count) VALUES (?, ?, 1)", (uid, week_num))
+        db_exec("INSERT INTO battle_shop_packs (user_id, week_number, bought_count) VALUES (?, ?, ?)",
+                (uid, week_num, bought))
 
     # Логика шансов
     rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
@@ -1691,37 +1805,23 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
     result = random.choices(rewards, weights=weights, k=1)[0]
 
     reward_text = ""
-    sent_media = False
-    card_c = None  # Сюда будем записывать объект карты для картинки
+    card_c = None
 
+    # БЕЗОПАСНАЯ ОБРАБОТКА (защита от NoneType)
     if result == "card_main":
         is_new, krw, card_c = give_card_to_user(uid, PACK_CARD)
-        reward_text = format_card_msg(card_c, is_new, krw)
+        if card_c:
+            reward_text = format_card_msg(card_c, is_new, krw)
+        else:
+            reward_text = "🎁 <b>Главная карта временно недоступна!</b>\nВам начислена компенсация: 10000 💴"
+            db_exec("UPDATE users SET krw = krw + 10000 WHERE id = ?", (uid,))
     elif result == "bg_yamazaki":
         db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG1))
         bg_key = PACK_BG1
         bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
         if bg_data:
-            file_path = f"images/backgrounds/{bg_data.get('file')}"
             bg_name = bg_data.get('name', 'Новый фон')
-            caption_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
-            try:
-                if bg_key in VIDEO_BGS:
-                    await send_cached_video(
-                        cq.bot,
-                        chat_id=uid,
-                        file_path=file_path,
-                        caption=caption_text,
-                        parse_mode="HTML",
-                        supports_streaming=True,
-                        width=bg_data.get('width'),
-                        height=bg_data.get('height')
-                    )
-                else:
-                    await cq.bot.send_photo(uid, photo=FSInputFile(file_path), caption=caption_text, parse_mode="HTML")
-                sent_media = True
-            except Exception:
-                reward_text = f"🌄 Получен новый фон: <b>{bg_name}</b>!"
+            reward_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
         else:
             reward_text = f"🌄 Получен новый фон: <b>Санни</b>!"
     elif result == "bg_jaehwan":
@@ -1729,31 +1829,12 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         bg_key = PACK_BG2
         bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
         if bg_data:
-            file_path = f"images/backgrounds/{bg_data.get('file')}"
             bg_name = bg_data.get('name', 'Новый фон')
-            caption_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
-            try:
-                if bg_key in VIDEO_BGS:
-                    await send_cached_video(
-                        cq.bot,
-                        chat_id=uid,
-                        file_path=file_path,
-                        caption=caption_text,
-                        parse_mode="HTML",
-                        supports_streaming=True,
-                        width=bg_data.get('width'),
-                        height=bg_data.get('height')
-                    )
-                else:
-                    await cq.bot.send_photo(uid, photo=FSInputFile(file_path), caption=caption_text, parse_mode="HTML")
-                sent_media = True
-            except Exception:
-                reward_text = f"🌄 Получен новый фон: <b>{bg_name}</b>!"
+            reward_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
         else:
             reward_text = f"🌄 Получен новый фон: <b>Теневой раб</b>!"
     elif result == "title":
-        exists = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?", (uid, PACK_TITLE),
-                             fetch=True)
+        exists = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?", (uid, PACK_TITLE), fetch=True)
         if exists:
             reward_text = f"🔱 Вам выпал титул: <b>Лишенный света 🕯️</b>, но, к сожалению, он у вас уже есть!"
         else:
@@ -1762,41 +1843,74 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
     elif result == "mythic":
         card_key = pull_random_card(force_rarity="Мифическая 🔴")
         is_new, krw, card_c = give_card_to_user(uid, card_key)
-        reward_text = format_card_msg(card_c, is_new, krw)
+        if card_c:
+            reward_text = format_card_msg(card_c, is_new, krw)
+        else:
+            reward_text = "🎁 <b>СБОЙ Мифическая карта не найдена в пуле!</b>\nВам начислена компенсация: 700 💴"
+            db_exec("UPDATE users SET krw = krw + 700 WHERE id = ?", (uid,))
     else:  # legendary
         card_key = pull_random_card(force_rarity="Легендарная 🔵")
         is_new, krw, card_c = give_card_to_user(uid, card_key)
-        reward_text = format_card_msg(card_c, is_new, krw)
+        if card_c:
+            reward_text = format_card_msg(card_c, is_new, krw)
+        else:
+            reward_text = "🎁 <b>СБОЙ Легендарная карта не найдена в пуле!</b>\nВам начислена компенсация: 300 💴"
+            db_exec("UPDATE users SET krw = krw + 300 WHERE id = ?", (uid,))
 
-    # ЭФФЕКТ ГАЧИ: Отправляем с картинкой и спойлером, если выпала карта
-    if not sent_media and card_c is not None and card_c.get("file"):
+    # КЛАВИАТУРА ДЛЯ ПОВТОРНОГО ОТКРЫТИЯ (избавляет от спама меню)
+    bld = InlineKeyboardBuilder()
+    if bought < 5:
+        bld.button(text=f"Купить еще 💵 ({5 - bought}/5)", callback_data="b_shop_pack_buy")
+    bld.button(text="Назад к пакам 🔙", callback_data="b_shop_pack")
+    bld.adjust(1)
+
+    # Удаляем старое окно, чтобы новое встало ровно на его место
+    try:
+        await cq.message.delete()
+    except:
+        pass
+
+    # ОТПРАВКА НАГРАДЫ (с сохранением эффекта спойлера)
+    if card_c is not None and card_c.get("file"):
         try:
             if "Божественная" in card_c.get("rarity", "") and card_c.get("video"):
                 await send_cached_video(
-                    cq.bot,
-                    chat_id=uid,
-                    file_path=f"images/cards/{card_c['video']}",
-                    caption=reward_text,
-                    width=card_c.get("width", 960),
-                    height=card_c.get("height", 1280),
-                    has_spoiler=True, # Эффект размытия (гача)
-                    supports_streaming=True
+                    cq.bot, chat_id=uid, file_path=f"images/cards/{card_c['video']}",
+                    caption=reward_text, width=card_c.get("width", 960), height=card_c.get("height", 1280),
+                    has_spoiler=True, supports_streaming=True, reply_markup=bld.as_markup()
                 )
             else:
                 await cq.bot.send_photo(
-                    uid,
-                    photo=FSInputFile(f"images/cards/{card_c['file']}"),
-                    caption=reward_text,
-                    has_spoiler=True, # Эффект размытия (гача)
-                    parse_mode="HTML"
+                    uid, photo=FSInputFile(f"images/cards/{card_c['file']}"),
+                    caption=reward_text, has_spoiler=True, parse_mode="HTML", reply_markup=bld.as_markup()
                 )
         except Exception:
-            await cq.message.answer(reward_text, parse_mode="HTML")
-    elif not sent_media:
-        await cq.message.answer(reward_text, parse_mode="HTML")
+            await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
 
-    await cq.answer("Пак открыт!", show_alert=True)
-    await b_shop_pack_cb(cq)
+    elif result in ["bg_yamazaki", "bg_jaehwan"]:
+        bg_key = PACK_BG1 if result == "bg_yamazaki" else PACK_BG2
+        bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
+        if bg_data:
+            file_path = f"images/backgrounds/{bg_data.get('file')}"
+            try:
+                if bg_key in VIDEO_BGS:
+                    await send_cached_video(
+                        cq.bot, chat_id=uid, file_path=file_path,
+                        caption=reward_text, parse_mode="HTML", supports_streaming=True,
+                        width=bg_data.get('width'), height=bg_data.get('height'), reply_markup=bld.as_markup()
+                    )
+                else:
+                    await cq.bot.send_photo(uid, photo=FSInputFile(file_path), caption=reward_text, parse_mode="HTML",
+                                            reply_markup=bld.as_markup())
+            except Exception:
+                await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
+        else:
+            await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
+    else:
+        await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
+
+    await cq.answer()
+    # Заметь: мы БОЛЬШЕ НЕ вызываем b_shop_pack_cb(cq) в конце, поэтому меню не будет дублироваться!
 
 
 def format_card_msg(c, is_new=True, krw=0):
