@@ -603,7 +603,8 @@ async def divine_toggle(cq: CallbackQuery):
 @router.callback_query(F.data.startswith("trade_init:"))
 async def trade_init(cq: CallbackQuery, state: FSMContext):
     await cq.answer()
-    cid = cq.data.split(":")[1]
+    # ИСПРАВЛЕНИЕ: Делим только 1 раз, чтобы не отрезать куски от ID карты
+    cid = cq.data.split(":", 1)[1]
 
     c = CARDS.get(cid)
     if not c:
@@ -660,19 +661,18 @@ async def trade_method_id(cq: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("trade_method:link:"))
 async def trade_method_link(cq: CallbackQuery):
     await cq.answer()
-    cid = cq.data.split(":")[2]
+    # ИСПРАВЛЕНИЕ: Делим ровно на 2 части
+    cid = cq.data.split(":", 2)[2]
     c = CARDS.get(cid)
 
     if not c:
         return await cq.message.answer("❌ Ошибка: карта не найдена.")
 
-    # Генерируем безопасный payload и саму ссылку
     bot_info = await cq.bot.get_me()
     raw_payload = f"trade:{cq.from_user.id}:{cid}"
     b64_payload = base64.urlsafe_b64encode(raw_payload.encode()).decode().rstrip("=")
     trade_link = f"https://t.me/{bot_info.username}?start={b64_payload}"
 
-    # Формируем текст для отправки другим
     share_text = f"Привет! Давай меняться! Я предлагаю карту {c['name']} ({c['rarity']}) в боте. Переходи по ссылке и делай свое предложение!"
     share_url = f"https://t.me/share/url?url={trade_link}&text={quote(share_text)}"
 
@@ -718,7 +718,6 @@ async def process_trade_id(msg: types.Message, state: FSMContext):
 
     target_id_str = (msg.text or "").strip()
 
-    # Любой невалидный ввод — сбрасываем трейд
     if not target_id_str.isdigit():
         await state.clear()
         PENDING_TRADES.pop(msg.from_user.id, None)
@@ -738,7 +737,6 @@ async def process_trade_id(msg: types.Message, state: FSMContext):
 
     await state.clear()
 
-    # Сохраняем трейд в ожидание
     PENDING_TRADES[msg.from_user.id] = {
         'sender_card': cid,
         'receiver_id': target_id,
@@ -839,7 +837,8 @@ async def trade_p2_select(cq: CallbackQuery):
 @router.callback_query(F.data.startswith("trade_p2_conf:"))
 async def trade_p2_conf(cq: CallbackQuery):
     await cq.answer()
-    parts = cq.data.split(":")
+    # ИСПРАВЛЕНИЕ: Делим на 3 части (так как ID может быть с двоеточием)
+    parts = cq.data.split(":", 2)
     sender_id = int(parts[1])
     p2_card = parts[2]
 
@@ -906,10 +905,11 @@ async def trade_p2_final(cq: CallbackQuery):
         f"Ударить по рукам и завершить сделку? 🤝"
     )
 
-    media = [
-        types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c1['file']}")),
-        types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c2['file']}"))
-    ]
+    media = []
+    for c in [c1, c2]:
+        p = f"images/cards/{c['file']}"
+        if os.path.exists(p):
+            media.append(types.InputMediaPhoto(media=FSInputFile(p)))
 
     bld = InlineKeyboardBuilder()
     bld.button(text="Ударить по рукам 🤝", callback_data=f"trade_p1_final:{cq.from_user.id}")
@@ -917,7 +917,8 @@ async def trade_p2_final(cq: CallbackQuery):
     bld.adjust(1)
 
     try:
-        await cq.bot.send_media_group(sender_id, media=media)
+        if media:
+            await cq.bot.send_media_group(sender_id, media=media)
         await cq.bot.send_message(sender_id, txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     except Exception:
         await cq.message.answer("❌ Не удалось связаться с инициатором. Трейд отменен.")
@@ -950,9 +951,8 @@ async def trade_p1_final(cq: CallbackQuery):
             pass
         return
 
-    # БЕЗОПАСНОЕ УДАЛЕНИЕ: по одной копии
-    row1 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (sender_id, c1_id),
-                   fetch=True)
+    # БЕЗОПАСНОЕ УДАЛЕНИЕ: изымаем по одной копии
+    row1 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (sender_id, c1_id), fetch=True)
     if row1:
         db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row1[0],))
     db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
@@ -968,18 +968,12 @@ async def trade_p1_final(cq: CallbackQuery):
         "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
         (c2_id, p2_id))
 
-    p1_has_c2 = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, c2_id), fetch=True)
-    p2_has_c1 = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (p2_id, c1_id), fetch=True)
-
-    if not p1_has_c2:
-        db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (sender_id, c2_id))
-
-    if not p2_has_c1:
-        db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (p2_id, c1_id))
-
     PENDING_TRADES.pop(sender_id, None)
 
-    # Достаем ники для красивого финала
+    # ИСПРАВЛЕНИЕ: Безопасное начисление через функцию, чтобы за повторки падала компенсация KRW!
+    is_new1, krw1, _ = give_card_to_user(sender_id, c2_id)
+    is_new2, krw2, _ = give_card_to_user(p2_id, c1_id)
+
     u1 = get_user(sender_id)
     u2 = get_user(p2_id)
     n1 = escape(u1[2] if u1 and u1[2] else f"Игрок {sender_id}")
@@ -987,31 +981,41 @@ async def trade_p1_final(cq: CallbackQuery):
 
     await cq.message.delete()
 
+    # Генерация сообщения с уведомлением о дубликатах
+    msg1 = f"<blockquote>🎴 <b>Новая карта:</b> {CARDS[c2_id]['name']}</blockquote>"
+    if not is_new1:
+        msg1 = f"<blockquote>♻️ <b>Повторка!</b> Карта конвертирована в <b>{krw1} 💴 KRW</b></blockquote>"
+
+    msg2 = f"<blockquote>🎴 <b>Новая карта:</b> {CARDS[c1_id]['name']}</blockquote>"
+    if not is_new2:
+        msg2 = f"<blockquote>♻️ <b>Повторка!</b> Карта конвертирована в <b>{krw2} 💴 KRW</b></blockquote>"
+
     # Сообщение инициатору
-    await cq.message.answer_photo(
-        photo=FSInputFile(f"images/cards/{CARDS[c2_id]['file']}"),
-        caption=(
-            f"🎉 <b>Обмен успешно завершён!</b>\n\n"
-            f"<blockquote>🎴 <b>Новая карта:</b> {CARDS[c2_id]['name']}</blockquote>\n"
-            f"Сделка с <a href='tg://user?id={p2_id}'>{n2}</a> прошла успешно 🤝"
-        ),
-        parse_mode="HTML"
-    )
+    photo_p1 = f"images/cards/{CARDS[c2_id]['file']}"
+    if os.path.exists(photo_p1):
+        await cq.message.answer_photo(
+            photo=FSInputFile(photo_p1),
+            caption=(f"🎉 <b>Обмен успешно завершён!</b>\n\n{msg1}\nСделка с <a href='tg://user?id={p2_id}'>{n2}</a> прошла успешно 🤝"),
+            parse_mode="HTML"
+        )
+    else:
+        await cq.message.answer(f"🎉 <b>Обмен успешно завершён!</b>\n\n{msg1}\nСделка с <a href='tg://user?id={p2_id}'>{n2}</a> прошла успешно 🤝", parse_mode="HTML")
 
     # Сообщение получателю
     try:
-        await cq.bot.send_photo(
-            p2_id,
-            photo=FSInputFile(f"images/cards/{CARDS[c1_id]['file']}"),
-            caption=(
-                f"🎉 <b>Обмен успешно завершён!</b>\n\n"
-                f"<blockquote>🎴 <b>Новая карта:</b> {CARDS[c1_id]['name']}</blockquote>\n"
-                f"Сделка с <a href='tg://user?id={sender_id}'>{n1}</a> прошла успешно 🤝"
-            ),
-            parse_mode="HTML"
-        )
+        photo_p2 = f"images/cards/{CARDS[c1_id]['file']}"
+        if os.path.exists(photo_p2):
+            await cq.bot.send_photo(
+                p2_id,
+                photo=FSInputFile(photo_p2),
+                caption=(f"🎉 <b>Обмен успешно завершён!</b>\n\n{msg2}\nСделка с <a href='tg://user?id={sender_id}'>{n1}</a> прошла успешно 🤝"),
+                parse_mode="HTML"
+            )
+        else:
+            await cq.bot.send_message(p2_id, f"🎉 <b>Обмен успешно завершён!</b>\n\n{msg2}\nСделка с <a href='tg://user?id={sender_id}'>{n1}</a> прошла успешно 🤝", parse_mode="HTML")
     except:
         pass
+
 
 @router.callback_query(F.data.startswith("trade_decline:"))
 async def trade_decline(cq: CallbackQuery):
