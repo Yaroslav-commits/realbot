@@ -3121,8 +3121,10 @@ async def stash_do_put_cb(cq: CallbackQuery):
 
     c = CARDS.get(cid, {})
     await cq.answer(f"📦 {c.get('name', cid)} → в Сундук", show_alert=False)
-    cq.data = f"stash_put:{page}:{source}"
-    await stash_put_cb(cq)
+
+    # 🔧 ИСПРАВЛЕНИЕ: Создаем копию объекта с новой датой
+    new_cq = cq.model_copy(update={"data": f"stash_put:{page}:{source}"})
+    await stash_put_cb(new_cq)
 
 
 @router.callback_query(F.data.startswith("stash_take:"))
@@ -3207,7 +3209,10 @@ async def stash_do_take_cb(cq: CallbackQuery):
     ok = unstash_card(uid, cid)
     if not ok:
         return await cq.answer("Карты нет в сундуке.", show_alert=True)
+
     c = CARDS.get(cid, {})
     await cq.answer(f"📤 {c.get('name', cid)} → в инвентарь", show_alert=False)
-    cq.data = f"stash_take:{page}:{source}"
-    await stash_take_cb(cq)
+
+    # 🔧 ИСПРАВЛЕНИЕ: Создаем копию объекта с новой датой
+    new_cq = cq.model_copy(update={"data": f"stash_take:{page}:{source}"})
+    await stash_take_cb(new_cq)
