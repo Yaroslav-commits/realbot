@@ -671,7 +671,7 @@ async def trade_method_link(cq: CallbackQuery):
     b64_payload = base64.urlsafe_b64encode(raw_payload.encode()).decode().rstrip("=")
     trade_link = f"https://t.me/{bot_info.username}?start={b64_payload}"
 
-    share_text = f"Привет! Давай меняться! Я предлагаю карту {c['name']} ({c['rarity']}) в боте. Переходи по ссылке и делай свое предложение!"
+    share_text = f"Давай меняться! Я предлагаю карту {c['name']} ({c['rarity']}) в боте.\n\n Переходи по ссылке и делай свое предложение!"
     share_url = f"https://t.me/share/url?url={trade_link}&text={quote(share_text)}"
 
     bld = InlineKeyboardBuilder()
