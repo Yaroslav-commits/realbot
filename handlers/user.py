@@ -2405,16 +2405,32 @@ async def use_promo(msg: types.Message):
         c = CARDS.get(p[1])
         if not c:
             return await msg.answer("✅ Промокод активирован, но карта не найдена!")
+
+        # Получаем данные о том, новая это карта или повторка
         is_new, krw_earned, card_data = give_card_to_user(uid, p[1])
-        txt = (f"✅ Промокод активирован!\n\n"
-               f"🃏 Получена новая боевая карта!\n\n"
-               f"🎴 Персонаж: {c['name']}\n"
-               f"🔮 Редкость: {c['rarity']}\n"
-               f"👊 Стиль боя: {c['style']}\n"
-               f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
-               f"⚡️ Скорость: {c['speed']}\n"
-               f"💪 Сила: {c['strength']}\n"
-               f"🧠 Интеллект: {c['intellect']}")
+
+        # Формируем текст в зависимости от того, есть ли уже карта
+        if is_new:
+            txt = (f"✅ <b>Промокод активирован!</b>\n\n"
+                   f"🃏 <b>Получена новая боевая карта!</b>\n\n"
+                   f"<b>🎴 Персонаж:</b> {c['name']}\n"
+                   f"<b>🔮 Редкость:</b> {c['rarity']}\n"
+                   f"<b>👊 Стиль боя:</b> {c['style']}\n"
+                   f"<b>🪐 Вселенная:</b> {c.get('series', 'Неизвестно')}\n\n"
+                   f"<b>⚡️ Скорость:</b> {c['speed']}\n"
+                   f"<b>💪 Сила:</b> {c['strength']}\n"
+                   f"<b>🧠 Интеллект:</b> {c['intellect']}")
+        else:
+            txt = (f"✅ <b>Промокод активирован!</b>\n\n"
+                   f"🛑 <b>Вам попалась повторная карта! Вы получаете {krw_earned} 💴 KRW</b>\n\n"
+                   f"<b>🎴 Персонаж:</b> {c['name']}\n"
+                   f"<b>🔮 Редкость:</b> {c['rarity']}\n"
+                   f"<b>👊 Стиль боя:</b> {c['style']}\n"
+                   f"<b>🪐 Вселенная:</b> {c.get('series', 'Неизвестно')}\n\n"
+                   f"<b>⚡️ Скорость:</b> {c['speed']}\n"
+                   f"<b>💪 Сила:</b> {c['strength']}\n"
+                   f"<b>🧠 Интеллект:</b> {c['intellect']}")
+
         try:
             if "Божественная" in c.get("rarity", "") and c.get("video"):
                 await send_cached_video(
@@ -2424,12 +2440,17 @@ async def use_promo(msg: types.Message):
                     caption=txt,
                     width=c.get("width", 960),
                     height=c.get("height", 1280),
-                    supports_streaming=True
+                    supports_streaming=True,
+                    parse_mode="HTML"
                 )
             else:
-                await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt)
+                await msg.answer_photo(
+                    photo=FSInputFile(f"images/cards/{c['file']}"),
+                    caption=txt,
+                    parse_mode="HTML"
+                )
         except Exception:
-            await msg.answer(txt)
+            await msg.answer(txt, parse_mode="HTML")
 
 @router.message(Command("update_refs"))
 async def update_refs_cmd(msg: types.Message):
