@@ -681,7 +681,7 @@ def get_referral(user_id: int = Depends(authed_user_id)):
         pass
     # Подстраховка для старых записей без сохранённой награды: минимум 5 круток на реферала
     if count and earned_attempts == 0:
-        earned_attempts = count * 5
+        earned_attempts = count * 3
 
     return {
         "count": count,
@@ -689,8 +689,8 @@ def get_referral(user_id: int = Depends(authed_user_id)):
         "bot_username": BOT_USERNAME,
         "earned_krw": earned_krw,
         "earned_attempts": earned_attempts,
-        "reward_krw_min": 500,
-        "reward_krw_max": 850,
+        "reward_krw_min": 300,
+        "reward_krw_max": 550,
         "reward_attempts": 5,
     }
 
