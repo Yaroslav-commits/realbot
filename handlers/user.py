@@ -102,7 +102,7 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         try:
             await msg.bot.send_message(
                 referred_by,
-                f"🤝 По твоей ссылке зашёл новый игрок!\nТебе начислено: <b>{reward_amount}💴</b> и <b>5💳</b>"
+                f"🤝 По твоей ссылке зашёл новый игрок!\nТебе начислено: <b>{reward_amount}💴</b> и <b>3💳</b>"
             )
         except Exception:
             pass
@@ -861,7 +861,7 @@ async def referral_system_cq(cq: CallbackQuery, bot: Bot):
     txt = (
         f"👥 <b>Всего приглашённых:</b> {ref_count}\n\n"
         f"Приглашай друзей! За каждого игрока, перешедшего по твоей ссылке, "
-        f"<b>ты и твой друг</b> получите от 500💴 до 850💴 и 5💳 попыток бонусом!\n\n"
+        f"<b>ты и твой друг</b> получите от 300💴 до 550💴 и 3💳 попыток бонусом!\n\n"
         f"⛓️‍💥 <b>Твоя уникальная реферальная ссылка:</b>\n"
         f"<code>{ref_link}</code>"
     )
@@ -1752,30 +1752,68 @@ async def cmd_stats(msg: types.Message):
     if msg.from_user.id not in ADMIN_IDS:
         return
 
-    # Собираем данные
-    total_users = db_exec("SELECT COUNT(*) FROM users", fetch=True)[0]
-    # Считаем активных (тех, кто крутил карты хотя бы раз за последние 7 дней)
-    active_users_7d = db_exec("SELECT COUNT(*) FROM users WHERE last_get >= datetime('now', '-7 days')", fetch=True)[0]
-    total_cards = db_exec("SELECT COUNT(*) FROM cards_inv", fetch=True)[0]
-    total_bgs = db_exec("SELECT COUNT(*) FROM bgs_inv", fetch=True)[0]
+    now_msk = datetime.now(timezone(timedelta(hours=3)))
+    current_ym = int(now_msk.strftime("%Y%m"))
 
-    # Экономика (COALESCE/IFNULL не дадут вернуть None, если база пустая)
-    total_krw = db_exec("SELECT SUM(krw) FROM users", fetch=True)[0] or 0
-    total_dia = db_exec("SELECT SUM(diamond) FROM users", fetch=True)[0] or 0
+    # === АУДИТОРИЯ ===
+    total_users = db_exec("SELECT COUNT(*) FROM users", fetch=True)[0]
+    active_users_7d = db_exec("SELECT COUNT(*) FROM users WHERE last_get >= datetime('now', '-7 days')", fetch=True)[0]
+    premium_users = \
+    db_exec("SELECT COUNT(*) FROM users WHERE premium_until IS NOT NULL AND premium_until > datetime('now')",
+            fetch=True)[0]
+    pass_users = db_exec("SELECT COUNT(*) FROM users WHERE royale_pass = ?", (current_ym,), fetch=True)[0]
+
+    # === ИГРОВЫЕ ПРЕДМЕТЫ И ПРОЦЕСС ===
+    total_cards_inv = db_exec("SELECT COUNT(*) FROM cards_inv", fetch=True)[0]
+    total_cards_stash = db_exec("SELECT COUNT(*) FROM cards_stash", fetch=True)[0]
+    total_cards = total_cards_inv + total_cards_stash
+    total_bgs = db_exec("SELECT COUNT(*) FROM bgs_inv", fetch=True)[0]
+    total_titles = db_exec("SELECT COUNT(*) FROM titles_inv", fetch=True)[0]
+
     total_battles = db_exec("SELECT SUM(wins + draws + losses) FROM users", fetch=True)[0] or 0
 
+    # Считаем успешные трейды из логов карт
+    try:
+        total_trades = db_exec("SELECT COUNT(*) FROM card_logs WHERE action = 'TRADE'", fetch=True)[0] or 0
+    except Exception:
+        total_trades = 0
+
+    # === ЭКОНОМИКА ===
+    total_krw = db_exec("SELECT SUM(krw) FROM users", fetch=True)[0] or 0
+    total_dia = db_exec("SELECT SUM(diamond) FROM users", fetch=True)[0] or 0
+    total_bc = db_exec("SELECT SUM(battlecoin) FROM users", fetch=True)[0] or 0
+    total_attempts = db_exec("SELECT SUM(attempts) FROM users", fetch=True)[0] or 0
+
+    # === ИВЕНТ ===
+    try:
+        event_res = db_exec("SELECT SUM(cocktail), SUM(icecream), SUM(dango) FROM event_items", fetch=True)
+        ev_cocktail = event_res[0] if event_res and event_res[0] else 0
+        ev_icecream = event_res[1] if event_res and event_res[1] else 0
+        ev_dango = event_res[2] if event_res and event_res[2] else 0
+        total_event = ev_cocktail + ev_icecream + ev_dango
+    except Exception:
+        ev_cocktail, ev_icecream, ev_dango, total_event = 0, 0, 0, 0
+
     text = (
-        "📊 <b>Статистика бота:</b>\n\n"
-        f"👥 <b>Пользователи:</b>\n"
+        "📊 <b>Расширенная статистика бота:</b>\n\n"
+        f"👥 <b>Аудитория:</b>\n"
         f"├ Всего юзеров: <b>{total_users}</b>\n"
-        f"└ Активные (7 дней): <b>{active_users_7d}</b>\n\n"
+        f"├ Активные (7 дней): <b>{active_users_7d}</b>\n"
+        f"├ Premium 👑: <b>{premium_users}</b>\n"
+        f"└ Royale Pass 🌠: <b>{pass_users}</b>\n\n"
         f"🎴 <b>Игровой процесс:</b>\n"
-        f"├ Карт на руках: <b>{total_cards}</b>\n"
+        f"├ Карт на руках (Инв / Сундук): <b>{total_cards_inv} / {total_cards_stash}</b> (Всего: <b>{total_cards}</b>)\n"
         f"├ Выдано фонов: <b>{total_bgs}</b>\n"
-        f"└ Сыграно боёв: <b>{total_battles}</b>\n\n"
+        f"├ Выдано титулов: <b>{total_titles}</b>\n"
+        f"├ Сыграно боёв: <b>{total_battles}</b> ⚔️\n"
+        f"└ Проведено обменов: <b>{total_trades}</b> 🤝\n\n"
         f"💰 <b>Экономика (в обороте):</b>\n"
         f"├ KRW: <b>{total_krw}</b> 💴\n"
-        f"└ Diamond: <b>{total_dia}</b> 💎"
+        f"├ Diamond: <b>{total_dia}</b> 💎\n"
+        f"├ BattleCoin: <b>{total_bc}</b> 🪙\n"
+        f"└ Неиспользованных попыток (круток): <b>{total_attempts}</b> 💳\n\n"
+        f"🪎 <b>Летний Ивент (Ресурсы на руках):</b>\n"
+        f"└ Всего: <b>{total_event}</b> (🍹 {ev_cocktail} | 🍨 {ev_icecream} | 🍡 {ev_dango})"
     )
     await msg.answer(text, parse_mode="HTML")
 
@@ -1932,7 +1970,7 @@ async def cmd_restore_pass_days(msg: types.Message, bot: Bot):
     await msg.answer(res_txt, parse_mode="HTML")
 
 @router.message(
-    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "delete_diamond", "give_pass", "give_prem", "create_promo", "restore_pass_day"]))
+    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "delete_diamond", "give_pass", "give_prem", "create_promo", "restore_pass_day", "qdelete_diamond"]))
 async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if msg.from_user.id not in ADMIN_IDS: return
     args = msg.text.split()
@@ -1961,7 +1999,7 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         uid = int(args[1])
         summary = grant_retroactive_royale_pass(uid)
         try:
-            await bot.send_message(uid, f"🌠 Получен Рояль Пасс на этот месяц от администратора ✅{summary}")
+            await bot.send_message(uid, f"🌠 Получен Рояль Пасс на этот месяц ✅{summary}")
         except Exception:
             pass
         return await msg.answer(f"✅ Рояль Пасс выдан пользователю {uid}!")  # ← вынести из except
@@ -2056,7 +2094,7 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if cmd == "/give_attempts":
         db_exec("UPDATE users SET attempts = attempts + ? WHERE id = ?", (int(val), uid))
         try:
-            await bot.send_message(uid, f"Получено {val}💳 попыток от администратора ✅")
+            await bot.send_message(uid, f"Вам начислено {val}💳 попыток")
         except Exception:
             pass
         await msg.answer(f"✅ Выдано пользователю {uid}!")
@@ -2064,7 +2102,7 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     elif cmd == "/give_money":
         db_exec("UPDATE users SET krw = krw + ? WHERE id = ?", (int(val), uid))
         try:
-            await bot.send_message(uid, f"Получено {val}💴 от администратора ✅")
+            await bot.send_message(uid, f"Вам начислено {val}💴 KRW")
         except Exception:
             pass
         await msg.answer(f"✅ Выдано пользователю {uid}!")
@@ -2076,7 +2114,7 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
 
         try:
 
-            await bot.send_message(uid, f"Получено {val}💎 Алмазов от администратора ✅")
+            await bot.send_message(uid, f"Вам начислено {val}💎 Алмазов")
 
         except Exception:
 
@@ -2084,6 +2122,12 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
 
         await msg.answer(f"✅ Выдано пользователю {uid}!")
 
+    elif cmd == "/qdelete_diamond":
+        # Списываем алмазы, не давая уйти в минус (MAX(0, ...)), без уведомления юзеру
+        db_exec("UPDATE users SET diamond = MAX(0, diamond - ?) WHERE id = ?", (int(val), uid))
+
+        # Только отчет тебе в админку
+        await msg.answer(f"🥷 Тихо списано {val}💎 у пользователя {uid}!")
 
     elif cmd == "/delete_diamond":
 

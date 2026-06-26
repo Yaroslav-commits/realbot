@@ -313,7 +313,7 @@ def generate_unique_ref_code():
 
 
 def process_referral(referrer_id, referred_id):
-    """Выдаёт награду ОБОИМ игрокам (500-850 KRW и 5 попыток)."""
+    """Выдаёт награду ОБОИМ игрокам (300-550 KRW и 3 попытки)."""
     import random
     # Проверяем, не был ли игрок уже приглашен
     existing = db_exec("SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,), fetch=True)
@@ -322,19 +322,19 @@ def process_referral(referrer_id, referred_id):
 
     try:
         # Генерируем награду
-        krw_reward = random.randint(500, 850)
+        krw_reward = random.randint(300, 529)
 
         # Записываем связь (сразу с суммой награды — для показа в WebApp)
         db_exec(
             "INSERT INTO referrals (referrer_id, referred_id, rewarded, reward_krw, reward_attempts) VALUES (?, ?, 1, ?, ?)",
-            (referrer_id, referred_id, krw_reward, 5)
+            (referrer_id, referred_id, krw_reward, 3)
         )
 
         # Начисляем награду НОВОМУ игроку
-        db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referred_id))
+        db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 3 WHERE id = ?", (krw_reward, referred_id))
 
         # Начисляем награду ВЛАДЕЛЬЦУ ССЫЛКИ (исправлено)
-        db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 5 WHERE id = ?", (krw_reward, referrer_id))
+        db_exec("UPDATE users SET krw = krw + ?, attempts = attempts + 3 WHERE id = ?", (krw_reward, referrer_id))
 
         return krw_reward
     except Exception as e:
