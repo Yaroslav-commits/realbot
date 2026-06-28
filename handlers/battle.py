@@ -1815,10 +1815,14 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         return await cq.answer("⏳ Транзакция в обработке, не спамьте...", show_alert=False)
 
     async with lock:
-        now = datetime.now()
-        week_num = now.isocalendar()[1]
+        # Устанавливаем московское время и сдвигаем на 1 час для синхронизации
+        msk_tz = timezone(timedelta(hours=3))
+        now_msk = datetime.now(msk_tz)
+        adjusted_time = now_msk - timedelta(hours=1)
+        week_num = adjusted_time.isocalendar()[1]
 
-        res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num), fetch=True)
+        res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?",
+                      (uid, week_num), fetch=True)
         bought = res[0] if res else 0
 
         if bought >= 5:
