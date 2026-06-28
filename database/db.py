@@ -487,8 +487,9 @@ def _card_pull_weight(card: dict) -> float:
         weight = 0.02
     return weight
 
-def pull_random_card(force_rarity=None, premium=False):
+def pull_random_card(uid=None, force_rarity=None, premium=False):
     """Возвращает ключ случайной карты или None, если пул пуст.
+    Если передан uid — проверяет наличие персональных шансов.
     Если premium=True — используется PREMIUM_RARITIES.
     Внутри редкости карты с 100/99/90 в статах падают реже (взвешенный выбор)."""
     try:
@@ -496,7 +497,30 @@ def pull_random_card(force_rarity=None, premium=False):
             pool = [(k, v) for k, v in CARDS.items()
                     if v.get('rarity') == force_rarity and not v.get('exclusive')]
         else:
-            rarities_dict = PREMIUM_RARITIES if premium else RARITIES
+            rarities_dict = None
+
+            # Если передали ID игрока, проверяем его персональные шансы
+            if uid:
+                try:
+                    custom = db_exec(
+                        "SELECT common, rare, epic, leg, myth, div FROM custom_user_rarities WHERE user_id = ?", (uid,),
+                        fetch=True)
+                    if custom:
+                        rarities_dict = {
+                            "Обычная ⚪️": {"chance": custom[0]},
+                            "Редкая 🟡": {"chance": custom[1]},
+                            "Эпическая 🟢": {"chance": custom[2]},
+                            "Легендарная 🔵": {"chance": custom[3]},
+                            "Мифическая 🔴": {"chance": custom[4]},
+                            "Божественная ⚫️": {"chance": custom[5]}
+                        }
+                except Exception:
+                    pass  # Если таблицы нет или ошибка — идём дальше по стандарту
+
+            # Если кастомных шансов нет, берем стандартные
+            if not rarities_dict:
+                rarities_dict = PREMIUM_RARITIES if premium else RARITIES
+
             total = sum(d.get('chance', 0) for d in rarities_dict.values())
             roll = random.uniform(0, total)
             cum = 0
@@ -517,7 +541,8 @@ def pull_random_card(force_rarity=None, premium=False):
         keys = [k for k, _ in pool]
         weights = [_card_pull_weight(v) for _, v in pool]
         return random.choices(keys, weights=weights, k=1)[0]
-    except Exception:
+    except Exception as e:
+        print(f"Ошибка в pull_random_card: {e}")
         return None
 
 # ===== СУНДУК (ОТЛОЖЕННЫЕ КАРТЫ) =====

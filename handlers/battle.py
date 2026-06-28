@@ -765,7 +765,23 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
     title_line1 = f"· Титул: {title1_str}\n" if title1_str else ""
 
     if p2 == -1:
-        deck2 = random.choices(list(CARDS.keys()), k=6)
+        # --- ИСПРАВЛЕНИЕ: БОТ ИСПОЛЬЗУЕТ КОЛОДЫ РЕАЛЬНЫХ ИГРОКОВ ---
+        # Ищем всех пользователей, у которых в колоде ровно 6 карт
+        valid_users = db_exec("SELECT user_id FROM decks GROUP BY user_id HAVING COUNT(card_id) = 6", fetchall=True)
+        valid_uids = [u[0] for u in valid_users]
+
+        if valid_uids:
+            # Стараемся не давать боту колоду самого игрока, если есть другие варианты
+            if p1 in valid_uids and len(valid_uids) > 1:
+                valid_uids.remove(p1)
+
+            chosen_uid = random.choice(valid_uids)
+            deck2 = [c[0] for c in db_exec("SELECT card_id FROM decks WHERE user_id = ?", (chosen_uid,), fetchall=True)]
+        else:
+            # Фоллбек: если в базе вообще нет собранных колод, генерируем случайную (без дубликатов)
+            all_cards = list(CARDS.keys())
+            deck2 = random.sample(all_cards, k=min(6, len(all_cards)))
+
         name2 = random.choice([
             "Важни Гий", "Ли Джи Ху..", "Йена пик форма", "Злодей Васко",
             "Великий Мага", "Босс Табаско", "Брад", "Клон Хикса", "Король Бибизян",
@@ -942,7 +958,6 @@ async def process_card_choice(gid, uid, card, bot):
                 reply_markup=bld.as_markup(),
                 supports_streaming=True
             )
-            # Уведомление противнику убрано ради честной игры!
         else:
             msg = await bot.send_photo(
                 uid,
@@ -975,6 +990,21 @@ async def process_card_choice(gid, uid, card, bot):
                     await resolve_round(gid, bot)
                 except Exception as e:
                     logging.error(f"resolve_round failed (bot path): {e}")
+                    # --- ИСПРАВЛЕНИЕ: Добавлен фоллбек (спасение от зависания) ---
+                    if gid in GAMES:
+                        GAMES[gid]['round'] += 1
+                        GAMES[gid]['p1_c'] = GAMES[gid]['p2_c'] = GAMES[gid]['p1_s'] = GAMES[gid]['p2_s'] = None
+                        try:
+                            await bot.send_message(GAMES[gid]['p1'],
+                                                   "⚠️ Возникла ошибка сервера в прошлом раунде, раунд пропущен.")
+                        except:
+                            pass
+
+                        if GAMES[gid]['round'] > 5:
+                            await finish_game(gid, bot)
+                        else:
+                            await send_card_choice(GAMES[gid]['p1'], GAMES[gid]['d1'], gid, bot)
+
                 if gid in GAMES: GAMES[gid]['resolving'] = False
 
 
@@ -1732,8 +1762,11 @@ GIVE_TOP_20_CARD = False
 @router.callback_query(F.data == "b_shop_pack")
 async def b_shop_pack_cb(cq: CallbackQuery):
     uid = cq.from_user.id
-    now = datetime.now()
-    week_num = now.isocalendar()[1]
+    msk_tz = timezone(timedelta(hours=3))
+    now_msk = datetime.now(msk_tz)
+    # Сдвигаем время на 1 час назад, чтобы неделя сменялась ровно в 01:00 по МСК
+    adjusted_time = now_msk - timedelta(hours=1)
+    week_num = adjusted_time.isocalendar()[1]
 
     res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num), fetch=True)
     bought = res[0] if res else 0
@@ -1775,139 +1808,141 @@ async def b_shop_pack_cb(cq: CallbackQuery):
 @router.callback_query(F.data == "b_shop_pack_buy")
 async def b_shop_pack_buy_cb(cq: CallbackQuery):
     uid = cq.from_user.id
-    now = datetime.now()
-    week_num = now.isocalendar()[1]
+    lock = _get_shop_lock(uid)
 
-    res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num),
-                  fetch=True)
-    bought = res[0] if res else 0
+    # Если уже идет покупка - отбиваем спам
+    if lock.locked():
+        return await cq.answer("⏳ Транзакция в обработке, не спамьте...", show_alert=False)
 
-    if bought >= 5:
-        return await cq.answer("На этой неделе вы уже скупили все паки!", show_alert=True)
+    async with lock:
+        now = datetime.now()
+        week_num = now.isocalendar()[1]
 
-    u = get_user(uid)
-    if u[5] < 400:
-        return await cq.answer("❌ Недостаточно BattleCoin! Нужно: 400 🪙", show_alert=True)
+        res = db_exec("SELECT bought_count FROM battle_shop_packs WHERE user_id = ? AND week_number = ?", (uid, week_num), fetch=True)
+        bought = res[0] if res else 0
 
-    # Списание валюты и обновление счетчика
-    db_exec("UPDATE users SET battlecoin = battlecoin - 400 WHERE id = ?", (uid,))
-    bought += 1
-    if res:
-        db_exec("UPDATE battle_shop_packs SET bought_count = ? WHERE user_id = ? AND week_number = ?",
-                (bought, uid, week_num))
-    else:
-        db_exec("INSERT INTO battle_shop_packs (user_id, week_number, bought_count) VALUES (?, ?, ?)",
-                (uid, week_num, bought))
+        if bought >= 5:
+            return await cq.answer("На этой неделе вы уже скупили все паки!", show_alert=True)
 
-    # Логика шансов
-    rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
-    weights = [1.5, 5, 3.6, 3.4, 6.5, 79]
-    result = random.choices(rewards, weights=weights, k=1)[0]
+        u = get_user(uid)
+        if u[5] < 400:
+            return await cq.answer("❌ Недостаточно BattleCoin! Нужно: 400 🪙", show_alert=True)
 
-    reward_text = ""
-    card_c = None
-
-    # БЕЗОПАСНАЯ ОБРАБОТКА (защита от NoneType)
-    if result == "card_main":
-        is_new, krw, card_c = give_card_to_user(uid, PACK_CARD)
-        if card_c:
-            reward_text = format_card_msg(card_c, is_new, krw)
+        # Списание валюты и обновление счетчика
+        db_exec("UPDATE users SET battlecoin = battlecoin - 400 WHERE id = ?", (uid,))
+        bought += 1
+        if res:
+            db_exec("UPDATE battle_shop_packs SET bought_count = ? WHERE user_id = ? AND week_number = ?", (bought, uid, week_num))
         else:
-            reward_text = "🎁 <b>Главная карта временно недоступна!</b>\nВам начислена компенсация: 10000 💴"
-            db_exec("UPDATE users SET krw = krw + 10000 WHERE id = ?", (uid,))
-    elif result == "bg_yamazaki":
-        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG1))
-        bg_key = PACK_BG1
-        bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
-        if bg_data:
-            bg_name = bg_data.get('name', 'Новый фон')
-            reward_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
-        else:
-            reward_text = f"🌄 Получен новый фон: <b>Санни</b>!"
-    elif result == "bg_jaehwan":
-        db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG2))
-        bg_key = PACK_BG2
-        bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
-        if bg_data:
-            bg_name = bg_data.get('name', 'Новый фон')
-            reward_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
-        else:
-            reward_text = f"🌄 Получен новый фон: <b>Теневой раб</b>!"
-    elif result == "title":
-        exists = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?", (uid, PACK_TITLE), fetch=True)
-        if exists:
-            reward_text = f"🔱 Вам выпал титул: <b>Лишенный света 🕯️</b>, но, к сожалению, он у вас уже есть!"
-        else:
-            db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, PACK_TITLE))
-            reward_text = f"🔱 Получен новый титул: <b>Лишенный света 🕯️</b>!"
-    elif result == "mythic":
-        card_key = pull_random_card(force_rarity="Мифическая 🔴")
-        is_new, krw, card_c = give_card_to_user(uid, card_key)
-        if card_c:
-            reward_text = format_card_msg(card_c, is_new, krw)
-        else:
-            reward_text = "🎁 <b>СБОЙ Мифическая карта не найдена в пуле!</b>\nВам начислена компенсация: 700 💴"
-            db_exec("UPDATE users SET krw = krw + 700 WHERE id = ?", (uid,))
-    else:  # legendary
-        card_key = pull_random_card(force_rarity="Легендарная 🔵")
-        is_new, krw, card_c = give_card_to_user(uid, card_key)
-        if card_c:
-            reward_text = format_card_msg(card_c, is_new, krw)
-        else:
-            reward_text = "🎁 <b>СБОЙ Легендарная карта не найдена в пуле!</b>\nВам начислена компенсация: 300 💴"
-            db_exec("UPDATE users SET krw = krw + 300 WHERE id = ?", (uid,))
+            db_exec("INSERT INTO battle_shop_packs (user_id, week_number, bought_count) VALUES (?, ?, ?)", (uid, week_num, bought))
 
-    # КЛАВИАТУРА ДЛЯ ПОВТОРНОГО ОТКРЫТИЯ (избавляет от спама меню)
-    bld = InlineKeyboardBuilder()
-    if bought < 5:
-        bld.button(text=f"Купить еще 💵 ({5 - bought}/5)", callback_data="b_shop_pack_buy")
-    bld.button(text="Назад к пакам 🔙", callback_data="b_shop_pack")
-    bld.adjust(1)
+        # Логика шансов
+        rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
+        weights = [1.5, 5, 3.6, 3.4, 6.5, 79]
+        result = random.choices(rewards, weights=weights, k=1)[0]
 
-    # Удаляем старое окно, чтобы новое встало ровно на его место
-    try:
-        await cq.message.delete()
-    except:
-        pass
+        reward_text = ""
+        card_c = None
 
-    # ОТПРАВКА НАГРАДЫ (с сохранением эффекта спойлера)
-    if card_c is not None and card_c.get("file"):
-        try:
-            if "Божественная" in card_c.get("rarity", "") and card_c.get("video"):
-                await send_cached_video(
-                    cq.bot, chat_id=uid, file_path=f"images/cards/{card_c['video']}",
-                    caption=reward_text, width=card_c.get("width", 960), height=card_c.get("height", 1280),
-                    has_spoiler=True, supports_streaming=True, reply_markup=bld.as_markup()
-                )
+        # БЕЗОПАСНАЯ ОБРАБОТКА (защита от NoneType)
+        if result == "card_main":
+            is_new, krw, card_c = give_card_to_user(uid, PACK_CARD)
+            if card_c:
+                reward_text = format_card_msg(card_c, is_new, krw)
             else:
-                await cq.bot.send_photo(
-                    uid, photo=FSInputFile(f"images/cards/{card_c['file']}"),
-                    caption=reward_text, has_spoiler=True, parse_mode="HTML", reply_markup=bld.as_markup()
-                )
-        except Exception:
-            await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
+                reward_text = "🎁 <b>Главная карта временно недоступна!</b>\nВам начислена компенсация: 10000 💴"
+                db_exec("UPDATE users SET krw = krw + 10000 WHERE id = ?", (uid,))
+        elif result == "bg_yamazaki":
+            db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG1))
+            bg_key = PACK_BG1
+            bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
+            if bg_data:
+                bg_name = bg_data.get('name', 'Новый фон')
+                reward_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
+            else:
+                reward_text = f"🌄 Получен новый фон: <b>Санни</b>!"
+        elif result == "bg_jaehwan":
+            db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG2))
+            bg_key = PACK_BG2
+            bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
+            if bg_data:
+                bg_name = bg_data.get('name', 'Новый фон')
+                reward_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
+            else:
+                reward_text = f"🌄 Получен новый фон: <b>Теневой раб</b>!"
+        elif result == "title":
+            exists = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?", (uid, PACK_TITLE), fetch=True)
+            if exists:
+                reward_text = f"🔱 Вам выпал титул: <b>Лишенный света 🕯️</b>, но, к сожалению, он у вас уже есть!"
+            else:
+                db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, PACK_TITLE))
+                reward_text = f"🔱 Получен новый титул: <b>Лишенный света 🕯️</b>!"
+        elif result == "mythic":
+            card_key = pull_random_card(force_rarity="Мифическая 🔴")
+            is_new, krw, card_c = give_card_to_user(uid, card_key)
+            if card_c:
+                reward_text = format_card_msg(card_c, is_new, krw)
+            else:
+                reward_text = "🎁 <b>СБОЙ Мифическая карта не найдена в пуле!</b>\nВам начислена компенсация: 700 💴"
+                db_exec("UPDATE users SET krw = krw + 700 WHERE id = ?", (uid,))
+        else:  # legendary
+            card_key = pull_random_card(force_rarity="Легендарная 🔵")
+            is_new, krw, card_c = give_card_to_user(uid, card_key)
+            if card_c:
+                reward_text = format_card_msg(card_c, is_new, krw)
+            else:
+                reward_text = "🎁 <b>СБОЙ Легендарная карта не найдена в пуле!</b>\nВам начислена компенсация: 300 💴"
+                db_exec("UPDATE users SET krw = krw + 300 WHERE id = ?", (uid,))
 
-    elif result in ["bg_yamazaki", "bg_jaehwan"]:
-        bg_key = PACK_BG1 if result == "bg_yamazaki" else PACK_BG2
-        bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
-        if bg_data:
-            file_path = f"images/backgrounds/{bg_data.get('file')}"
+        # КЛАВИАТУРА ДЛЯ ПОВТОРНОГО ОТКРЫТИЯ
+        bld = InlineKeyboardBuilder()
+        if bought < 5:
+            bld.button(text=f"Купить еще 💵 ({5 - bought}/5)", callback_data="b_shop_pack_buy")
+        bld.button(text="Назад к пакам 🔙", callback_data="b_shop_pack")
+        bld.adjust(1)
+
+        try:
+            await cq.message.delete()
+        except:
+            pass
+
+        # ОТПРАВКА НАГРАДЫ
+        if card_c is not None and card_c.get("file"):
             try:
-                if bg_key in VIDEO_BGS:
+                if "Божественная" in card_c.get("rarity", "") and card_c.get("video"):
                     await send_cached_video(
-                        cq.bot, chat_id=uid, file_path=file_path,
-                        caption=reward_text, parse_mode="HTML", supports_streaming=True,
-                        width=bg_data.get('width'), height=bg_data.get('height'), reply_markup=bld.as_markup()
+                        cq.bot, chat_id=uid, file_path=f"images/cards/{card_c['video']}",
+                        caption=reward_text, width=card_c.get("width", 960), height=card_c.get("height", 1280),
+                        has_spoiler=True, supports_streaming=True, reply_markup=bld.as_markup()
                     )
                 else:
-                    await cq.bot.send_photo(uid, photo=FSInputFile(file_path), caption=reward_text, parse_mode="HTML",
-                                            reply_markup=bld.as_markup())
+                    await cq.bot.send_photo(
+                        uid, photo=FSInputFile(f"images/cards/{card_c['file']}"),
+                        caption=reward_text, has_spoiler=True, parse_mode="HTML", reply_markup=bld.as_markup()
+                    )
             except Exception:
+                await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
+
+        elif result in ["bg_yamazaki", "bg_jaehwan"]:
+            bg_key = PACK_BG1 if result == "bg_yamazaki" else PACK_BG2
+            bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
+            if bg_data:
+                file_path = f"images/backgrounds/{bg_data.get('file')}"
+                try:
+                    if bg_key in VIDEO_BGS:
+                        await send_cached_video(
+                            cq.bot, chat_id=uid, file_path=file_path,
+                            caption=reward_text, parse_mode="HTML", supports_streaming=True,
+                            width=bg_data.get('width'), height=bg_data.get('height'), reply_markup=bld.as_markup()
+                        )
+                    else:
+                        await cq.bot.send_photo(uid, photo=FSInputFile(file_path), caption=reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
+                except Exception:
+                    await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
+            else:
                 await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
         else:
             await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
-    else:
-        await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
 
     await cq.answer()
     # Заметь: мы БОЛЬШЕ НЕ вызываем b_shop_pack_cb(cq) в конце, поэтому меню не будет дублироваться!
@@ -1951,6 +1986,44 @@ async def b_shop_spins_cb(cq: CallbackQuery):
             pass
     await cq.answer()
 
+
+async def auto_pack_reset_notifier(bot: Bot):
+    """Фоновая задача для сброса лимита паков и уведомления игроков в понедельник в 01:00 МСК"""
+    msk_tz = timezone(timedelta(hours=3))
+
+    while True:
+        now_msk = datetime.now(msk_tz)
+
+        # Проверяем: Понедельник (weekday == 0) ровно в 01:00
+        if now_msk.weekday() == 0 and now_msk.hour == 1 and now_msk.minute == 0:
+
+            # Получаем номер завершившейся недели
+            last_week = (now_msk - timedelta(hours=2)).isocalendar()[1]
+
+            # Ищем всех, кто скупал паки на прошлой неделе (чтобы не спамить "мертвым" аккаунтам)
+            users_to_notify = db_exec("SELECT DISTINCT user_id FROM battle_shop_packs WHERE week_number = ?",
+                                      (last_week,), fetchall=True)
+
+            if users_to_notify:
+                logging.info(f"Начинаем рассылку об обновлении паков для {len(users_to_notify)} игроков.")
+
+            for (uid,) in users_to_notify:
+                try:
+                    await bot.send_message(
+                        uid,
+                        "📦 <b>Лимит паков обновлён!</b>\n\nБоевой пак снова доступен в BattleShop. Заходи и успей выбить эксклюзивные карты и фоны! 🃏",
+                        parse_mode="HTML"
+                    )
+                    # Анти-флуд задержка (лимит Telegram - 30 сообщений в секунду)
+                    await asyncio.sleep(0.05)
+                except Exception:
+                    pass  # Игрок мог заблокировать бота
+
+            # Спим 60 секунд, чтобы цикл не выполнил рассылку дважды за эту же минуту
+            await asyncio.sleep(60)
+
+        # Проверяем совпадение времени каждую минуту
+        await asyncio.sleep(60)
 
 @router.callback_query(F.data.startswith("b_spin_buy:"))
 async def b_spin_buy_cb(cq: CallbackQuery):
@@ -2054,6 +2127,14 @@ BET_VALID_CHOICES = {
     "dice": {"even", "odd"},
     "ball": {"goal", "miss"},
 }
+# Замки для защиты транзакций от автокликеров
+SHOP_LOCKS: dict[int, asyncio.Lock] = {}
+
+def _get_shop_lock(uid: int) -> asyncio.Lock:
+    if uid not in SHOP_LOCKS:
+        SHOP_LOCKS[uid] = asyncio.Lock()
+    return SHOP_LOCKS[uid]
+
 BET_PLAY_LOCKS: dict[int, asyncio.Lock] = {}
 
 def _get_bet_lock(uid: int) -> asyncio.Lock:
@@ -2537,18 +2618,47 @@ async def b_craft_do_cb(cq: CallbackQuery):
     if len(filled) < CRAFT_REQUIRED:
         return await cq.answer("❌ Нужно заполнить все 5 слотов!", show_alert=True)
 
+    # --- ИСПРАВЛЕНИЕ: ЖЕСТКАЯ ПРОВЕРКА НАЛИЧИЯ КАРТ (Анти-дюп) ---
+    needed_counts = {}
+    for cid in filled:
+        needed_counts[cid] = needed_counts.get(cid, 0) + 1
+
+    inv_rows = db_exec("SELECT card_id, COUNT(*) FROM cards_inv WHERE user_id = ? GROUP BY card_id", (uid,), fetchall=True)
+    inv_counts = {row[0]: row[1] for row in inv_rows}
+
+    for cid, needed in needed_counts.items():
+        if inv_counts.get(cid, 0) < needed:
+            _clear_craft_slots(uid)
+            return await cq.answer("❌ Ошибка синхронизации! Карт не хватает в инвентаре (вы перенесли их в сундук?). Слоты сброшены.", show_alert=True)
+    # -------------------------------------------------------------
+
     u = get_user(uid)
     if u[5] < CRAFT_COIN_COST:
         return await cq.answer(
             f"❌ Недостаточно BattleCoin! Нужно: {CRAFT_COIN_COST} 🪙", show_alert=True
         )
 
-    # БЕЗОПАСНОЕ СПИСАНИЕ МАТЕРИАЛОВ: удаляем по одному rowid
+        # БЕЗОПАСНОЕ СПИСАНИЕ МАТЕРИАЛОВ: удаляем по одному rowid
     db_exec("UPDATE users SET battlecoin = battlecoin - ? WHERE id = ?", (CRAFT_COIN_COST, uid))
     for cid in filled:
-        row = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (uid, cid), fetch=True)
+        row = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (uid, cid),
+                          fetch=True)
         if row:
             db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row[0],))
+
+            # --- ПРОВЕРКА ОСТАТКОВ (Анти-Фантом) ---
+        l_inv = db_exec("SELECT COUNT(*) FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, cid), fetch=True)
+        l_st = db_exec("SELECT COUNT(*) FROM cards_stash WHERE user_id = ? AND card_id = ?", (uid, cid), fetch=True)
+
+        if (l_inv[0] if l_inv else 0) + (l_st[0] if l_st else 0) == 0:
+            db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (uid, cid))
+            try:
+                db_exec(
+                        "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
+                        (cid, uid))
+            except:
+                pass
+            db_exec("DELETE FROM favorite_cards WHERE user_id = ? AND card_id = ?", (uid, cid))
 
     _clear_craft_slots(uid)
 
@@ -2776,41 +2886,46 @@ async def b_diamond_amount_msg(msg: types.Message, state: FSMContext):
 
     await msg.answer(confirm_txt, reply_markup=bld.as_markup(), parse_mode="HTML")
 
-
 @router.callback_query(F.data == "b_dia_confirm", DiamondExchangeState.entering_amount)
 async def b_dia_confirm_cb(cq: CallbackQuery, state: FSMContext):
-    data   = await state.get_data()
-    amount = data.get("exchange_amount", 0)
-    coins  = data.get("exchange_coins",  0)
-    uid    = cq.from_user.id
+    uid = cq.from_user.id
+    lock = _get_shop_lock(uid)
 
-    u = get_user(uid)
-    if u[3] < amount:
+    if lock.locked():
+        return await cq.answer("⏳ Транзакция в обработке...", show_alert=False)
+
+    async with lock:
+        data   = await state.get_data()
+        amount = data.get("exchange_amount", 0)
+        coins  = data.get("exchange_coins",  0)
+
+        # Снова сверяем баланс прямо внутри блокировки
+        u = get_user(uid)
+        if u[3] < amount:
+            await state.clear()
+            return await cq.answer("❌ Недостаточно алмазов! Возможно, вы уже произвели обмен.", show_alert=True)
+
+        db_exec(
+            "UPDATE users SET diamond = diamond - ?, battlecoin = battlecoin + ? WHERE id = ?",
+            (amount, coins, uid)
+        )
+        db_exec(
+            "INSERT INTO diamond_exchange_log (user_id, diamonds, coins) VALUES (?, ?, ?)",
+            (uid, amount, coins)
+        )
+
         await state.clear()
-        return await cq.answer("❌ Алмазов стало меньше, обмен отменён.", show_alert=True)
+        try:
+            await cq.message.delete()
+        except:
+            pass
 
-    db_exec(
-        "UPDATE users SET diamond = diamond - ?, battlecoin = battlecoin + ? WHERE id = ?",
-        (amount, coins, uid)
-    )
-    db_exec(
-        "INSERT INTO diamond_exchange_log (user_id, diamonds, coins) VALUES (?, ?, ?)",
-        (uid, amount, coins)
-    )
-
-    await state.clear()
-    try:
-        await cq.message.delete()
-    except:
-        pass
-
-    await cq.bot.send_message(
-        uid,
-        f"✅ <b>Обмен выполнен!</b>\n\n💎 -{amount} → 🪙 +{coins}\n\nПриятной игры!",
-        parse_mode="HTML"
-    )
+        await cq.bot.send_message(
+            uid,
+            f"✅ <b>Обмен выполнен!</b>\n\n💎 -{amount} → 🪙 +{coins}\n\nПриятной игры!",
+            parse_mode="HTML"
+        )
     await cq.answer()
-
 
 @router.callback_query(F.data == "b_dia_cancel")
 async def b_dia_cancel_cb(cq: CallbackQuery, state: FSMContext):

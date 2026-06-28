@@ -264,7 +264,7 @@ async def get_card_cmd(msg: types.Message):
                 return await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
 
         # Получаем карту (Premium — повышенный шанс)
-        card_key = pull_random_card(premium=user_is_premium)
+        card_key = pull_random_card(uid=uid, premium=user_is_premium)
         if not card_key:
             return await msg.answer("❌ Ошибка: пул карт пуст или произошла ошибка.")
         is_new, krw, c = give_card_to_user(uid, card_key)
@@ -1694,6 +1694,63 @@ async def cb_card_history_owners(cq: CallbackQuery):
     await cq.answer()
 # ============ АДМИН И ПРОМО ============
 # ============ КОМАНДА РАССЫЛКИ (NOTIFER) ============
+@router.message(Command("set_chances"))
+async def cmd_set_chances(msg: types.Message):
+    # Проверка на админа
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    args = msg.text.split()
+
+    # Если хотим сбросить шансы юзера до стандартных
+    if len(args) == 3 and args[2].lower() == "reset":
+        try:
+            uid = int(args[1])
+            db_exec("DELETE FROM custom_user_rarities WHERE user_id = ?", (uid,))
+            return await msg.answer(f"✅ Персональные шансы для {uid} успешно сброшены на стандартные.")
+        except Exception:
+            return await msg.answer("❌ Ошибка при сбросе. Убедитесь, что ID — число.")
+
+    # Проверка правильности формата
+    if len(args) < 8:
+        return await msg.answer(
+            "❌ <b>Формат:</b> <code>/set_chances [ID] [Обыч] [Редк] [Эпик] [Лег] [Миф] [Бож]</code>\n"
+            "<b>Пример:</b> <code>/set_chances 123456789 50 30 15 4 0.9 0.1</code>\n\n"
+            "🔄 <b>Сбросить на дефолт:</b> <code>/set_chances [ID] reset</code>",
+            parse_mode="HTML"
+        )
+
+    try:
+        uid = int(args[1])
+        # Считываем шансы, заменяем запятые на точки, если админ случайно ввел 0,5 вместо 0.5
+        chances = [float(x.replace(',', '.')) for x in args[2:8]]
+    except ValueError:
+        return await msg.answer("❌ Ошибка: ID и шансы должны быть числами.")
+
+    # Ленивое создание таблицы для кастомных шансов, если её еще нет
+    db_exec('''CREATE TABLE IF NOT EXISTS custom_user_rarities (
+        user_id INTEGER PRIMARY KEY,
+        common REAL, rare REAL, epic REAL, leg REAL, myth REAL, div REAL
+    )''')
+
+    # Записываем или обновляем шансы
+    db_exec('''INSERT INTO custom_user_rarities (user_id, common, rare, epic, leg, myth, div)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+               common=excluded.common, rare=excluded.rare, epic=excluded.epic,
+               leg=excluded.leg, myth=excluded.myth, div=excluded.div''',
+            (uid, chances[0], chances[1], chances[2], chances[3], chances[4], chances[5]))
+
+    await msg.answer(
+        f"✅ Уникальные шансы для <code>{uid}</code> установлены:\n"
+        f"⚪️ Обычная: {chances[0]}%\n"
+        f"🟡 Редкая: {chances[1]}%\n"
+        f"🟢 Эпическая: {chances[2]}%\n"
+        f"🔵 Легендарная: {chances[3]}%\n"
+        f"🔴 Мифическая: {chances[4]}%\n"
+        f"⚫️ Божественная: {chances[5]}%",
+        parse_mode="HTML"
+    )
 
 @router.message(Command("notifer"))
 async def notifier_cmd(msg: types.Message, state: FSMContext):
@@ -1969,8 +2026,7 @@ async def cmd_restore_pass_days(msg: types.Message, bot: Bot):
 
     await msg.answer(res_txt, parse_mode="HTML")
 
-@router.message(
-    Command(commands=["give_attempts", "give_card", "delete_card", "give_money", "give_title", "give_background", "give_diamond", "delete_diamond", "give_pass", "give_prem", "create_promo", "restore_pass_day", "qdelete_diamond"]))
+@router.message(Command(commands=["give_attempts", "give_card", "delete_card", "delete_stash_card", "give_money", "give_title", "give_background", "give_diamond", "delete_diamond", "give_pass", "give_prem", "create_promo", "restore_pass_day", "qdelete_diamond"]))
 async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
     if msg.from_user.id not in ADMIN_IDS: return
     args = msg.text.split()
@@ -2221,26 +2277,123 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
             pass
         await msg.answer(f"✅ Карта «{c['name']}» выдана пользователю {uid}!")
 
+
     elif cmd == "/delete_card":
+
+        if len(args) < 3:
+            return await msg.answer("❌ Использование: /delete_card <id_игрока> <card_id>")
+
+        try:
+
+            uid = int(args[1])
+
+            val = args[2]
+
+        except ValueError:
+
+            return await msg.answer("❌ ID игрока должно быть числом!")
+
+        c = CARDS.get(val)
+
+        if not c:
+            return await msg.answer(f"❌ Карта с ключом «{val}» не найдена в базе кода!")
+
+        # Проверяем наличие карты у игрока в активном инвентаре
+
+        has_card = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (uid, val),
+                           fetch=True)
+
+        if not has_card:
+            return await msg.answer(f"❌ У пользователя {uid} нет карты «{c['name']}» в инвентаре.")
+
+        # Удаляем ровно ОДНУ копию из инвентаря
+
+        db_exec("DELETE FROM cards_inv WHERE rowid = ?", (has_card[0],))
+
+        # Пересчитываем остатки (в инвентаре и сундуке)
+
+        left_in_inv_res = db_exec("SELECT COUNT(*) FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, val),
+                                  fetch=True)
+
+        left_in_stash_res = db_exec("SELECT COUNT(*) FROM cards_stash WHERE user_id = ? AND card_id = ?", (uid, val),
+                                    fetch=True)
+
+        left_in_inv = left_in_inv_res[0] if left_in_inv_res else 0
+
+        left_in_stash = left_in_stash_res[0] if left_in_stash_res else 0
+
+        # Если у игрока вообще больше не осталось этой карты нигде, вычищаем её фантомы
+
+        if (left_in_inv + left_in_stash) == 0:
+            db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (uid, val))
+
+            db_exec(
+                "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
+                (val, uid))
+
+            db_exec("DELETE FROM favorite_cards WHERE user_id = ? AND card_id = ?", (uid, val))
+
+        # Уведомление игроку полностью удалено — удаление бесшумное
+
+        await msg.answer(
+            f"🥷 Тихо удалена 1 шт. карты «{c['name']}» из инвентаря пользователя {uid}!\nОстаток у игрока: {left_in_inv} в инв, {left_in_stash} в сундуке.")
+
+    elif cmd == "/delete_stash_card":
+        if len(args) < 4:
+            return await msg.answer("❌ Использование: /delete_stash_card <id_игрока> <card_id> <количество>")
+
+        try:
+            uid = int(args[1])
+            val = args[2]
+            amount = int(args[3])
+        except ValueError:
+            return await msg.answer("❌ ID игрока и количество должны быть числами!")
+
+        if amount <= 0:
+            return await msg.answer("❌ Количество должно быть больше нуля!")
+
         c = CARDS.get(val)
         if not c:
             return await msg.answer(f"❌ Карта с ключом «{val}» не найдена в базе кода!")
 
-        # Проверяем наличие карты у игрока
-        has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, val), fetch=True)
-        if not has_card:
-            return await msg.answer(f"❌ У пользователя {uid} нет карты «{c['name']}»")
+        # Проверяем, сколько таких карт у игрока именно в сундуке
+        stash_count_res = db_exec("SELECT COUNT(*) FROM cards_stash WHERE user_id = ? AND card_id = ?", (uid, val),
+                                  fetch=True)
+        stash_count = stash_count_res[0] if stash_count_res else 0
 
-        # Удаляем одну копию (используя rowid для SQLite, чтобы не удалить все сразу, если их несколько)
-        db_exec(
-            "DELETE FROM cards_inv WHERE rowid = (SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1)",
-            (uid, val))
+        if stash_count == 0:
+            return await msg.answer(f"❌ У пользователя {uid} нет карт «{c['name']}» в сундуке.")
 
-        try:
-            await bot.send_message(uid, f"⚠️ Администратор удалил у вас карту: {c['name']}")
-        except Exception:
-            pass
-        await msg.answer(f"✅ Карта «{c['name']}» успешно удалена у пользователя {uid}!")
+        # Защита: если просят удалить больше, чем лежит в сундуке — удаляем максимум доступного
+        to_delete = min(amount, stash_count)
+
+        # Безопасно удаляем точное количество строк через rowid
+        for _ in range(to_delete):
+            row = db_exec("SELECT rowid FROM cards_stash WHERE user_id = ? AND card_id = ? LIMIT 1", (uid, val),
+                          fetch=True)
+            if row:
+                db_exec("DELETE FROM cards_stash WHERE rowid = ?", (row[0],))
+
+        # Проверяем финальные остатки по аккаунту
+        left_in_inv_res = db_exec("SELECT COUNT(*) FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, val),
+                                  fetch=True)
+        left_in_stash_res = db_exec("SELECT COUNT(*) FROM cards_stash WHERE user_id = ? AND card_id = ?", (uid, val),
+                                    fetch=True)
+
+        left_in_inv = left_in_inv_res[0] if left_in_inv_res else 0
+        left_in_stash = left_in_stash_res[0] if left_in_stash_res else 0
+
+        # Если карт на аккаунте тотально 0 — чистим колоды и любимые слоты профиля
+        if (left_in_inv + left_in_stash) == 0:
+            db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (uid, val))
+            db_exec(
+                "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
+                (val, uid))
+            db_exec("DELETE FROM favorite_cards WHERE user_id = ? AND card_id = ?", (uid, val))
+
+        # Полностью бесшумное действие
+        await msg.answer(
+            f"🥷 Тихо удалено {to_delete} шт. карты «{c['name']}» из СУНДУКА пользователя {uid}!\nОстаток у игрока: {left_in_inv} в инв, {left_in_stash} в сундуке.")
 
     elif cmd == "/give_title":
         if val not in TITLES:

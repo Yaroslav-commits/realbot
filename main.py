@@ -323,6 +323,10 @@ async def start_bot():
 
     await bot.delete_webhook(drop_pending_updates=True)
 
+    from handlers.battle import auto_pack_reset_notifier  # Укажи правильный путь импорта
+
+    # Внутри функции on_startup или main():
+    asyncio.create_task(auto_pack_reset_notifier(bot))
     # Запускаем все наши фоновые задачи
     asyncio.create_task(cooldown_notification_scheduler(bot))
     asyncio.create_task(battle_cooldown_notification_scheduler(bot))

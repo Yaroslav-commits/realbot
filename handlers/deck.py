@@ -1077,29 +1077,49 @@ async def trade_p1_final(cq: CallbackQuery):
     except Exception:
         pass
 
-    # БЕЗОПАСНОЕ УДАЛЕНИЕ КАРТ (ПО ОДНОЙ КОПИИ)
-    row1 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (sender_id, c1_id),
-                   fetch=True)
-    if row1:
-        db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row1[0],))
-    db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
-    try:
-        db_exec(
-            "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
-            (c1_id, sender_id))
-    except:
-        pass
+        # ---------------------------------------------------------
+        # БЕЗОПАСНОЕ УДАЛЕНИЕ КАРТ (С ПРОВЕРКОЙ ОСТАТКОВ И ФАНТОМОВ)
+        # ---------------------------------------------------------
 
-    row2 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (p2_id, c2_id), fetch=True)
-    if row2:
-        db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row2[0],))
-    db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (p2_id, c2_id))
-    try:
-        db_exec(
-            "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
-            (c2_id, p2_id))
-    except:
-        pass
+        # --- 1. Удаление карты у инициатора (P1) ---
+        row1 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (sender_id, c1_id),
+                       fetch=True)
+        if row1:
+            db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row1[0],))
+
+        l_inv1 = db_exec("SELECT COUNT(*) FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, c1_id),
+                         fetch=True)
+        l_st1 = db_exec("SELECT COUNT(*) FROM cards_stash WHERE user_id = ? AND card_id = ?", (sender_id, c1_id),
+                        fetch=True)
+        if (l_inv1[0] if l_inv1 else 0) + (l_st1[0] if l_st1 else 0) == 0:
+            db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
+            try:
+                db_exec(
+                    "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
+                    (c1_id, sender_id))
+            except:
+                pass
+            db_exec("DELETE FROM favorite_cards WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
+
+        # --- 2. Удаление карты у получателя (P2) ---
+        row2 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (p2_id, c2_id),
+                       fetch=True)
+        if row2:
+            db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row2[0],))
+
+        l_inv2 = db_exec("SELECT COUNT(*) FROM cards_inv WHERE user_id = ? AND card_id = ?", (p2_id, c2_id), fetch=True)
+        l_st2 = db_exec("SELECT COUNT(*) FROM cards_stash WHERE user_id = ? AND card_id = ?", (p2_id, c2_id),
+                        fetch=True)
+        if (l_inv2[0] if l_inv2 else 0) + (l_st2[0] if l_st2 else 0) == 0:
+            db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (p2_id, c2_id))
+            try:
+                db_exec(
+                    "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
+                    (c2_id, p2_id))
+            except:
+                pass
+            db_exec("DELETE FROM favorite_cards WHERE user_id = ? AND card_id = ?", (p2_id, c2_id))
+        # ---------------------------------------------------------
 
     # ВЫДАЕМ КАРТЫ С ЗАЩИТОЙ
     p1_has_c2 = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, c2_id), fetch=True)
