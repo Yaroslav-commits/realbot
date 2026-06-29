@@ -298,11 +298,15 @@ def authed_user_id(user_id: int, x_telegram_init_data: str = Header(default=""))
     return verified
 
 
+# Глобальный список для строгого контроля и уничтожения зомби-процессов при перезапусках
+BACKGROUND_TASKS = []
+
+
 # ============================================================
-#  ЗАПУСК БОТА
+#  ЗАПУСК БОТА (ОПТИМИЗИРОВАННЫЙ ПОД ХОСТИНГ)
 # ============================================================
 async def start_bot():
-    global BOT_INSTANCE, BOT_USERNAME
+    global BACKGROUND_TASKS, BOT_INSTANCE, BOT_USERNAME
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     BOT_INSTANCE = bot
     dp = Dispatcher()
@@ -323,15 +327,15 @@ async def start_bot():
 
     await bot.delete_webhook(drop_pending_updates=True)
 
-    from handlers.battle import auto_pack_reset_notifier  # Укажи правильный путь импорта
+    from handlers.battle import auto_pack_reset_notifier
 
-    # Внутри функции on_startup или main():
-    asyncio.create_task(auto_pack_reset_notifier(bot))
-    # Запускаем все наши фоновые задачи
-    asyncio.create_task(cooldown_notification_scheduler(bot))
-    asyncio.create_task(battle_cooldown_notification_scheduler(bot))
-    asyncio.create_task(auto_top_distributor(bot))
-    asyncio.create_task(premium_expiration_scheduler(bot))  # <-- Добавлен планировщик Premium!
+    # Фиксируем каждую фоновую задачу в глобальный список, чтобы гарантированно убить их при деплое
+    t1 = asyncio.create_task(auto_pack_reset_notifier(bot))
+    t2 = asyncio.create_task(cooldown_notification_scheduler(bot))
+    t3 = asyncio.create_task(battle_cooldown_notification_scheduler(bot))
+    t4 = asyncio.create_task(auto_top_distributor(bot))
+    t5 = asyncio.create_task(premium_expiration_scheduler(bot))
+    BACKGROUND_TASKS.extend([t1, t2, t3, t4, t5])
 
     print("Ждём 3 секунды для отключения старых процессов...")
     await asyncio.sleep(3)  # <-- Даем старому боту спокойно умереть
@@ -341,6 +345,9 @@ async def start_bot():
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except Exception as e:
         logging.error(f"Ошибка при поллинге (возможно, конфликт): {e}")
+    finally:
+        # Важнейший фикс: при любой остановке принудительно закрываем сетевую сессию бота
+        await bot.session.close()
 
 
 # ============================================================
@@ -372,18 +379,34 @@ def migrate_profile_stats():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global BACKGROUND_TASKS
     init_db()
     migrate_daily()
     migrate_earn()
-    migrate_profile_stats()  # <--- ВОТ НАШ ФИКС!
-    # WAL заметно снижает конфликты блокировок при одновременном чтении/записи
+    migrate_profile_stats()
+
     try:
         db_exec_sync("PRAGMA journal_mode=WAL")
     except Exception:
         pass
+
     bot_task = asyncio.create_task(start_bot())
+
     yield
+
+    # --- НАЧАЛО БЕЗОПАСНОГО ВЫКЛЮЧЕНИЯ (ОБНУЛЕНИЕ СТАРЫХ ХУКОВ) ---
+    print("ВНИМАНИЕ: Запущено полное уничтожение старых процессов приложения...")
     bot_task.cancel()
+
+    # Принудительно отменяем абсолютно все запущенные циклы уведомлений и топов
+    for task in BACKGROUND_TASKS:
+        if not task.done():
+            task.cancel()
+
+    # Дожидаемся пока они полностью отпустят базу данных и Telegram-токен
+    await asyncio.gather(bot_task, *BACKGROUND_TASKS, return_exceptions=True)
+    BACKGROUND_TASKS.clear()
+    print("Все зомби-процессы успешно ликвидированы. База данных и порт чисты!")
 
 
 app = FastAPI(lifespan=lifespan)
