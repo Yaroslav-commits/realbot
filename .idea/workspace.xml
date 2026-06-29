@@ -115,7 +115,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/main.py</url>
-          <line>974</line>
+          <line>1016</line>
           <option name="timeStamp" value="1" />
         </line-breakpoint>
       </breakpoints>

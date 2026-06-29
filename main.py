@@ -472,6 +472,22 @@ def get_profile(user_id: int = Depends(authed_user_id)):
         except Exception:
             migrate_daily()
 
+        # === НОВЫЙ РАСЧЕТ ПРОПУСКА ЕЖЕДНЕВКИ ===
+        now_msk = datetime.now(timezone(timedelta(hours=3)))
+        today_date = now_msk.date()
+
+        last_claim_date_str = last_claim_date.split(" ")[0] if last_claim_date else '2000-01-01'
+        try:
+            last_dt = datetime.strptime(last_claim_date_str, "%Y-%m-%d").date()
+            days_passed = (today_date - last_dt).days
+        except Exception:
+            days_passed = 0
+
+        can_claim_daily = (days_passed > 0)
+        # Если прошло больше 1 дня, стрик прерван (но если сегодня 30-й день забран, то на 31-й стрик просто сбрасывается в 1 без штрафа)
+        needs_recovery = (days_passed > 1 and 0 < daily_day < 30)
+        # =======================================
+
         is_prem = is_premium(user_id)
         cards_rows = db_exec_sync(
             "SELECT card_id FROM cards_inv WHERE user_id = ?", (user_id,), fetchall=True
@@ -515,6 +531,7 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             "owned_cards": owned_cards,
             "daily_day": daily_day,
             "can_claim_daily": can_claim_daily,
+            "needs_recovery": needs_recovery,  # <-- ДОБАВИЛИ ЭТУ СТРОКУ
             "wins": wins,
             "losses": losses,
             "winrate": winrate,
@@ -596,47 +613,74 @@ def set_active_title_api(payload: TitlePayload, user_id: int = Depends(authed_us
         logging.error(f"Title update error: {e}")
         return {"success": False, "error": str(e)}
 
+class DailyPayload(BaseModel):
+    action: str = "claim"  # Может быть: "claim", "recover", "reset"
+
+
 @app.post("/api/claim_daily/{user_id}")
-def claim_daily(user_id: int = Depends(authed_user_id)):
+def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
     try:
-        # Всю проверку + начисление валюты + сдвиг дня делаем в ОДНОЙ
-        # транзакции на одном соединении — атомарно. Это убирает риск
-        # двойного клейма и "полузачисленных" наград.
         conn = sqlite3.connect(DB_PATH, timeout=5.0)
         card_key = None
         try:
             c = conn.cursor()
 
             try:
-                c.execute("SELECT daily_day, last_daily_claim FROM users WHERE id = ?", (user_id,))
+                c.execute("SELECT daily_day, last_daily_claim, diamond FROM users WHERE id = ?", (user_id,))
                 user = c.fetchone()
             except Exception:
                 conn.close()
                 migrate_daily()
                 conn = sqlite3.connect(DB_PATH, timeout=5.0)
                 c = conn.cursor()
-                c.execute("SELECT daily_day, last_daily_claim FROM users WHERE id = ?", (user_id,))
+                c.execute("SELECT daily_day, last_daily_claim, diamond FROM users WHERE id = ?", (user_id,))
                 user = c.fetchone()
 
             if not user:
                 return {"success": False, "error": "Пользователь не найден в базе"}
 
             now_msk = datetime.now(timezone(timedelta(hours=3)))
-            today_str = now_msk.strftime("%Y-%m-%d")
-            last_claim_date = user[1].split(" ")[0] if user[1] else '2000-01-01'
+            today_date = now_msk.date()
+            today_str = today_date.strftime("%Y-%m-%d")
 
-            if last_claim_date == today_str:
+            last_claim_date_str = user[1].split(" ")[0] if user[1] else '2000-01-01'
+            try:
+                last_dt = datetime.strptime(last_claim_date_str, "%Y-%m-%d").date()
+                days_passed = (today_date - last_dt).days
+            except Exception:
+                days_passed = 0
+
+            if days_passed == 0:
                 return {"success": False, "error": "Награда уже получена сегодня!"}
 
-            current_day = (user[0] or 0) + 1
-            if current_day > 30:
+            daily_day = user[0] or 0
+            diamonds = user[2] or 0
+            needs_recovery = (days_passed > 1 and 0 < daily_day < 30)
+
+            # Обработка действий (Сбор, Восстановление, Сброс)
+            if payload.action == "recover":
+                if not needs_recovery:
+                    return {"success": False, "error": "Стрик не прерван, восстановление не требуется!"}
+                if diamonds < 10:
+                    return {"success": False, "error": "Недостаточно алмазов (нужно 10 💎)"}
+                c.execute("UPDATE users SET diamond = diamond - 10 WHERE id = ?", (user_id,))
+                current_day = daily_day + 1
+
+            elif payload.action == "reset":
+                if not needs_recovery:
+                    return {"success": False, "error": "Стрик не прерван!"}
                 current_day = 1
 
+            else:  # Стандартный "claim"
+                if needs_recovery:
+                    return {"success": False, "error": "Нужно восстановить стрик или начать заново!"}
+                current_day = daily_day + 1 if daily_day < 30 else 1
+
+            # Выдаем награду за current_day
             reward = DAILY_REWARDS.get(current_day, {'krw': 200})
             is_pack = 'pack' in reward
             pack_type = reward.get('pack')
 
-            # Сначала фиксируем сам факт клейма + валюту (атомарно).
             if 'krw' in reward:
                 c.execute("UPDATE users SET krw = krw + ? WHERE id = ?", (reward['krw'], user_id))
             if 'dia' in reward:
@@ -650,8 +694,6 @@ def claim_daily(user_id: int = Depends(authed_user_id)):
         finally:
             conn.close()
 
-        # Карту выдаём ПОСЛЕ закрытия основной транзакции, чтобы не держать
-        # write-lock на БД, пока pull/give открывают свои соединения.
         if is_pack:
             rarity = "Мифическая 🔴" if pack_type == 'mythic' else "Легендарная 🔵"
             card_key = pull_random_card(force_rarity=rarity)
