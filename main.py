@@ -52,7 +52,7 @@ TIKTOK_HASHTAG_LINK = "https://vt.tiktok.com/ZS92ocVcSbVA5-QEi0R/"
 
 # Куда приходят заявки на проверку TikTok-видео и Сторис (твой Telegram ID
 # или ID группы модерации). Узнать свой ID: напиши @userinfobot.
-MODERATION_CHAT_ID = 0  # <-- ОБЯЗАТЕЛЬНО ЗАМЕНИ НА СВОЙ ID
+MODERATION_CHAT_ID = 6378471773  # <-- ОБЯЗАТЕЛЬНО ЗАМЕНИ НА СВОЙ ID
 
 # Кто имеет право жать «Одобрить / Отклонить» под заявкой.
 # Если заявки летят в группу — впиши сюда РЕАЛЬНЫЕ user_id админов.
@@ -62,7 +62,7 @@ ADMIN_IDS = {MODERATION_CHAT_ID}
 REWARDS = {
     "subscribe": {"krw": 1000, "dia": 5},    # подписка на канал (Партнёры)
     "boost":     {"krw": 2000, "dia": 10},   # буст канала (раз в 7 дней)
-    "tiktok":    {"krw": 5000, "dia": 10},   # TikTok-видео (после модерации)
+    "tiktok":    {"krw": 3000, "dia": 10},   # TikTok-видео (после модерации)
     "story":     {"krw": 3000, "dia": 5},    # Сторис (после модерации)
 }
 BOOST_COOLDOWN_DAYS = 7
@@ -706,7 +706,7 @@ def get_referral(user_id: int = Depends(authed_user_id)):
             earned_attempts = agg[1] or 0
     except Exception:
         pass
-    # Подстраховка для старых записей без сохранённой награды: минимум 5 круток на реферала
+    # Подстраховка для старых записей без сохранённой награды: минимум 3 круток на реферала
     if count and earned_attempts == 0:
         earned_attempts = count * 3
 
@@ -718,7 +718,7 @@ def get_referral(user_id: int = Depends(authed_user_id)):
         "earned_attempts": earned_attempts,
         "reward_krw_min": 300,
         "reward_krw_max": 550,
-        "reward_attempts": 5,
+        "reward_attempts": 3,
     }
 
 
@@ -865,7 +865,7 @@ async def submit_social(payload: SocialPayload, user_id: int = Depends(authed_us
                f"👤 ID игрока: <code>{user_id}</code>\n"
                f"🔗 Ссылка: {link}\n"
                f"💬 Комментарий: {note or '—'}\n\n"
-               f"💰 При одобрении: {r.get('krw', 0)} ₩ + {r.get('dia', 0)} 💎")
+               f"💰 При одобрении: {r.get('krw', 0)} KRW + {r.get('dia', 0)} 💎")
         kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="✅ Одобрить", callback_data=f"ts:ok:{sub_id}"),
             InlineKeyboardButton(text="❌ Отклонить", callback_data=f"ts:no:{sub_id}"),
