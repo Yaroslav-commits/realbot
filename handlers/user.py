@@ -2710,3 +2710,61 @@ async def battle_cooldown_notification_scheduler(bot: Bot):
         except Exception as e:
             logging.error(f"Battle cooldown scheduler error: {e}")
         await asyncio.sleep(60)
+
+
+from aiogram.filters import Command
+from datetime import datetime, timedelta, timezone
+from config import ADMIN_IDS
+from database.db import db_exec
+
+
+@router.message(Command("testdaily"))
+async def cmd_testdaily(message: types.Message):
+    """
+    Команда: /testdaily <день>
+    Отматывает время сбора на вчера и ставит нужный день.
+    Например: /testdaily 7 — позволит прямо сейчас зайти и забрать пак за 7-й день!
+    """
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    args = message.text.split()
+    if len(args) < 2:
+        await message.reply("⚙️ <b>Использование:</b> /testdaily <день от 1 до 30>\n"
+                            "<i>Например: /testdaily 7 (подготовит вам сбор 7-го дня с паком)</i>")
+        return
+
+    target_day = int(args[1])
+    target_uid = message.from_user.id
+
+    # Отматываем время "последнего сбора" на день назад, чтобы сегодня можно было собрать
+    MSK = timezone(timedelta(hours=3))
+    yesterday_str = (datetime.now(MSK) - timedelta(days=1)).strftime("%Y-%m-%d 12:00:00")
+
+    # Ставим (target_day - 1), чтобы при сборе выдало именно target_day
+    db_exec("UPDATE users SET daily_day = ?, last_daily_claim = ? WHERE id = ?",
+            (target_day - 1, yesterday_str, target_uid))
+
+    await message.reply(f"✅ <b>Готово!</b>\nВам установлен {target_day - 1} день и отмотано время.\n"
+                        f"Открывайте Web App, чтобы собрать награду за <b>{target_day} день</b>!")
+
+
+@router.message(Command("breakdaily"))
+async def cmd_breakdaily(message: types.Message):
+    """
+    Команда: /breakdaily
+    Отматывает время сбора на 3 дня назад.
+    Идеально для теста окна "Восстановить стрик (10 алмазов)".
+    """
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    MSK = timezone(timedelta(hours=3))
+    past_str = (datetime.now(MSK) - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
+    target_uid = message.from_user.id
+
+    # Меняем только дату сбора, чтобы создать разрыв стрика
+    db_exec("UPDATE users SET last_daily_claim = ? WHERE id = ?", (past_str, target_uid))
+
+    await message.reply("💔 <b>Стрик сломан!</b>\nДата сбора отмотана на 3 дня назад.\n"
+                        "Зайдите в Web App, и вам предложат восстановить стрик за 10 💎 или сбросить.")

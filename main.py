@@ -8,7 +8,8 @@ import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qsl
-
+from data.cards import TITLES, CARDS, RARITIES
+import random
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -622,6 +623,9 @@ def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
     try:
         conn = sqlite3.connect(DB_PATH, timeout=5.0)
         card_key = None
+        is_duplicate = False
+        dup_reward = 0
+
         try:
             c = conn.cursor()
 
@@ -657,7 +661,6 @@ def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
             diamonds = user[2] or 0
             needs_recovery = (days_passed > 1 and 0 < daily_day < 30)
 
-            # Обработка действий (Сбор, Восстановление, Сброс)
             if payload.action == "recover":
                 if not needs_recovery:
                     return {"success": False, "error": "Стрик не прерван, восстановление не требуется!"}
@@ -671,12 +674,11 @@ def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
                     return {"success": False, "error": "Стрик не прерван!"}
                 current_day = 1
 
-            else:  # Стандартный "claim"
+            else:
                 if needs_recovery:
                     return {"success": False, "error": "Нужно восстановить стрик или начать заново!"}
                 current_day = daily_day + 1 if daily_day < 30 else 1
 
-            # Выдаем награду за current_day
             reward = DAILY_REWARDS.get(current_day, {'krw': 200})
             is_pack = 'pack' in reward
             pack_type = reward.get('pack')
@@ -686,6 +688,24 @@ def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
             if 'dia' in reward:
                 c.execute("UPDATE users SET diamond = diamond + ? WHERE id = ?", (reward['dia'], user_id))
 
+            # === ЧЕСТНОЕ ЗАЧИСЛЕНИЕ И ПРОВЕРКА НА ДУБЛИКАТ ===
+            if is_pack:
+                rarity = "Мифическая 🔴" if pack_type == 'mythic' else "Легендарная 🔵"
+                card_key = pull_random_card(force_rarity=rarity)
+
+                if card_key:
+                    card_data = CARDS.get(card_key)
+                    c.execute("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (user_id, card_key))
+                    if c.fetchone():
+                        is_duplicate = True
+                        r_name = card_data.get('rarity', 'Обычная ⚪️') if card_data else 'Обычная ⚪️'
+                        dup_range = RARITIES.get(r_name, {}).get("dup", (10, 20))
+                        dup_reward = random.randint(dup_range[0], dup_range[1])
+                        c.execute("UPDATE users SET krw = krw + ? WHERE id = ?", (dup_reward, user_id))
+                    else:
+                        give_card_to_user(user_id, card_key)
+
+            # Сохраняем день сбора
             c.execute(
                 "UPDATE users SET daily_day = ?, last_daily_claim = ? WHERE id = ?",
                 (current_day, today_str, user_id)
@@ -694,20 +714,24 @@ def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
         finally:
             conn.close()
 
-        if is_pack:
-            rarity = "Мифическая 🔴" if pack_type == 'mythic' else "Легендарная 🔵"
-            card_key = pull_random_card(force_rarity=rarity)
-            if card_key:
-                give_card_to_user(user_id, card_key)
-
         new_user = db_exec_sync("SELECT diamond, krw FROM users WHERE id = ?", (user_id,), fetch=True)
 
-        return {
+        resp = {
             "success": True,
             "new_krw": new_user[1],
-            "new_dia": new_user[0],
-            "card_key": card_key
+            "new_dia": new_user[0]
         }
+
+        if is_pack and card_key:
+            card_data = CARDS.get(card_key, {})
+            resp["card_key"] = card_key
+            resp["card_file"] = card_data.get("file", "")
+            resp["card_name"] = card_data.get("name", "")
+            resp["card_rarity"] = card_data.get("rarity", "")
+            resp["is_duplicate"] = is_duplicate
+            resp["dup_reward"] = dup_reward
+
+        return resp
     except HTTPException:
         raise
     except Exception as e:
