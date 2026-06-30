@@ -602,13 +602,14 @@ async def divine_toggle(cq: CallbackQuery):
 @router.callback_query(F.data.startswith("trade_init:"))
 async def trade_init(cq: CallbackQuery, state: FSMContext):
     await cq.answer()
-    # ВАЖНО: Делим на 2 части (maxsplit=1), чтобы не обрезать ID карты (например battle:EPIC)
+    # ИСПРАВЛЕНИЕ: Делим только 1 раз, чтобы не отрезать куски от ID карты
     cid = cq.data.split(":", 1)[1]
 
     c = CARDS.get(cid)
     if not c:
         return await cq.message.answer("❌ Ошибка: карта не найдена в базе данных.")
 
+    # Сохраняем карту в стейт на случай выбора по ID
     await state.update_data(trade_card=cid)
 
     bld = InlineKeyboardBuilder()
@@ -659,7 +660,7 @@ async def trade_method_id(cq: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("trade_method:link:"))
 async def trade_method_link(cq: CallbackQuery):
     await cq.answer()
-    # ВАЖНО: Делим на 3 части (maxsplit=2), чтобы сохранить ID карты
+    # ИСПРАВЛЕНИЕ: Делим ровно на 2 части
     cid = cq.data.split(":", 2)[2]
     c = CARDS.get(cid)
 
@@ -671,7 +672,7 @@ async def trade_method_link(cq: CallbackQuery):
     b64_payload = base64.urlsafe_b64encode(raw_payload.encode()).decode().rstrip("=")
     trade_link = f"https://t.me/{bot_info.username}?start={b64_payload}"
 
-    share_text = f"Давай меняться! Я предлагаю карту {c['name']} ({c['rarity']}) в боте.\n\n Переходи по ссылке и делай свое предложение!"
+    share_text = f"Давай обмениваться! Я предлагаю карту {c['name']} ({c['rarity']}) в боте. Переходи по ссылке и делай свое предложение!"
     share_url = f"https://t.me/share/url?url={trade_link}&text={quote(share_text)}"
 
     bld = InlineKeyboardBuilder()
@@ -785,45 +786,17 @@ async def process_trade_id(msg: types.Message, state: FSMContext):
 @router.callback_query(F.data.startswith("trade_p2_select:"))
 async def trade_p2_select(cq: CallbackQuery):
     await cq.answer()
+
     sender_id = int(cq.data.split(":")[1])
-    # При первом открытии мы удаляем стартовое фото/сообщение
-    try:
-        await cq.message.delete()
-    except Exception:
-        pass
-    # Вызываем страницу 0, сортировка 0 (сначала сильные)
-    await _render_trade_page(cq, sender_id, page=0, sort_dir=0, is_new_message=True)
-
-
-@router.callback_query(F.data.startswith("trade_p2_page:"))
-async def trade_p2_page(cq: CallbackQuery):
-    await cq.answer()
-    parts = cq.data.split(":")
-    sender_id = int(parts[1])
-    page = int(parts[2])
-    sort_dir = int(parts[3])
-    # При перелистывании мы просто редактируем текущее сообщение
-    await _render_trade_page(cq, sender_id, page, sort_dir, is_new_message=False)
-
-
-async def _render_trade_page(cq: CallbackQuery, sender_id: int, page: int, sort_dir: int, is_new_message: bool):
     t = PENDING_TRADES.get(sender_id)
 
     if not t or t['receiver_id'] != cq.from_user.id:
-        txt = "❌ Трейд более не актуален или был отменен."
-        if is_new_message:
-            return await cq.message.answer(txt)
-        else:
-            return await cq.message.edit_text(txt, reply_markup=None)
+        return await cq.message.answer("❌ Трейд более не актуален или был отменен.")
 
     sender_card_id = t['sender_card']
     sender_card_data = CARDS.get(sender_card_id)
     if not sender_card_data:
-        txt = "❌ Ошибка: карта инициатора не найдена."
-        if is_new_message:
-            return await cq.message.answer(txt)
-        else:
-            return await cq.message.edit_text(txt, reply_markup=None)
+        return await cq.message.answer("❌ Ошибка: карта инициатора не найдена.")
 
     rarity = sender_card_data['rarity']
     inv_data = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
@@ -834,87 +807,36 @@ async def _render_trade_page(cq: CallbackQuery, sender_id: int, page: int, sort_
         if card_info and card_info.get('rarity') == rarity:
             valid_cards.append(cid)
 
-    # Оставляем только уникальные карты (без повторок)
     valid_cards = list(set(valid_cards))
 
     if not valid_cards:
+        await cq.message.delete()
+        await cq.message.answer(f"❌ У вас нет карт редкости <b>{rarity}</b> для равноценного обмена. Трейд отменен.",
+                                parse_mode="HTML")
         PENDING_TRADES.pop(sender_id, None)
-        txt = f"❌ У вас нет карт редкости <b>{rarity}</b> для равноценного обмена. Трейд отменен."
-        if is_new_message:
-            await cq.message.answer(txt, parse_mode="HTML")
-        else:
-            await cq.message.edit_text(txt, parse_mode="HTML")
         try:
             await cq.bot.send_message(sender_id, "❌ Игрок не может принять трейд: нет подходящих карт по редкости.")
         except:
             pass
         return
 
-    # СОРТИРОВКА
-    # sort_dir == 0 (сначала сильные -> слабые), sort_dir == 1 (сначала слабые -> сильные)
-    valid_cards.sort(key=lambda cid: _card_power(cid), reverse=(sort_dir == 0))
-
-    # ПАГИНАЦИЯ (8 карт на страницу)
-    items_per_page = 8
-    total_pages = max(1, (len(valid_cards) + items_per_page - 1) // items_per_page)
-    page = max(0, min(page, total_pages - 1))
-
-    start_idx = page * items_per_page
-    page_cards = valid_cards[start_idx: start_idx + items_per_page]
-
     bld = InlineKeyboardBuilder()
-
-    # Кнопки с картами (по 2 штуки в ряд)
-    card_btns = []
-    for cid in page_cards:
+    for cid in valid_cards[:40]:
         name = CARDS[cid]['name']
-        power = _card_power(cid)
-        # Добавляем отображение мощи для удобства
-        card_btns.append(
-            InlineKeyboardButton(text=f"{name} · {power}💥", callback_data=f"trade_p2_conf:{sender_id}:{cid}"))
+        bld.button(text=name, callback_data=f"trade_p2_conf:{sender_id}:{cid}")
 
-    for i in range(0, len(card_btns), 2):
-        bld.row(*card_btns[i:i + 2])
+    bld.button(text="Отказаться ❌", callback_data=f"trade_decline:{sender_id}")
+    bld.adjust(2)
 
-    # Навигационные кнопки
-    nav_row = []
-    if page > 0:
-        nav_row.append(
-            InlineKeyboardButton(text="⬅️", callback_data=f"trade_p2_page:{sender_id}:{page - 1}:{sort_dir}"))
-    else:
-        nav_row.append(InlineKeyboardButton(text="⬅️", callback_data="ignore"))
-
-    nav_row.append(InlineKeyboardButton(text=f"📄 {page + 1}/{total_pages}", callback_data="ignore"))
-
-    if page < total_pages - 1:
-        nav_row.append(
-            InlineKeyboardButton(text="➡️", callback_data=f"trade_p2_page:{sender_id}:{page + 1}:{sort_dir}"))
-    else:
-        nav_row.append(InlineKeyboardButton(text="➡️", callback_data="ignore"))
-    bld.row(*nav_row)
-
-    # Кнопка переключения сортировки
-    sort_text = "🔄 Сортировка: Сильные ⬇️" if sort_dir == 0 else "🔄 Сортировка: Слабые ⬆️"
-    next_sort = 1 if sort_dir == 0 else 0
-    bld.row(InlineKeyboardButton(text=sort_text, callback_data=f"trade_p2_page:{sender_id}:0:{next_sort}"))
-
-    bld.row(InlineKeyboardButton(text="Отказаться ❌", callback_data=f"trade_decline:{sender_id}"))
-
-    txt = (
-        f"🎴 <b>Выберите вашу карту, которую отдадите взамен:</b>\n"
-        f"<i>(Показаны только карты редкости {rarity})</i>\n"
-        f"Всего доступно карт на выбор: <b>{len(valid_cards)}</b>"
-    )
-
-    if is_new_message:
-        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
-    else:
-        await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.message.delete()
+    await cq.message.answer("🎴 <b>Выберите вашу карту, которую отдадите взамен:</b>", reply_markup=bld.as_markup(),
+                            parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("trade_p2_conf:"))
 async def trade_p2_conf(cq: CallbackQuery):
     await cq.answer()
+    # ИСПРАВЛЕНИЕ: Делим на 3 части (так как ID может быть с двоеточием)
     parts = cq.data.split(":", 2)
     sender_id = int(parts[1])
     p2_card = parts[2]
@@ -942,15 +864,10 @@ async def trade_p2_conf(cq: CallbackQuery):
     if media:
         await cq.message.answer_media_group(media=media)
 
-    # ПРОВЕРКА: Если у игрока, который принимает обмен, УЖЕ ЕСТЬ карта инициатора
-    has_c_sender = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
-                           (cq.from_user.id, t['sender_card']), fetch=True)
-    warning = "\n<i>(⚠️ Осторожно: у вас уже есть копия этой карты)</i>" if has_c_sender else ""
-
     txt = (
         f"⚖️ <b>Подготовка к обмену</b> с <a href='tg://user?id={sender_id}'>{sender_name}</a>\n\n"
         f"<blockquote>📤 <b>Вы отдаёте:</b> {c_receiver['name']} ({c_receiver['rarity']})\n"
-        f"📥 <b>Вы получаете:</b> {c_sender['name']} ({c_sender['rarity']}){warning}</blockquote>\n\n"
+        f"📥 <b>Вы получаете:</b> {c_sender['name']} ({c_sender['rarity']})</blockquote>\n\n"
         f"❓ Всё верно? Подтвердите выбор для отправки встречного предложения 🤝"
     )
 
@@ -969,50 +886,29 @@ async def trade_p2_final(cq: CallbackQuery):
     if not t or t['receiver_id'] != cq.from_user.id:
         return await cq.answer("Трейд не актуален.", show_alert=True)
 
+    await cq.message.edit_text("⏳ Ожидание подтверждения от инициатора сделки...")
+
     c1 = CARDS[t['sender_card']]
     c2 = CARDS[t['receiver_card']]
 
-    # 1. ОБНОВЛЯЕМ СООБЩЕНИЕ ВТОРОГО ИГРОКА (Убираем кнопки, оставляем текст, пишем "Ожидание")
-    sender_user = get_user(sender_id)
-    sender_name = escape(sender_user[2] if sender_user else f"Игрок {sender_id}")
-
-    has_c_sender = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
-                           (cq.from_user.id, t['sender_card']), fetch=True)
-    warning_p2 = "\n<i>(⚠️ Осторожно: у вас уже есть копия этой карты)</i>" if has_c_sender else ""
-
-    p2_txt_update = (
-        f"⚖️ <b>Подготовка к обмену</b> с <a href='tg://user?id={sender_id}'>{sender_name}</a>\n\n"
-        f"<blockquote>📤 <b>Вы отдаёте:</b> {c2['name']} ({c2['rarity']})\n"
-        f"📥 <b>Вы получаете:</b> {c1['name']} ({c1['rarity']}){warning_p2}</blockquote>\n\n"
-        f"⏳ <i>Ожидание подтверждения от инициатора сделки...</i>"
-    )
-
-    try:
-        await cq.message.edit_text(p2_txt_update, reply_markup=None, parse_mode="HTML")
-    except Exception:
-        pass  # Если вдруг сообщение удалено, бот не крашнется
-
-    # 2. ОТПРАВЛЯЕМ ЗАПРОС ИНИЦИАТОРУ СДЕЛКИ
     has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, t['receiver_card']),
                        fetch=True)
-    warning_p1 = "\n<i>(⚠️ Осторожно: у вас уже есть эта копия)</i>" if has_card else ""
+    warning = "\n<i>(⚠️ Осторожно: у вас уже есть эта копия)</i>" if has_card else ""
     p2_name = escape(cq.from_user.first_name)
 
     txt = (
         f"✨ <b>Встречное предложение получено!</b>\n\n"
         f"Игрок <a href='tg://user?id={cq.from_user.id}'>{p2_name}</a> выбрал карту для обмена.\n"
         f"<blockquote>📤 <b>Вы отдаёте:</b> {c1['name']} ({c1['rarity']})\n"
-        f"📥 <b>Вы получаете:</b> {c2['name']} ({c2['rarity']}){warning_p1}</blockquote>\n\n"
+        f"📥 <b>Вы получаете:</b> {c2['name']} ({c2['rarity']}){warning}</blockquote>\n\n"
         f"Ударить по рукам и завершить сделку? 🤝"
     )
 
     media = []
-    p1_path = f"images/cards/{c1['file']}"
-    p2_path = f"images/cards/{c2['file']}"
-    if os.path.exists(p1_path):
-        media.append(types.InputMediaPhoto(media=FSInputFile(p1_path)))
-    if os.path.exists(p2_path):
-        media.append(types.InputMediaPhoto(media=FSInputFile(p2_path)))
+    for c in [c1, c2]:
+        p = f"images/cards/{c['file']}"
+        if os.path.exists(p):
+            media.append(types.InputMediaPhoto(media=FSInputFile(p)))
 
     bld = InlineKeyboardBuilder()
     bld.button(text="Ударить по рукам 🤝", callback_data=f"trade_p1_final:{cq.from_user.id}")
@@ -1045,13 +941,8 @@ async def trade_p1_final(cq: CallbackQuery):
 
     if not p1_has or not p2_has:
         PENDING_TRADES.pop(sender_id, None)
-        # Убираем кнопки и пишем об ошибке
-        try:
-            await cq.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
-        await cq.message.answer("❌ <b>Трейд сорвался:</b> у одного из игроков больше нет нужной карты.",
-                                parse_mode="HTML")
+        await cq.message.edit_text("❌ <b>Трейд сорвался:</b> у одного из игроков больше нет нужной карты.",
+                                   parse_mode="HTML")
         try:
             await cq.bot.send_message(p2_id, "❌ <b>Трейд сорвался:</b> у одного из игроков больше нет нужной карты.",
                                       parse_mode="HTML")
@@ -1059,128 +950,68 @@ async def trade_p1_final(cq: CallbackQuery):
             pass
         return
 
-    # ОБНОВЛЯЕМ СООБЩЕНИЕ ИНИЦИАТОРУ (Убираем кнопки и пишем что сделка успешна)
-    has_card_p1 = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, c2_id), fetch=True)
-    warning_p1_final = "\n<i>(⚠️ Осторожно: у вас уже есть эта копия)</i>" if has_card_p1 else ""
-    p2_user = get_user(p2_id)
-    p2_name = escape(p2_user[2] if p2_user and p2_user[2] else f"Игрок {p2_id}")
+    # БЕЗОПАСНОЕ УДАЛЕНИЕ: изымаем по одной копии
+    row1 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (sender_id, c1_id), fetch=True)
+    if row1:
+        db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row1[0],))
+    db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
+    db_exec(
+        "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
+        (c1_id, sender_id))
 
-    p1_txt_update = (
-        f"✨ <b>Встречное предложение получено!</b>\n\n"
-        f"Игрок <a href='tg://user?id={p2_id}'>{p2_name}</a> выбрал карту для обмена.\n"
-        f"<blockquote>📤 <b>Вы отдаёте:</b> {CARDS[c1_id]['name']} ({CARDS[c1_id]['rarity']})\n"
-        f"📥 <b>Вы получаете:</b> {CARDS[c2_id]['name']} ({CARDS[c2_id]['rarity']}){warning_p1_final}</blockquote>\n\n"
-        f"✅ <b>Сделка успешно завершена!</b>"
-    )
-    try:
-        await cq.message.edit_text(p1_txt_update, reply_markup=None, parse_mode="HTML")
-    except Exception:
-        pass
-
-        # ---------------------------------------------------------
-        # БЕЗОПАСНОЕ УДАЛЕНИЕ КАРТ (С ПРОВЕРКОЙ ОСТАТКОВ И ФАНТОМОВ)
-        # ---------------------------------------------------------
-
-        # --- 1. Удаление карты у инициатора (P1) ---
-        row1 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (sender_id, c1_id),
-                       fetch=True)
-        if row1:
-            db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row1[0],))
-
-        l_inv1 = db_exec("SELECT COUNT(*) FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, c1_id),
-                         fetch=True)
-        l_st1 = db_exec("SELECT COUNT(*) FROM cards_stash WHERE user_id = ? AND card_id = ?", (sender_id, c1_id),
-                        fetch=True)
-        if (l_inv1[0] if l_inv1 else 0) + (l_st1[0] if l_st1 else 0) == 0:
-            db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
-            try:
-                db_exec(
-                    "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
-                    (c1_id, sender_id))
-            except:
-                pass
-            db_exec("DELETE FROM favorite_cards WHERE user_id = ? AND card_id = ?", (sender_id, c1_id))
-
-        # --- 2. Удаление карты у получателя (P2) ---
-        row2 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (p2_id, c2_id),
-                       fetch=True)
-        if row2:
-            db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row2[0],))
-
-        l_inv2 = db_exec("SELECT COUNT(*) FROM cards_inv WHERE user_id = ? AND card_id = ?", (p2_id, c2_id), fetch=True)
-        l_st2 = db_exec("SELECT COUNT(*) FROM cards_stash WHERE user_id = ? AND card_id = ?", (p2_id, c2_id),
-                        fetch=True)
-        if (l_inv2[0] if l_inv2 else 0) + (l_st2[0] if l_st2 else 0) == 0:
-            db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (p2_id, c2_id))
-            try:
-                db_exec(
-                    "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
-                    (c2_id, p2_id))
-            except:
-                pass
-            db_exec("DELETE FROM favorite_cards WHERE user_id = ? AND card_id = ?", (p2_id, c2_id))
-        # ---------------------------------------------------------
-
-    # ВЫДАЕМ КАРТЫ С ЗАЩИТОЙ
-    p1_has_c2 = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (sender_id, c2_id), fetch=True)
-    p2_has_c1 = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (p2_id, c1_id), fetch=True)
-
-    if not p1_has_c2:
-        db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (sender_id, c2_id))
-
-    if not p2_has_c1:
-        db_exec("INSERT INTO cards_inv (user_id, card_id) VALUES (?, ?)", (p2_id, c1_id))
+    row2 = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (p2_id, c2_id), fetch=True)
+    if row2:
+        db_exec("DELETE FROM cards_inv WHERE rowid = ?", (row2[0],))
+    db_exec("DELETE FROM decks WHERE user_id = ? AND card_id = ?", (p2_id, c2_id))
+    db_exec(
+        "DELETE FROM multi_deck_slots WHERE card_id = ? AND deck_id IN (SELECT deck_id FROM multi_decks WHERE user_id = ?)",
+        (c2_id, p2_id))
 
     PENDING_TRADES.pop(sender_id, None)
 
-    # Достаем ники для красивого финала
+    # ИСПРАВЛЕНИЕ: Безопасное начисление через функцию, чтобы за повторки падала компенсация KRW!
+    is_new1, krw1, _ = give_card_to_user(sender_id, c2_id)
+    is_new2, krw2, _ = give_card_to_user(p2_id, c1_id)
+
     u1 = get_user(sender_id)
     u2 = get_user(p2_id)
     n1 = escape(u1[2] if u1 and u1[2] else f"Игрок {sender_id}")
     n2 = escape(u2[2] if u2 and u2[2] else f"Игрок {p2_id}")
 
+    await cq.message.delete()
+
+    # Генерация сообщения с уведомлением о дубликатах
+    msg1 = f"<blockquote>🎴 <b>Новая карта:</b> {CARDS[c2_id]['name']}</blockquote>"
+    if not is_new1:
+        msg1 = f"<blockquote>♻️ <b>Повторка!</b> Карта конвертирована в <b>{krw1} 💴 KRW</b></blockquote>"
+
+    msg2 = f"<blockquote>🎴 <b>Новая карта:</b> {CARDS[c1_id]['name']}</blockquote>"
+    if not is_new2:
+        msg2 = f"<blockquote>♻️ <b>Повторка!</b> Карта конвертирована в <b>{krw2} 💴 KRW</b></blockquote>"
+
     # Сообщение инициатору
-    p2_card_path = f"images/cards/{CARDS[c2_id]['file']}"
-    if os.path.exists(p2_card_path):
+    photo_p1 = f"images/cards/{CARDS[c2_id]['file']}"
+    if os.path.exists(photo_p1):
         await cq.message.answer_photo(
-            photo=FSInputFile(p2_card_path),
-            caption=(
-                f"🎉 <b>Обмен успешно завершён!</b>\n\n"
-                f"<blockquote>🎴 <b>Новая карта:</b> {CARDS[c2_id]['name']}</blockquote>\n"
-                f"Сделка с <a href='tg://user?id={p2_id}'>{n2}</a> прошла успешно 🤝"
-            ),
+            photo=FSInputFile(photo_p1),
+            caption=(f"🎉 <b>Обмен успешно завершён!</b>\n\n{msg1}\nСделка с <a href='tg://user?id={p2_id}'>{n2}</a> прошла успешно 🤝"),
             parse_mode="HTML"
         )
     else:
-        await cq.message.answer(
-            f"🎉 <b>Обмен успешно завершён!</b>\n\n"
-            f"<blockquote>🎴 <b>Новая карта:</b> {CARDS[c2_id]['name']}</blockquote>\n"
-            f"Сделка с <a href='tg://user?id={p2_id}'>{n2}</a> прошла успешно 🤝",
-            parse_mode="HTML"
-        )
+        await cq.message.answer(f"🎉 <b>Обмен успешно завершён!</b>\n\n{msg1}\nСделка с <a href='tg://user?id={p2_id}'>{n2}</a> прошла успешно 🤝", parse_mode="HTML")
 
     # Сообщение получателю
     try:
-        p1_card_path = f"images/cards/{CARDS[c1_id]['file']}"
-        if os.path.exists(p1_card_path):
+        photo_p2 = f"images/cards/{CARDS[c1_id]['file']}"
+        if os.path.exists(photo_p2):
             await cq.bot.send_photo(
                 p2_id,
-                photo=FSInputFile(p1_card_path),
-                caption=(
-                    f"🎉 <b>Обмен успешно завершён!</b>\n\n"
-                    f"<blockquote>🎴 <b>Новая карта:</b> {CARDS[c1_id]['name']}</blockquote>\n"
-                    f"Сделка с <a href='tg://user?id={sender_id}'>{n1}</a> прошла успешно 🤝"
-                ),
+                photo=FSInputFile(photo_p2),
+                caption=(f"🎉 <b>Обмен успешно завершён!</b>\n\n{msg2}\nСделка с <a href='tg://user?id={sender_id}'>{n1}</a> прошла успешно 🤝"),
                 parse_mode="HTML"
             )
         else:
-            await cq.bot.send_message(
-                p2_id,
-                f"🎉 <b>Обмен успешно завершён!</b>\n\n"
-                f"<blockquote>🎴 <b>Новая карта:</b> {CARDS[c1_id]['name']}</blockquote>\n"
-                f"Сделка с <a href='tg://user?id={sender_id}'>{n1}</a> прошла успешно 🤝",
-                parse_mode="HTML"
-            )
+            await cq.bot.send_message(p2_id, f"🎉 <b>Обмен успешно завершён!</b>\n\n{msg2}\nСделка с <a href='tg://user?id={sender_id}'>{n1}</a> прошла успешно 🤝", parse_mode="HTML")
     except:
         pass
 
@@ -1190,12 +1021,7 @@ async def trade_decline(cq: CallbackQuery):
     sender_id = int(cq.data.split(":")[1])
     t = PENDING_TRADES.pop(sender_id, None)
 
-    # Просто растворяем кнопки, чтобы сообщение красиво осталось в чате
-    try:
-        await cq.message.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
-
+    await cq.message.delete()
     await cq.message.answer("❌ Трейд отменен.")
 
     other_id = sender_id if cq.from_user.id != sender_id else (t['receiver_id'] if t else None)
@@ -1204,8 +1030,3 @@ async def trade_decline(cq: CallbackQuery):
             await cq.bot.send_message(other_id, "❌ Игрок отказался от трейда (или трейд отменен).")
         except:
             pass
-
-
-@router.callback_query(F.data == "ignore")
-async def ignore_cb(cq: CallbackQuery):
-    await cq.answer()
