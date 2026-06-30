@@ -925,34 +925,50 @@ async def pass_back(cq: CallbackQuery):
 
 @router.callback_query(F.data.startswith("pass:"))
 async def show_pass(cq: CallbackQuery):
-    _, p_type, page_str = cq.data.split(":")
-    uid = cq.from_user.id
-    u = get_user(uid)
-    now = datetime.now(MSK)
-    _, days_in_month = calendar.monthrange(now.year, now.month)
+    try:
+        _, p_type, page_str = cq.data.split(":")
+        uid = cq.from_user.id
+        u = get_user(uid)
 
-    # Автоматическое открытие страницы с текущим днем при первом входе
-    if page_str == "start":
-        if now.day <= 6:
-            page = 0
-        elif now.day <= 12:
-            page = 1
-        elif now.day <= 18:
-            page = 2
-        elif now.day <= 24:
-            page = 3
+        if not u:
+            return await cq.answer("❌ Пользователь не найден в БД!", show_alert=True)
+
+        now = datetime.now(MSK)
+        _, days_in_month = calendar.monthrange(now.year, now.month)
+
+        # Автоматическое открытие страницы с текущим днем при первом входе
+        if page_str == "start":
+            if now.day <= 6:
+                page = 0
+            elif now.day <= 12:
+                page = 1
+            elif now.day <= 18:
+                page = 2
+            elif now.day <= 24:
+                page = 3
+            else:
+                page = 4
         else:
-            page = 4
-    else:
-        page = int(page_str)
+            page = int(page_str)
 
-    await render_pass_page(cq, p_type, page, u, now, days_in_month)
+        await render_pass_page(cq, p_type, page, u, now, days_in_month)
+
+        # Обязательно подтверждаем нажатие, чтобы кнопка не "висла"
+        try:
+            await cq.answer()
+        except:
+            pass
+
+    except Exception as e:
+        logging.error(f"Ошибка в show_pass: {e}")
+        await cq.answer(f"⚠️ Ошибка открытия пасса: {e}", show_alert=True)
 
 
 async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, now: datetime, days_in_month: int):
     uid = u[0]
     is_royale = (p_type == "royale")
     current_ym = int(now.strftime("%Y%m"))
+
     if is_royale and u[16] != current_ym:
         bld = InlineKeyboardBuilder()
         bld.button(text="Купить ⭐️", callback_data="buy_royale_pass")
@@ -964,15 +980,23 @@ async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, 
                                             caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\n🃏 Лимитированная карта: Ю Хобин\n⚠️ Данный пасс у вас ещё не приобретен."),
                 reply_markup=bld.as_markup()
             )
-        except:
+        except Exception:
+            try:
+                await cq.message.delete()
+            except:
+                pass
             await cq.message.answer_photo(photo=PASS_ROYALE_IMG_1,
                                           caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\n🃏 Лимитированная карта: Ю Хобин\n\n⚠️ Данный пасс у вас ещё не приобретен.",
                                           reply_markup=bld.as_markup())
         return
+
     data = ROYALE_PASS if is_royale else NORMAL_PASS
     imgs_normal = [PASS_NORMAL_IMG_1, PASS_NORMAL_IMG_2, PASS_NORMAL_IMG_3, PASS_NORMAL_IMG_4, PASS_NORMAL_IMG_5]
     imgs_royale = [PASS_ROYALE_IMG_1, PASS_ROYALE_IMG_2, PASS_ROYALE_IMG_3, PASS_ROYALE_IMG_4, PASS_ROYALE_IMG_5]
-    img = imgs_royale[page] if is_royale else imgs_normal[page]
+
+    # Защита от выхода за пределы списка картинок
+    page_safe = max(0, min(page, 4))
+    img = imgs_royale[page_safe] if is_royale else imgs_normal[page_safe]
 
     start_d = page * 6 + 1
     end_d = min(start_d + 5, days_in_month)
@@ -981,7 +1005,7 @@ async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, 
 
     claims = db_exec("SELECT day FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
                      (uid, now.month, p_type), fetchall=True)
-    claimed_days = [d[0] for d in claims]
+    claimed_days = [d[0] for d in claims] if claims else []
 
     pass_name = "🌠 Рояль пасс" if is_royale else "🏙️ Обычный пасс"
     icons = {'krw': '💴', 'atm': '💳', 'bc': '🪙', 'dia': '💎', 'pack': '🗃️'}
@@ -994,8 +1018,15 @@ async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, 
             r_str = pack_names.get(r_val, 'Пак')
         else:
             r_str = f"{r_val} {icons.get(r_type, '')}"
+
+        # Игнорируем технический "99 день" при отрисовке
+        if d == 99: continue
+
         mark = "✅" if d in claimed_days else ("❌" if d < now.day else ("🎯" if d == now.day else "🕓"))
         rewards_txt += f"{mark} {d} день — {r_str}\n"
+
+    # Считаем реальные дни (без учета 99-го технического дня за главный приз)
+    real_claimed = len([d for d in claimed_days if d != 99])
 
     txt = (
         f"<b>{pass_name}</b>\n\n"
@@ -1006,7 +1037,7 @@ async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, 
         f"✅ — Награда получена\n"
         f"🎯 — Забери сегодня!\n"
         f"🕓 — Ещё не наступил\n\n"
-        f"Получено дней — <b>{len(claimed_days)}/{days_in_month}</b>"
+        f"Получено дней — <b>{real_claimed}/{days_in_month}</b>"
     )
 
     bld = InlineKeyboardBuilder()
@@ -1052,8 +1083,11 @@ async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, 
             try:
                 await cq.message.delete()
                 await cq.message.answer_photo(photo=img, caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
-            except:
-                pass
+            except Exception as inner_e:
+                logging.error(f"Не удалось отправить фото: {inner_e}")
+                # Фолбэк на случай, если картинки не найдены вообще
+                await cq.message.answer(f"⚠️ Ошибка отображения: {inner_e}\n\n{txt}", reply_markup=bld.as_markup(),
+                                        parse_mode="HTML")
 
 
 # ── Хранилище выбранных дней (в памяти, per-user) ──────────
@@ -1431,26 +1465,74 @@ async def pass_main(cq: CallbackQuery):
     uid = cq.from_user.id
     now = datetime.now(MSK)
     _, dim = calendar.monthrange(now.year, now.month)
-    claims = db_exec("SELECT COUNT(*) FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ?",
-                     (uid, now.month, p_type), fetch=True)
+
+    # 1. Проверяем, забрал ли игрок ВСЕ обычные дни (исключаем день 99 из подсчета, если он там есть)
+    claims = db_exec("SELECT COUNT(*) FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ? AND day <= ?",
+                     (uid, now.month, p_type, dim), fetch=True)
 
     if claims[0] < dim:
         return await cq.answer("❌ Соберите награды за все дни месяца!", show_alert=True)
 
+    # 🔥 ФИКС БЕСКОНЕЧНОГО ДЮПА ТРЕЙДАМИ:
+    # Проверяем не инвентарь, а ИСТОРИЮ получения главного приза в этом месяце (день 99)
+    prize_claimed = db_exec("SELECT 1 FROM pass_claims WHERE user_id = ? AND month = ? AND pass_type = ? AND day = 99",
+                            (uid, now.month, p_type), fetch=True)
+
+    if prize_claimed:
+        return await cq.answer("✅ Вы уже забирали главный приз в этом месяце!", show_alert=True)
+
+    # 2. Выдача приза
     if p_type == "normal":
+        # Проверяем наличие титула (титулы не трейдятся, но защита от дублей не помешает)
         has_title = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?",
                             (uid, MAIN_PRIZE_NORMAL_TITLE), fetch=True)
-        if has_title:
-            return await cq.answer("✅ Главный приз уже в инвентаре!", show_alert=True)
-        db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, MAIN_PRIZE_NORMAL_TITLE))
+        if not has_title:
+            db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, MAIN_PRIZE_NORMAL_TITLE))
+
+        # ЗАПИСЫВАЕМ ФАКТ ПОЛУЧЕНИЯ
+        db_exec("INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, 99, ?)",
+                (uid, now.month, p_type))
         await cq.answer("✅ Получен главный приз: Титул!", show_alert=True)
+
     else:
-        has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
-                           (uid, MAIN_PRIZE_ROYALE_CARD), fetch=True)
-        if has_card:
-            return await cq.answer("✅ Главный приз уже в инвентаре!", show_alert=True)
-        give_card_to_user(uid, MAIN_PRIZE_ROYALE_CARD)
-        await cq.answer("✅ Получен эксклюзивный персонаж Рояль Пасса!", show_alert=True)
+        # ЗАПИСЫВАЕМ ФАКТ ПОЛУЧЕНИЯ ДО ВЫДАЧИ КАРТЫ
+        db_exec("INSERT INTO pass_claims (user_id, month, day, pass_type) VALUES (?, ?, 99, ?)",
+                (uid, now.month, p_type))
+
+        # Выдаем карту (тут уже работает исправленная в db.py функция, которая чекает и сундук, если вдруг карта уже есть)
+        is_new, krw_earn, c = give_card_to_user(uid, MAIN_PRIZE_ROYALE_CARD)
+
+        if c and is_new:
+            txt = (
+                f"🃏 <b>Получена лимитированная карта!</b>\n\n"
+                f"<b>🎴 Персонаж:</b> {c['name']}\n"
+                f"<b>🔮 Редкость:</b> {c['rarity']}\n"
+                f"<b>👊 Стиль боя:</b> {c['style']}\n"
+                f"<b>🪐 Вселенная:</b> {c.get('series', 'Неизвестно')}\n\n"
+                f"<b>⚡️ Скорость:</b> {c['speed']}\n"
+                f"<b>💪 Сила:</b> {c['strength']}\n"
+                f"<b>🧠 Интеллект:</b> {c['intellect']}"
+            )
+
+            try:
+                if "Божественная" in c.get("rarity", "") and c.get("video"):
+                    await cq.message.answer_video(
+                        video=FSInputFile(f"images/cards/{c['video']}"),
+                        caption=txt, parse_mode="HTML",
+                        width=c.get("width", 960), height=c.get("height", 1280),
+                        has_spoiler=True, supports_streaming=True
+                    )
+                else:
+                    await cq.message.answer_photo(
+                        photo=FSInputFile(f"images/cards/{c['file']}"),
+                        caption=txt, parse_mode="HTML", has_spoiler=True
+                    )
+            except Exception:
+                await cq.message.answer(txt, parse_mode="HTML")
+
+            await cq.answer("✅ Получен эксклюзивный персонаж Рояль Пасса!", show_alert=True)
+        else:
+            await cq.answer(f"✅ Карта уже была у вас и конвертирована в {krw_earn} KRW!", show_alert=True)
 
 @router.callback_query(F.data == "buy_royale_pass")
 async def buy_rp(cq: CallbackQuery, bot: Bot):

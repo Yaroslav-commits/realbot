@@ -585,9 +585,11 @@ def give_card_to_user(uid, card_key):
         if not c:
             return False, 0, None
 
-        has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, card_key), fetch=True)
+        # 🔥 ФИКС ДЮПА: Теперь чекаем и инвентарь, и сундук!
+        has_card_inv = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, card_key), fetch=True)
+        has_card_stash = db_exec("SELECT 1 FROM cards_stash WHERE user_id = ? AND card_id = ?", (uid, card_key), fetch=True)
 
-        if has_card:
+        if has_card_inv or has_card_stash:
             rarity_data = RARITIES.get(c.get('rarity'))
             if not rarity_data:
                 return False, 0, None
