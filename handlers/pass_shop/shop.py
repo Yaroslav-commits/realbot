@@ -896,17 +896,17 @@ import calendar
 # Жесткая привязка к МСК (UTC+3)
 MSK = timezone(timedelta(hours=3))
 
-PASS_NORMAL_IMG_1 = FSInputFile("images/shop/pass_normal_1.jpg")
-PASS_NORMAL_IMG_2 = FSInputFile("images/shop/pass_normal_2.jpg")
-PASS_NORMAL_IMG_3 = FSInputFile("images/shop/pass_normal_3.jpg")
-PASS_NORMAL_IMG_4 = FSInputFile("images/shop/pass_normal_4.jpg")
-PASS_NORMAL_IMG_5 = FSInputFile("images/shop/pass_normal_5.jpg")
+PASS_NORMAL_IMG_1 = FSInputFile("images/shop/pass_normal_1.jpeg")
+PASS_NORMAL_IMG_2 = FSInputFile("images/shop/pass_normal_2.jpeg")
+PASS_NORMAL_IMG_3 = FSInputFile("images/shop/pass_normal_3.jpeg")
+PASS_NORMAL_IMG_4 = FSInputFile("images/shop/pass_normal_4.jpeg")
+PASS_NORMAL_IMG_5 = FSInputFile("images/shop/pass_normal_5.jpeg")
 
-PASS_ROYALE_IMG_1 = FSInputFile("images/shop/pass_royale_1.jpg")
-PASS_ROYALE_IMG_2 = FSInputFile("images/shop/pass_royale_2.jpg")
-PASS_ROYALE_IMG_3 = FSInputFile("images/shop/pass_royale_3.jpg")
-PASS_ROYALE_IMG_4 = FSInputFile("images/shop/pass_royale_4.jpg")
-PASS_ROYALE_IMG_5 = FSInputFile("images/shop/pass_royale_5.jpg")
+PASS_ROYALE_IMG_1 = FSInputFile("images/shop/pass_royale_1.jpeg")
+PASS_ROYALE_IMG_2 = FSInputFile("images/shop/pass_royale_2.jpeg")
+PASS_ROYALE_IMG_3 = FSInputFile("images/shop/pass_royale_3.jpeg")
+PASS_ROYALE_IMG_4 = FSInputFile("images/shop/pass_royale_4.jpeg")
+PASS_ROYALE_IMG_5 = FSInputFile("images/shop/pass_royale_5.jpeg")
 
 
 @router.message(F.text == "🏞️ Пасс")

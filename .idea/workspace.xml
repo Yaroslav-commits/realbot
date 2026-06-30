@@ -6,6 +6,21 @@
   <component name="ChangeListManager">
     <list default="true" id="9e9a111f-dea5-49ef-9a80-af6150603ae2" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/cards.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/deck.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/deck.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/pass_shop/shop.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/pass_shop/shop.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/user.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/user.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/pass_normal_1.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/pass_normal_2.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/pass_normal_3.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/pass_normal_4.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/pass_normal_5.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/pass_royale_1.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/pass_royale_2.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/pass_royale_3.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/pass_royale_4.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/shop/pass_royale_5.jpg" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

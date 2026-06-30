@@ -8,5 +8,5 @@ DB_PATH = os.path.join("data", "lookism_bot.db")
 GET_COOLDOWN_HOURS = 3
 BATTLE_COOLDOWN_HOURS = 1
 
-MAIN_PRIZE_NORMAL_TITLE = "title_pass_streem"   # Ключ титула
-MAIN_PRIZE_ROYALE_CARD = "yu_hobin_pass"   # Ключ эксклюзивной карты
+MAIN_PRIZE_NORMAL_TITLE = "title_pass_sword"   # Ключ титула
+MAIN_PRIZE_ROYALE_CARD = "ronan"   # Ключ эксклюзивной карты

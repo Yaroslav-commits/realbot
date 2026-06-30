@@ -602,6 +602,16 @@ async def divine_toggle(cq: CallbackQuery):
 
 @router.callback_query(F.data.startswith("trade_init:"))
 async def trade_init(cq: CallbackQuery, state: FSMContext):
+    # ЗАЩИТА: Проверяем, не занят ли инициатор уже каким-то трейдом
+    def is_user_busy(uid):
+        if uid in PENDING_TRADES: return True
+        for tr in PENDING_TRADES.values():
+            if tr.get('receiver_id') == uid: return True
+        return False
+
+    if is_user_busy(cq.from_user.id):
+        return await cq.answer("❌ Вы уже участвуете в активном обмене! Завершите или отмените его перед новым.", show_alert=True)
+
     await cq.answer()
     cid = cq.data.split(":", 1)[1]
 
@@ -707,6 +717,17 @@ async def trade_cancel_init(cq: CallbackQuery, state: FSMContext):
 
 @router.message(TradeState.waiting_for_trade_id)
 async def process_trade_id(msg: types.Message, state: FSMContext):
+    # ЗАЩИТА: Проверка занятости (Trade Lock)
+    def is_user_busy(uid):
+        if uid in PENDING_TRADES: return True
+        for tr in PENDING_TRADES.values():
+            if tr.get('receiver_id') == uid: return True
+        return False
+
+    if is_user_busy(msg.from_user.id):
+        await state.clear()
+        return await msg.answer("❌ Вы уже участвуете в активном обмене! Сначала завершите или отмените его.")
+
     data = await state.get_data()
     cid = data.get('trade_card')
     if not cid:
@@ -725,6 +746,11 @@ async def process_trade_id(msg: types.Message, state: FSMContext):
         await state.clear()
         PENDING_TRADES.pop(msg.from_user.id, None)
         return await msg.answer("❌ Нельзя трейдиться с самим собой. Трейд отменен.")
+
+    if is_user_busy(target_id):
+        await state.clear()
+        PENDING_TRADES.pop(msg.from_user.id, None)
+        return await msg.answer("❌ Этот игрок сейчас занят другим обменом. Попробуйте позже.")
 
     u_target = get_user(target_id)
     if not u_target:
@@ -1198,10 +1224,27 @@ async def trade_decline(cq: CallbackQuery):
 
     await cq.message.answer("❌ Трейд отменен.")
 
-    other_id = sender_id if cq.from_user.id != sender_id else (t['receiver_id'] if t else None)
+    # Интеллектуально вычисляем, кому нужно отправить уведомление
+    other_id = None
+    if t:
+        # Если трейд был активен, смотрим, кто нажал отмену
+        if cq.from_user.id == sender_id:
+            other_id = t.get('receiver_id') # Отменил создатель, уведомляем второго
+        else:
+            other_id = sender_id # Отменил второй, уведомляем создателя
+    else:
+        # Если трейд уже удален, но кнопку нажал второй игрок
+        if cq.from_user.id != sender_id:
+            other_id = sender_id
+
     if other_id:
         try:
-            await cq.bot.send_message(other_id, "❌ Игрок отказался от трейда (или трейд отменен).")
+            name = escape(cq.from_user.first_name)
+            await cq.bot.send_message(
+                other_id,
+                f"❌ Игрок <a href='tg://user?id={cq.from_user.id}'>{name}</a> отменил трейд.",
+                parse_mode="HTML"
+            )
         except:
             pass
 

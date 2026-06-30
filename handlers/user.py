@@ -79,7 +79,7 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
             padded_payload = payload + "=" * padding if padding != 4 else payload
             raw = base64.urlsafe_b64decode(padded_payload.encode()).decode()
 
-            # ВАЖНОЕ ИСПРАВЛЕНИЕ: Делим ровно на 3 части, так как ID карты может содержать двоеточие (напр. battle:EPIC)
+            # Делим ровно на 3 части (так как ID карты может содержать двоеточие)
             parts = raw.split(":", 2)
 
             if len(parts) == 3 and parts[0] == "trade":
@@ -111,6 +111,19 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
     if is_trade:
         if trade_sender_id == msg.from_user.id:
             return await msg.answer("❌ Вы не можете обмениваться сами с собой по своей же ссылке!")
+
+        # ЗАЩИТА: Проверка на занятость игроков (Trade Lock)
+        def is_user_busy(uid):
+            if uid in PENDING_TRADES: return True
+            for tr in PENDING_TRADES.values():
+                if tr.get('receiver_id') == uid: return True
+            return False
+
+        if is_user_busy(msg.from_user.id):
+            return await msg.answer("❌ Вы уже участвуете в активном обмене! Сначала завершите или отмените его.")
+
+        if is_user_busy(trade_sender_id):
+            return await msg.answer("❌ Владелец ссылки сейчас занят другим обменом.")
 
         # Проверяем, есть ли всё ещё эта карта у инициатора
         sender_has = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
