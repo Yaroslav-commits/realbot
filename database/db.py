@@ -576,8 +576,6 @@ def get_stash(uid: int):
     rows = db_exec("SELECT card_id FROM cards_stash WHERE user_id = ?", (uid,), fetchall=True)
     return [r[0] for r in rows] if rows else []
 
-
-
 def give_card_to_user(uid, card_key):
     """Выдаёт карту игроку. Возвращает (is_new, krw, card_data) или (False, 0, None) при ошибке."""
     try:
@@ -585,11 +583,10 @@ def give_card_to_user(uid, card_key):
         if not c:
             return False, 0, None
 
-        # 🔥 ФИКС ДЮПА: Теперь чекаем и инвентарь, и сундук!
+        # Проверяем только основной инвентарь. Карты в сундуке больше не считаются дубликатами.
         has_card_inv = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, card_key), fetch=True)
-        has_card_stash = db_exec("SELECT 1 FROM cards_stash WHERE user_id = ? AND card_id = ?", (uid, card_key), fetch=True)
 
-        if has_card_inv or has_card_stash:
+        if has_card_inv:
             rarity_data = RARITIES.get(c.get('rarity'))
             if not rarity_data:
                 return False, 0, None

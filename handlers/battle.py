@@ -3234,6 +3234,11 @@ async def stash_do_put_cb(cq: CallbackQuery):
     if in_deck:
         return await cq.answer("Эта карта стоит в активной колоде! Уберите её сначала.", show_alert=True)
 
+    # 🔥 НОВОЕ: Ограничение на 2 одинаковые карты в сундуке
+    stash_count = db_exec("SELECT COUNT(*) FROM cards_stash WHERE user_id = ? AND card_id = ?", (uid, cid), fetch=True)
+    if stash_count and stash_count[0] >= 2:
+        return await cq.answer("❌ В сундуке нельзя хранить больше 2-х одинаковых карт!", show_alert=True)
+
     ok = stash_card(uid, cid)
     if not ok:
         return await cq.answer("Карта не найдена в инвентаре.", show_alert=True)

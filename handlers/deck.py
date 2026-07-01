@@ -62,15 +62,17 @@ def _card_power(cid: str) -> int:
     return c.get('speed', 0) + c.get('strength', 0) + c.get('intellect', 0)
 
 
-def _get_user_cids(uid: int) -> list[str]:
-    """Возвращает уникальные card_id из инвентаря И сундука пользователя."""
+def _get_user_cids(uid: int, include_stash: bool = False) -> list[str]:
+    """Возвращает уникальные card_id из инвентаря. Опционально - вместе с сундуком для коллекции."""
     rows = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (uid,), fetchall=True)
-    stash_rows = db_exec("SELECT card_id FROM cards_stash WHERE user_id = ?", (uid,), fetchall=True)
+
+    if include_stash:
+        stash_rows = db_exec("SELECT card_id FROM cards_stash WHERE user_id = ?", (uid,), fetchall=True)
+        rows = rows + stash_rows
 
     seen = set()
     result = []
-    # Объединяем результаты обеих таблиц
-    for (cid,) in rows + stash_rows:
+    for (cid,) in rows:
         if cid not in seen:
             seen.add(cid)
             result.append(cid)
@@ -416,7 +418,8 @@ async def inv_view_paginated(cq: CallbackQuery):
 
 @router.callback_query(F.data == "inv_collection")
 async def inv_collection_cb(cq: CallbackQuery):
-    user_cids = _get_user_cids(cq.from_user.id)
+    # Добавляем include_stash=True, чтобы в прогресс коллекции шли и карты из сундука
+    user_cids = _get_user_cids(cq.from_user.id, include_stash=True)
     user_owned = set(user_cids)
 
     total_cards = len(CARDS)
