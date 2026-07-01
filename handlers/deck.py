@@ -23,9 +23,11 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
                     GET_COOLDOWN_HOURS, BATTLE_COOLDOWN_HOURS,
                     MAIN_PRIZE_NORMAL_TITLE, MAIN_PRIZE_ROYALE_CARD)
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
-                        NORMAL_PASS, ROYALE_PASS, is_divine)
+                        NORMAL_PASS, ROYALE_PASS, is_divine,
+                        AWAKENED_SKIN, ABSOLUTE_SKIN)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
-                         pull_random_card, give_card_to_user)
+                         pull_random_card, give_card_to_user,
+                         get_active_skin, get_user_skins_for_card, equip_skin, unequip_skin)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 from media_cache import send_cached_video
@@ -500,12 +502,32 @@ async def view_card(cq: CallbackQuery):
     if not c:
         return await cq.answer("Карта не найдена.", show_alert=True)
 
+    # --- ПРОВЕРКА СКИНОВ ---
+    active_skin = get_active_skin(cq.from_user.id, cid)
+    is_video = False
+    skin_label = ""
+    asset_path = ""
+
+    if active_skin == "awakened" and cid in AWAKENED_SKIN:
+        asset_path = f"images/cards/{AWAKENED_SKIN[cid]['skin_art_file']}"
+        skin_label = " <i>(💠 Пробужденный)</i>"
+    elif active_skin == "absolute" and cid in ABSOLUTE_SKIN:
+        asset_path = f"images/cards/{ABSOLUTE_SKIN[cid]['skin_video_file']}"
+        is_video = True
+        skin_label = " <i>(🔮 Абсолютный)</i>"
+    else:
+        if is_divine(cid) and c.get("video"):
+            asset_path = f"images/cards/{c['video']}"
+            is_video = True
+        else:
+            asset_path = f"images/cards/{c['file']}"
+
     power = _card_power(cid)
     power_filled = min(10, power // 30)
     power_bar = "▰" * power_filled + "▱" * (10 - power_filled)
 
     txt = (
-        f"🃏 <b>{c['name']}</b>\n\n"
+        f"🃏 <b>{c['name']}</b>{skin_label}\n\n"
         f"🔮 Редкость: {c['rarity']}\n"
         f"👊 Стиль боя: {c['style']}\n"
         f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n\n"
@@ -518,17 +540,22 @@ async def view_card(cq: CallbackQuery):
     bld = InlineKeyboardBuilder()
     bld.button(text="〽️ Трейд", callback_data=f"trade_init:{cid}")
 
-    if is_divine(cid) and c.get("video"):
+    if not active_skin and is_divine(cid) and c.get("video"):
         bld.button(text="Показать арт 👀", callback_data=f"divshow:{cid}:art:{page}:{r_filter}:{excl_filter}")
+
+    # Кнопка меню Обликов появляется только если у карты вообще существуют скины
+    if cid in AWAKENED_SKIN or cid in ABSOLUTE_SKIN:
+        bld.button(text="🎭 Облики", callback_data=f"card_skins:{cid}:{page}:{r_filter}:{excl_filter}")
 
     bld.button(text="🔙 Назад", callback_data=f"inv_view:{page}:{r_filter}:{excl_filter}")
     bld.adjust(1)
+
     await cq.message.delete()
-    if is_divine(cid) and c.get("video"):
+    if is_video:
         await send_cached_video(
             cq.bot,
             chat_id=cq.message.chat.id,
-            file_path=f"images/cards/{c['video']}",
+            file_path=asset_path,
             caption=txt,
             width=c.get("width", 960),
             height=c.get("height", 1280),
@@ -538,12 +565,110 @@ async def view_card(cq: CallbackQuery):
         )
     else:
         await cq.message.answer_photo(
-            photo=FSInputFile(f"images/cards/{c['file']}"),
+            photo=FSInputFile(asset_path),
             caption=txt,
             parse_mode="HTML",
             reply_markup=bld.as_markup()
         )
 
+# ================== МЕНЮ СКИНОВ ==================
+@router.callback_query(F.data.startswith("card_skins:"))
+async def card_skins_menu(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    cid = parts[1]
+    page = parts[2]
+    r_filter = parts[3]
+    excl_filter = parts[4]
+
+    c = CARDS.get(cid)
+    uid = cq.from_user.id
+
+    # Получаем скины игрока
+    user_skins = get_user_skins_for_card(uid, cid)
+    owned_skins = {st: bool(ia) for st, ia in user_skins}
+
+    txt = f"🎭 <b>Облики для карты «{c['name']}»</b>\n\n"
+    bld = InlineKeyboardBuilder()
+    sizes = []
+
+    # 💠 Пробужденный скин
+    if cid in AWAKENED_SKIN:
+        is_owned = "awakened" in owned_skins
+        is_active = owned_skins.get("awakened", False)
+        status = "🟢 Надет" if is_active else ("🟡 Доступен" if is_owned else "🔴 Заблокирован 🔒")
+        txt += f"💠 <b>Пробужденный:</b> {status}\n"
+
+        if is_owned:
+            bld.button(text="👁️ Смотреть 💠", callback_data=f"skin_act:view:awakened:{cid}:{page}:{r_filter}:{excl_filter}")
+            if is_active:
+                bld.button(text="❌ Снять 💠", callback_data=f"skin_act:unequip:awakened:{cid}:{page}:{r_filter}:{excl_filter}")
+            else:
+                bld.button(text="✅ Надеть 💠", callback_data=f"skin_act:equip:awakened:{cid}:{page}:{r_filter}:{excl_filter}")
+            sizes.append(2)
+
+    # 🔮 Абсолютный скин
+    if cid in ABSOLUTE_SKIN:
+        is_owned = "absolute" in owned_skins
+        is_active = owned_skins.get("absolute", False)
+        status = "🟢 Надет" if is_active else ("🟡 Доступен" if is_owned else "🔴 Заблокирован 🔒")
+        txt += f"🔮 <b>Абсолютный:</b> {status}\n"
+
+        if is_owned:
+            bld.button(text="👁️ Смотреть 🔮", callback_data=f"skin_act:view:absolute:{cid}:{page}:{r_filter}:{excl_filter}")
+            if is_active:
+                bld.button(text="❌ Снять 🔮", callback_data=f"skin_act:unequip:absolute:{cid}:{page}:{r_filter}:{excl_filter}")
+            else:
+                bld.button(text="✅ Надеть 🔮", callback_data=f"skin_act:equip:absolute:{cid}:{page}:{r_filter}:{excl_filter}")
+            sizes.append(2)
+
+    bld.button(text="🔙 К карте", callback_data=f"viewcard:{cid}:{page}:{r_filter}:{excl_filter}")
+    sizes.append(1)
+    bld.adjust(*sizes)
+
+    await cq.message.edit_caption(caption=txt, parse_mode="HTML", reply_markup=bld.as_markup())
+
+
+@router.callback_query(F.data.startswith("skin_act:"))
+async def skin_action(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    action, skin_type, cid, page, r_filter, excl_filter = parts[1], parts[2], parts[3], parts[4], parts[5], parts[6]
+    uid = cq.from_user.id
+    c = CARDS.get(cid)
+
+    if action == "equip":
+        equip_skin(uid, cid, skin_type)
+        await cq.answer("Облик успешно надет! ✅")
+        # Возвращаемся к карте, чтобы она сразу отобразилась с новым скином
+        cq.data = f"viewcard:{cid}:{page}:{r_filter}:{excl_filter}"
+        return await view_card(cq)
+
+    elif action == "unequip":
+        unequip_skin(uid, cid)
+        await cq.answer("Облик снят! ❌")
+        cq.data = f"viewcard:{cid}:{page}:{r_filter}:{excl_filter}"
+        return await view_card(cq)
+
+    elif action == "view":
+        await cq.message.delete()
+        bld = InlineKeyboardBuilder()
+        bld.button(text="🔙 Назад к обликам", callback_data=f"card_skins:{cid}:{page}:{r_filter}:{excl_filter}")
+
+        txt = f"🎭 <b>Просмотр облика</b>\n\n🃏 Карта: {c['name']}\nТип: {'Пробужденный 💠' if skin_type == 'awakened' else 'Абсолютный 🔮'}"
+
+        if skin_type == "awakened":
+            file_path = f"images/cards/{AWAKENED_SKIN[cid]['skin_art_file']}"
+            await cq.message.answer_photo(
+                photo=FSInputFile(file_path),
+                caption=txt, parse_mode="HTML", reply_markup=bld.as_markup()
+            )
+        else:
+            file_path = f"images/cards/{ABSOLUTE_SKIN[cid]['skin_video_file']}"
+            await send_cached_video(
+                cq.bot, chat_id=cq.message.chat.id,
+                file_path=file_path, caption=txt,
+                reply_markup=bld.as_markup(), parse_mode="HTML"
+            )
+            
 # ===== Переключение арт/видео для Божественной карты =====
 @router.callback_query(F.data.startswith("divshow:"))
 async def divine_toggle(cq: CallbackQuery):

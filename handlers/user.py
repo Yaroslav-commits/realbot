@@ -24,7 +24,7 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
                     GET_COOLDOWN_HOURS, BATTLE_COOLDOWN_HOURS,
                     MAIN_PRIZE_NORMAL_TITLE, MAIN_PRIZE_ROYALE_CARD)
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
-                        NORMAL_PASS, ROYALE_PASS)
+                        NORMAL_PASS, ROYALE_PASS, AWAKENED_SKIN, ABSOLUTE_SKIN)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user, try_use_promo, grant_retroactive_royale_pass,
                          get_user_by_ref_code, get_referral_count, get_users_for_cooldown_notify,
@@ -32,7 +32,8 @@ from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          get_notifications_enabled, is_anonymous, toggle_anonymity,
                          user_has_bg, user_has_title, give_bg_to_user, give_title_to_user,
                          is_premium, get_premium_until,
-                         get_users_for_battle_cooldown_notify, mark_battle_cooldown_notified)
+                         get_users_for_battle_cooldown_notify, mark_battle_cooldown_notified,
+                         give_skin_to_user)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 from media_cache import send_cached_video
@@ -2781,3 +2782,61 @@ async def cmd_breakdaily(message: types.Message):
 
     await message.reply("💔 <b>Стрик сломан!</b>\nДата сбора отмотана на 3 дня назад.\n"
                         "Зайдите в Web App, и вам предложат восстановить стрик за 10 💎 или сбросить.")
+
+# ============ ВЫДАЧА СКИНОВ (АДМИН) ============
+@router.message(Command("give_skin"))
+async def cmd_give_skin(msg: types.Message, bot: Bot):
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    args = msg.text.split()
+    if len(args) < 4:
+        return await msg.answer(
+            "❌ <b>Использование:</b> <code>/give_skin [ID_игрока] [ID_карты] [awakened/absolute]</code>\n"
+            "<b>Пример:</b> <code>/give_skin 123456789 yu_cha_ryeon awakened</code>\n\n"
+            "<i>Типы скинов:\nawakened — 💠 Пробужденный (Арт)\nabsolute — 🔮 Абсолютный (Видео)</i>",
+            parse_mode="HTML"
+        )
+
+    try:
+        uid = int(args[1])
+    except ValueError:
+        return await msg.answer("❌ ID игрока должен быть числом.")
+
+    card_id = args[2]
+    skin_type = args[3].lower()
+
+    if skin_type not in ["awakened", "absolute"]:
+        return await msg.answer("❌ Тип скина должен быть 'awakened' или 'absolute'.")
+
+    if card_id not in CARDS:
+        return await msg.answer(f"❌ Карта с ключом «{card_id}» не найдена!")
+
+    # Проверка, существует ли вообще такой скин для этой карты в базе
+    if skin_type == "awakened" and card_id not in AWAKENED_SKIN:
+        return await msg.answer(f"❌ У карты «{card_id}» не существует Пробужденного (awakened) скина!")
+    if skin_type == "absolute" and card_id not in ABSOLUTE_SKIN:
+        return await msg.answer(f"❌ У карты «{card_id}» не существует Абсолютного (absolute) скина!")
+
+    # Выдаем скин через функцию БД
+    success = give_skin_to_user(uid, card_id, skin_type)
+
+    card_name = CARDS[card_id]["name"]
+    skin_label = "💠 Пробужденный" if skin_type == "awakened" else "🔮 Абсолютный"
+
+    if success:
+        # Уведомляем счастливого игрока
+        try:
+            await bot.send_message(
+                uid,
+                f"🎉 <b>Секретный подарок от Администрации!</b>\n\n"
+                f"Вам выдан <b>{skin_label}</b> облик для карты <b>«{card_name}»</b>!\n"
+                f"<i>Зайдите в Инвентарь 🧳 -> Мои карты, найдите её и нажмите кнопку «🎭 Облики», чтобы примерить.</i>",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass # Если у игрока заблокирован бот
+
+        await msg.answer(f"✅ {skin_label} облик для карты «{card_name}» успешно выдан игроку <code>{uid}</code>!", parse_mode="HTML")
+    else:
+        await msg.answer(f"⚠️ У игрока <code>{uid}</code> уже есть этот облик!", parse_mode="HTML")

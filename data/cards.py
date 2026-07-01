@@ -745,6 +745,30 @@ TITLES = {
 NORMAL_PASS = {1:('krw',150), 2:('atm',5), 3:('bc',120), 4:('atm',6), 5:('pack','epic'), 6:('dia',5), 7:('krw',190), 8:('atm',3), 9:('krw',100), 10:('bc',100), 11:('atm',4), 12:('pack','epic'), 13:('krw',175), 14:('dia',3), 15:('krw',60), 16:('atm',5), 17:('bc',100), 18:('krw',70), 19:('pack','epic'), 20:('atm',3), 21:('krw',300), 22:('dia',3), 23:('krw',90), 24:('bc',50), 25:('pack','leg'), 26:('krw',100), 27:('atm',5), 28:('krw',250), 29:('dia',4), 30:('krw',50), 31:('atm',10)}
 ROYALE_PASS = {1:('krw',550), 2:('atm',20), 3:('bc',250), 4:('atm',18), 5:('pack','epic'), 6:('dia',25), 7:('krw',700), 8:('atm',16), 9:('krw',420), 10:('bc',500), 11:('atm',10), 12:('pack','epic'), 13:('krw',250), 14:('dia',150), 15:('krw',180), 16:('atm',12), 17:('bc',600), 18:('krw',200), 19:('pack','leg'), 20:('atm',25), 21:('krw',630), 22:('dia',50), 23:('krw',460), 24:('bc',90), 25:('pack','leg'), 26:('krw',500), 27:('atm',32), 28:('krw',850), 29:('dia',200), 30:('krw',400), 31:('atm',20)}
 
+# ===== СКИНЫ ДЛЯ КАРТ =====
+
+AWAKENED_SKIN = {
+    # Пробужденный скин (Арт - 💠)
+    "yu_cha_ryeon": {"skin_art_file": "yu_cha_ryeon_awakened.jpeg", "exclusive": False}, # Ю Ча Рён
+    "alfina": {"skin_art_file": "alfina_awakened.jpeg", "exclusive": False},             # Альфина
+    "park_jinyeong": {"skin_art_file": "park_jinyeong_awakened.jpeg", "exclusive": False} # Пак Джинён
+}
+
+ABSOLUTE_SKIN = {
+    # Абсолютный скин (Видео - 🔮)
+    "hong_jayeol": {"skin_video_file": "hong_jayeol_absolute.mp4", "exclusive": False},  # Хон Джаёль
+    "lineman": {"skin_video_file": "lineman_absolute.mp4", "exclusive": False}           # Лайнмен
+}
+
+# ===== Хелперы для скинов =====
+def has_awakened_skin(card_id: str) -> bool:
+    """Проверяет, существует ли в игре Пробужденный скин для этой карты."""
+    return card_id in AWAKENED_SKIN
+
+def has_absolute_skin(card_id: str) -> bool:
+    """Проверяет, существует ли в игре Абсолютный скин для этой карты."""
+    return card_id in ABSOLUTE_SKIN
+
 # ===== Хелпер для Божественных карт (картинка + видео) =====
 def is_divine(card_or_id):
     """Принимает либо словарь карты, либо её ключ. True если редкость Божественная."""
