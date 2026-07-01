@@ -20,10 +20,11 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
                     GET_COOLDOWN_HOURS, BATTLE_COOLDOWN_HOURS,
                     MAIN_PRIZE_NORMAL_TITLE, MAIN_PRIZE_ROYALE_CARD)
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
-                        NORMAL_PASS, ROYALE_PASS, is_divine)
+                        NORMAL_PASS, ROYALE_PASS, is_divine,
+                        AWAKENED_SKIN, ABSOLUTE_SKIN)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user, is_premium,
-                         stash_card, unstash_card, get_stash)
+                         stash_card, unstash_card, get_stash, get_active_skin)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 from media_cache import send_cached_video
@@ -33,6 +34,33 @@ import handlers as _handlers
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 import asyncio
+
+def get_card_media_info(uid: int, cid: str, base_card: dict):
+    """Определяет, какой медиафайл (арт/видео/скин) нужно показать для карты."""
+    if uid <= 0:  # Для бота
+        active_skin = None
+    else:
+        active_skin = get_active_skin(uid, cid)
+
+    is_video = False
+    asset_path = ""
+    skin_label = ""
+
+    if active_skin == "awakened" and cid in AWAKENED_SKIN:
+        asset_path = f"images/cards/{AWAKENED_SKIN[cid]['skin_art_file']}"
+        skin_label = " 💠"
+    elif active_skin == "absolute" and cid in ABSOLUTE_SKIN:
+        asset_path = f"images/cards/{ABSOLUTE_SKIN[cid]['skin_video_file']}"
+        is_video = True
+        skin_label = " 🔮"
+    else:
+        if ("Божественная" in base_card.get('rarity', '') or is_divine(base_card)) and base_card.get("video"):
+            asset_path = f"images/cards/{base_card['video']}"
+            is_video = True
+        else:
+            asset_path = f"images/cards/{base_card['file']}"
+
+    return asset_path, is_video, skin_label
 
 class BattleState(StatesGroup):
     waiting_for_friend_id = State()
@@ -279,10 +307,16 @@ async def view_deck(cq: CallbackQuery):
                     "Обычная ⚪️": 1}
     c_objs = [(cid, CARDS[cid]) for (cid,) in deck]
     c_objs.sort(key=lambda x: rarity_order.get(x[1]['rarity'], 0), reverse=True)
+
     media = []
     for i, (cid, c) in enumerate(c_objs):
-        txt_card = f"{i + 1}. {c['name']} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
-        media.append(types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c['file']}"), caption=txt_card))
+        asset_path, is_video, skin_label = get_card_media_info(cq.from_user.id, cid, c)
+        txt_card = f"{i + 1}. {c['name']}{skin_label} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
+
+        if is_video:
+            media.append(types.InputMediaVideo(media=FSInputFile(asset_path), caption=txt_card))
+        else:
+            media.append(types.InputMediaPhoto(media=FSInputFile(asset_path), caption=txt_card))
 
     await cq.message.answer_media_group(media=media)
 
@@ -943,30 +977,24 @@ async def process_card_choice(gid, uid, card, bot):
     bld.button(text="💪 Сила", callback_data=f"b_style:{gid}:str")
     bld.button(text="🧠 Интеллект", callback_data=f"b_style:{gid}:int")
 
-    txt = f"Выбрана карта: {CARDS[card]['name']}\nВыберите ⚔️ Атаку \nСтили: ⚡️ Скорость, 💪 Сила, 🧠 Интеллект.\n\nНа выбор дается 30 секунд"
     card_data = CARDS[card]
+    asset_path, is_video, skin_label = get_card_media_info(uid, card, card_data)
+
+    txt = f"Выбрана карта: {card_data['name']}{skin_label}\nВыберите ⚔️ Атаку \nСтили: ⚡️ Скорость, 💪 Сила, 🧠 Интеллект.\n\nНа выбор дается 30 секунд"
+
     msg = None
     try:
-        if is_divine(card_data) and card_data.get("video"):
+        if is_video:
             msg = await send_cached_video(
-                bot,
-                chat_id=uid,
-                file_path=f"images/cards/{card_data['video']}",
-                caption=txt,
-                width=card_data.get("width", 960),
-                height=card_data.get("height", 1280),
-                reply_markup=bld.as_markup(),
-                supports_streaming=True
+                bot, chat_id=uid, file_path=asset_path, caption=txt,
+                width=card_data.get("width", 960), height=card_data.get("height", 1280),
+                reply_markup=bld.as_markup(), supports_streaming=True
             )
         else:
             msg = await bot.send_photo(
-                uid,
-                photo=FSInputFile(f"images/cards/{card_data['file']}"),
-                caption=txt,
-                reply_markup=bld.as_markup()
+                uid, photo=FSInputFile(asset_path), caption=txt, reply_markup=bld.as_markup()
             )
     except Exception as e:
-        # критично: если медиа карты упало, игра НЕ должна виснуть — шлём fallback с кнопками
         logging.error(f"send card media failed for {uid}, card={card}: {e}")
         try:
             msg = await bot.send_message(uid, txt, reply_markup=bld.as_markup())
@@ -990,7 +1018,6 @@ async def process_card_choice(gid, uid, card, bot):
                     await resolve_round(gid, bot)
                 except Exception as e:
                     logging.error(f"resolve_round failed (bot path): {e}")
-                    # --- ИСПРАВЛЕНИЕ: Добавлен фоллбек (спасение от зависания) ---
                     if gid in GAMES:
                         GAMES[gid]['round'] += 1
                         GAMES[gid]['p1_c'] = GAMES[gid]['p2_c'] = GAMES[gid]['p1_s'] = GAMES[gid]['p2_s'] = None
@@ -999,7 +1026,6 @@ async def process_card_choice(gid, uid, card, bot):
                                                    "⚠️ Возникла ошибка сервера в прошлом раунде, раунд пропущен.")
                         except:
                             pass
-
                         if GAMES[gid]['round'] > 5:
                             await finish_game(gid, bot)
                         else:
@@ -1074,24 +1100,24 @@ async def send_card_choice(uid, deck_left, gid, bot):
     g = GAMES.get(gid)
     if not g: return
 
-    # Сортируем карты по редкости для отображения от сильнейшей
     c_objs = [(cid, CARDS[cid]) for cid in set(deck_left)]
-    rarity_order = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2,
-                    "Обычная ⚪️": 1}
+    rarity_order = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2, "Обычная ⚪️": 1}
     c_objs.sort(key=lambda x: rarity_order.get(x[1]['rarity'], 0), reverse=True)
 
-    # Формируем медиагруппу (сверху изображения карт)
     media = []
     for i, (cid, c) in enumerate(c_objs):
-        txt_card = f"{i + 1}. {c['name']} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
-        media.append(types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c['file']}"), caption=txt_card))
+        asset_path, is_video, skin_label = get_card_media_info(uid, cid, c)
+        txt_card = f"{i + 1}. {c['name']}{skin_label} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
+        if is_video:
+            media.append(types.InputMediaVideo(media=FSInputFile(asset_path), caption=txt_card))
+        else:
+            media.append(types.InputMediaPhoto(media=FSInputFile(asset_path), caption=txt_card))
 
     try:
         await bot.send_media_group(uid, media=media)
     except Exception as e:
         logging.error(f"Failed to send visual deck to {uid}: {e}")
 
-    # Кнопки выбора (снизу, в порядке силы)
     bld = InlineKeyboardBuilder()
     for cid, c in c_objs:
         bld.button(text=c['name'], callback_data=f"b_card:{gid}:{cid}")
@@ -1137,7 +1163,6 @@ async def b_style(cq: CallbackQuery):
         pass
     await process_style_choice(gid, cq.from_user.id, style, cq.bot)
 
-
 async def resolve_round(gid, bot):
     g = GAMES[gid]
     c1, c2 = CARDS[g['p1_c']], CARDS[g['p2_c']]
@@ -1156,7 +1181,6 @@ async def resolve_round(gid, bot):
         n2_link = f"<a href='tg://user?id={g['p2']}'>{n2}</a>"
 
     val1, val2 = c1[s_map[g['p1_s']][2]], c2[s_map[g['p2_s']][2]]
-
     adv = check_advantage(g['p1_s'], g['p2_s'])
 
     m1, m2 = 1.0, 1.0
@@ -1196,41 +1220,32 @@ async def resolve_round(gid, bot):
         t += f"Раунд завершился в ничью!" if winner_name == "Ничья" else f"Раунд выиграл {winner_name}"
         return t
 
-    # Локальная функция для динамической сборки медиа (фото/видео)
-    def create_media(card_main, card_secondary, caption_txt):
-        m = []
-        # Первая карточка (с текстом)
-        if is_divine(card_main) and card_main.get('video'):
-            m.append(types.InputMediaVideo(
-                media=FSInputFile(f"images/cards/{card_main['video']}"),
-                caption=caption_txt,
-                parse_mode="HTML",
-                width=card_main.get("width", 960),
-                height=card_main.get("height", 1280)
-            ))
-        else:
-            m.append(types.InputMediaPhoto(
-                media=FSInputFile(f"images/cards/{card_main['file']}"),
-                caption=caption_txt,
-                parse_mode="HTML"
-            ))
+    # === ПОЛУЧАЕМ МЕДИА-ИНФОРМАЦИЮ О КАРТАХ СО СКИНАМИ ===
+    c1_path, c1_is_video, c1_label = get_card_media_info(g['p1'], g['p1_c'], c1)
+    c2_path, c2_is_video, c2_label = get_card_media_info(g['p2'], g['p2_c'], c2)
 
-        # Вторая карточка (без текста)
-        if is_divine(card_secondary) and card_secondary.get('video'):
+    # Локальная функция для динамической сборки медиа с учетом скинов
+    def create_media(path_main, is_video_main, path_secondary, is_video_secondary, card_main, card_secondary, caption_txt):
+        m = []
+        if is_video_main:
             m.append(types.InputMediaVideo(
-                media=FSInputFile(f"images/cards/{card_secondary['video']}"),
-                width=card_secondary.get("width", 960),
-                height=card_secondary.get("height", 1280)
+                media=FSInputFile(path_main), caption=caption_txt, parse_mode="HTML",
+                width=card_main.get("width", 960), height=card_main.get("height", 1280)
             ))
         else:
-            m.append(types.InputMediaPhoto(
-                media=FSInputFile(f"images/cards/{card_secondary['file']}")
+            m.append(types.InputMediaPhoto(media=FSInputFile(path_main), caption=caption_txt, parse_mode="HTML"))
+
+        if is_video_secondary:
+            m.append(types.InputMediaVideo(
+                media=FSInputFile(path_secondary), width=card_secondary.get("width", 960), height=card_secondary.get("height", 1280)
             ))
+        else:
+            m.append(types.InputMediaPhoto(media=FSInputFile(path_secondary)))
         return m
 
     try:
         txt1 = format_text(n1, n2_link, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1, val2, f1, f2, bonus_txt_1, emoji1, emoji2)
-        media1 = create_media(c1, c2, txt1)
+        media1 = create_media(c1_path, c1_is_video, c2_path, c2_is_video, c1, c2, txt1)
         await bot.send_media_group(g['p1'], media=media1)
     except Exception as e:
         logging.error(f"Error sending round result to p1: {e}")
@@ -1238,7 +1253,7 @@ async def resolve_round(gid, bot):
     if g['p2'] != -1:
         try:
             txt2 = format_text(n2_link, n1, g['score2'], g['score1'], g['p2_s'], g['p1_s'], val2, val1, f2, f1, bonus_txt_2, emoji2, emoji1)
-            media2 = create_media(c2, c1, txt2)
+            media2 = create_media(c2_path, c2_is_video, c1_path, c1_is_video, c2, c1, txt2)
             await bot.send_media_group(g['p2'], media=media2)
         except Exception as e:
             logging.error(f"Error sending round result to p2: {e}")

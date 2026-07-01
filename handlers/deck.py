@@ -698,7 +698,7 @@ async def skin_action(cq: CallbackQuery):
             txt = (
                 f"🎭 <b>ПРОСМОТР ОБЛИКА</b>\n\n"
                 f"🃏 Карта: <b>{c['name']}</b>\n"
-                f"Тип: {'💠 Пробужденный (Арт)' if skin_type == 'awakened' else '🔮 Абсолютный (Видео)'}\n\n"
+                f"Тип: {'💠 Пробужденный' if skin_type == 'awakened' else '🔮 Абсолютный'}\n\n"
                 f"Статус: {'🟢 <b>Надет</b>' if is_active else '🟡 <b>Доступен</b>'}"
             )
             try:
@@ -729,7 +729,7 @@ async def skin_action(cq: CallbackQuery):
         txt = (
             f"🎭 <b>ПРОСМОТР ОБЛИКА</b>\n\n"
             f"🃏 Карта: <b>{c['name']}</b>\n"
-            f"Тип: {'💠 Пробужденный (Арт)' if skin_type == 'awakened' else '🔮 Абсолютный (Видео)'}\n\n"
+            f"Тип: {'💠 Пробужденный' if skin_type == 'awakened' else '🔮 Абсолютный'}\n\n"
             f"Статус: {'🟢 <b>Надет</b>' if is_active else '🟡 <b>Доступен</b>'}"
         )
 
