@@ -26,7 +26,7 @@ from aiogram.enums import ParseMode
 from pydantic import BaseModel
 
 from config import BOT_TOKEN, DB_PATH
-from database.db import init_db, is_premium, pull_random_card, give_card_to_user
+from database.db import init_db, is_premium, pull_random_card, give_card_to_user, add_pass_xp
 from data.cards import TITLES
 from handlers import router
 
@@ -361,7 +361,10 @@ def migrate_profile_stats():
         ("losses", "INTEGER DEFAULT 0"),
         ("max_streak", "INTEGER DEFAULT 0"),
         ("active_bg", "TEXT DEFAULT 'default'"),
-        ("active_title", "TEXT")
+        ("active_title", "TEXT"),
+        ("pass_level", "INTEGER DEFAULT 1"),          # <-- Добавили для Пасса
+        ("pass_xp", "INTEGER DEFAULT 0"),             # <-- Добавили для Пасса
+        ("claimed_pass_levels", "INTEGER DEFAULT 1")  # <-- Счетчик забранных наград
     ]
     for col, col_def in columns:
         try:
@@ -378,6 +381,29 @@ def migrate_profile_stats():
         pass
 
 
+async def weekly_quest_reset_loop():
+    """Фоновая задача для тихого сброса недельных заданий каждый понедельник в 00:00 МСК"""
+    msk_tz = timezone(timedelta(hours=3))
+    while True:
+        now_msk = datetime.now(msk_tz)
+        # Если наступил Понедельник (0) и время ровно 00:00
+        if now_msk.weekday() == 0 and now_msk.hour == 0 and now_msk.minute == 0:
+            try:
+                from database.db import generate_new_quests
+                users = db_exec_sync("SELECT id FROM users", fetchall=True)
+                for (uid,) in users:
+                    generate_new_quests(uid[0])
+                logging.info("Недельные задания пасса успешно сброшены и обновлены для всех игроков.")
+            except Exception as e:
+                logging.error(f"Ошибка при автоматическом сбросе недельных заданий: {e}")
+
+            # Засыпаем на 60 секунд, чтобы код не выполнился повторно в эту же минуту
+            await asyncio.sleep(60)
+
+        # Проверяем время каждые 30 секунд
+        await asyncio.sleep(30)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global BACKGROUND_TASKS
@@ -392,6 +418,10 @@ async def lifespan(app: FastAPI):
         pass
 
     bot_task = asyncio.create_task(start_bot())
+
+    # === НАШ НОВЫЙ ТИХИЙ СБРОС КВЕСТОВ ПО ПОНЕДЕЛЬНИКАМ ===
+    quest_task = asyncio.create_task(weekly_quest_reset_loop())
+    BACKGROUND_TASKS.append(quest_task)
 
     yield
 
@@ -448,9 +478,22 @@ DAILY_REWARDS = {
 @app.get("/api/profile/{user_id}")
 def get_profile(user_id: int = Depends(authed_user_id)):
     try:
-        # Достаём новые поля: победы, поражения, стрик и активный титул
+        # === MANHWCARD PASS: 30 XP ЗА ЕЖЕДНЕВНЫЙ ВХОД ===
+        try:
+            db_exec_sync("ALTER TABLE users ADD COLUMN last_webapp_login TEXT DEFAULT '2000-01-01'")
+        except Exception:
+            pass
+        msk_tz = timezone(timedelta(hours=3))
+        today_str = datetime.now(msk_tz).strftime("%Y-%m-%d")
+        res_login = db_exec_sync("SELECT last_webapp_login FROM users WHERE id = ?", (user_id,), fetch=True)
+        if res_login and res_login[0] != today_str:
+            add_pass_xp(user_id, 30)
+            db_exec_sync("UPDATE users SET last_webapp_login = ? WHERE id = ?", (today_str, user_id))
+        # =================================================
+
+        # Достаём новые поля: победы, поражения, стрик, активный титул, фон и ПАСС
         user = db_exec_sync(
-            "SELECT diamond, krw, battlecoin, wins, losses, max_streak, active_title, active_bg FROM users WHERE id = ?",
+            "SELECT diamond, krw, battlecoin, wins, losses, max_streak, active_title, active_bg, pass_level, pass_xp, claimed_pass_levels FROM users WHERE id = ?",
             (user_id,), fetch=True
         )
         if not user:
@@ -459,7 +502,7 @@ def get_profile(user_id: int = Depends(authed_user_id)):
                     "wins": 0, "losses": 0, "winrate": 0, "max_streak": 0,
                     "active_title": None, "fav_cards": {}, "unlocked_titles": []}
 
-        # Миграция ежедневных наград (оставляем как было)
+        # Миграция ежедневных наград
         daily_day = 0
         last_claim_date = '2000-01-01'
         try:
@@ -473,10 +516,8 @@ def get_profile(user_id: int = Depends(authed_user_id)):
         except Exception:
             migrate_daily()
 
-        # === НОВЫЙ РАСЧЕТ ПРОПУСКА ЕЖЕДНЕВКИ ===
         now_msk = datetime.now(timezone(timedelta(hours=3)))
         today_date = now_msk.date()
-
         last_claim_date_str = last_claim_date.split(" ")[0] if last_claim_date else '2000-01-01'
         try:
             last_dt = datetime.strptime(last_claim_date_str, "%Y-%m-%d").date()
@@ -485,21 +526,12 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             days_passed = 0
 
         can_claim_daily = (days_passed > 0)
-        # Если прошло больше 1 дня, стрик прерван (но если сегодня 30-й день забран, то на 31-й стрик просто сбрасывается в 1 без штрафа)
         needs_recovery = (days_passed > 1 and 0 < daily_day < 30)
-        # =======================================
-
         is_prem = is_premium(user_id)
-        cards_rows = db_exec_sync(
-            "SELECT card_id FROM cards_inv WHERE user_id = ?", (user_id,), fetchall=True
-        )
+
+        cards_rows = db_exec_sync("SELECT card_id FROM cards_inv WHERE user_id = ?", (user_id,), fetchall=True)
         owned_cards = [row[0] for row in cards_rows] if cards_rows else []
 
-        now_msk = datetime.now(timezone(timedelta(hours=3)))
-        today_str = now_msk.strftime("%Y-%m-%d")
-        can_claim_daily = (last_claim_date.split(" ")[0] != today_str)
-
-        # Подсчёт статистики боёв
         wins = user[3] or 0
         losses = user[4] or 0
         max_streak = user[5] or 0
@@ -508,20 +540,15 @@ def get_profile(user_id: int = Depends(authed_user_id)):
         total_battles = wins + losses
         winrate = int((wins / total_battles) * 100) if total_battles > 0 else 0
 
-        # Любимые карты
-        fav_rows = db_exec_sync("SELECT slot_index, card_id FROM favorite_cards WHERE user_id = ?", (user_id,),
-                                fetchall=True)
+        fav_rows = db_exec_sync("SELECT slot_index, card_id FROM favorite_cards WHERE user_id = ?", (user_id,), fetchall=True)
         fav_cards = {str(row[0]): row[1] for row in fav_rows} if fav_rows else {}
 
-        # Титулы (какие есть у игрока)
         titles_rows = db_exec_sync("SELECT title_id FROM titles_inv WHERE user_id = ?", (user_id,), fetchall=True)
         unlocked_titles = [row[0] for row in titles_rows] if titles_rows else []
 
-        # Фоны (какие есть у игрока)
         bgs_rows = db_exec_sync("SELECT bg_id FROM bgs_inv WHERE user_id = ?", (user_id,), fetchall=True)
         unlocked_bgs = [row[0] for row in bgs_rows] if bgs_rows else []
 
-        # --- ДОБАВЛЕНО: Мастер-список титулов напрямую из файла data.cards ---
         all_titles_list = [{"id": k, "name": v} for k, v in TITLES.items()]
 
         return {
@@ -532,7 +559,7 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             "owned_cards": owned_cards,
             "daily_day": daily_day,
             "can_claim_daily": can_claim_daily,
-            "needs_recovery": needs_recovery,  # <-- ДОБАВИЛИ ЭТУ СТРОКУ
+            "needs_recovery": needs_recovery,
             "wins": wins,
             "losses": losses,
             "winrate": winrate,
@@ -542,7 +569,10 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             "unlocked_titles": unlocked_titles,
             "all_titles": all_titles_list,
             "active_bg": user[7] if len(user) > 7 and user[7] else "default",
-            "unlocked_bgs": unlocked_bgs
+            "unlocked_bgs": unlocked_bgs,
+            "pass_level": user[8] if len(user) > 8 and user[8] is not None else 1,
+            "pass_xp": user[9] if len(user) > 9 and user[9] is not None else 0,
+            "claimed_pass_levels": user[10] if len(user) > 10 and user[10] is not None else 1
         }
     except HTTPException:
         raise
@@ -616,7 +646,6 @@ def set_active_title_api(payload: TitlePayload, user_id: int = Depends(authed_us
 
 class DailyPayload(BaseModel):
     action: str = "claim"  # Может быть: "claim", "recover", "reset"
-
 
 @app.post("/api/claim_daily/{user_id}")
 def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
@@ -710,6 +739,12 @@ def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
                 "UPDATE users SET daily_day = ?, last_daily_claim = ? WHERE id = ?",
                 (current_day, today_str, user_id)
             )
+
+            # =========================================================
+            # === MANHWCARD PASS: 70 XP ЗА СБОР ЕЖЕДНЕВКИ В WEB APP ===
+            # =========================================================
+            add_pass_xp(user_id, 70)
+
             conn.commit()
         finally:
             conn.close()
@@ -1138,6 +1173,48 @@ async def get_telegram_user_avatar(user_id: int):
 
     return RedirectResponse(url="https://placehold.co/150x150/1c1c28/8b5cf6?text=U")
 
+
+@app.post("/api/pass_claim_level/{user_id}")
+def pass_claim_level(user_id: int = Depends(authed_user_id)):
+    """Эндпоинт для выдачи награды за получение уровня в ManhwCard Pass"""
+    try:
+        user = db_exec_sync("SELECT pass_level, claimed_pass_levels FROM users WHERE id = ?", (user_id,), fetch=True)
+        if not user:
+            return {"success": False, "error": "Игрок не найден"}
+
+        real_level = user[0] if user[0] is not None else 1
+        claimed_level = user[1] if user[1] is not None else 1
+
+        # Проверяем, есть ли несобранные награды
+        if claimed_level >= real_level:
+            return {"success": False, "error": "Нет доступных наград за уровни!"}
+
+        # Отмечаем, что забрали один уровень
+        db_exec_sync("UPDATE users SET claimed_pass_levels = claimed_pass_levels + 1 WHERE id = ?", (user_id,))
+
+        # Логика шансов: 70% KRW, 25% BattleCoin, 5% Алмазы
+        reward_type = random.choices(['krw', 'bc', 'dia'], weights=[70, 25, 5], k=1)[0]
+
+        amount = 0
+        reward_text = ""
+
+        if reward_type == 'krw':
+            amount = random.randint(150, 250)
+            db_exec_sync("UPDATE users SET krw = krw + ? WHERE id = ?", (amount, user_id))
+            reward_text = f"{amount} 💴 KRW"
+        elif reward_type == 'bc':
+            amount = random.randint(50, 100)
+            db_exec_sync("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (amount, user_id))
+            reward_text = f"{amount} 🪙 BattleCoin"
+        else:
+            amount = random.randint(2, 6)
+            db_exec_sync("UPDATE users SET diamond = diamond + ? WHERE id = ?", (amount, user_id))
+            reward_text = f"{amount} 💎 Алмазов"
+
+        return {"success": True, "reward": reward_text}
+    except Exception as e:
+        logging.error(f"Error in pass_claim_level: {e}")
+        return {"success": False, "error": str(e)}
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

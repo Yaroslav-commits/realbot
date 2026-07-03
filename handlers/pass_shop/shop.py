@@ -23,7 +23,8 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         NORMAL_PASS, ROYALE_PASS)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
-                         pull_random_card, give_card_to_user, grant_retroactive_royale_pass)
+                         pull_random_card, give_card_to_user, grant_retroactive_royale_pass,
+                         add_pass_xp, check_and_update_quests)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 
@@ -515,6 +516,24 @@ async def buy_pack(msg: types.Message):
     if u[4] < cost:
         return await msg.answer(f"❌ Недостаточно KRW. Нужно: {cost} 💴")
     db_exec("UPDATE users SET krw = krw - ? WHERE id = ?", (cost, msg.from_user.id))
+    # === MANHWCARD PASS: ОПЫТ ЗА ПАКИ (60 XP ЛЕГА / 25 XP ЭПИК) ===
+    from database.db import add_pass_xp
+    xp_to_add = 60 if is_leg else 25
+    xp_res = add_pass_xp(msg.from_user.id, xp_to_add)
+
+    if xp_res["leveled_up"]:
+        try:
+            await msg.bot.send_message(
+                msg.from_user.id,
+                f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                f"Требования выполнены.\n"
+                f"Ваш уровень ManhwCard Pass повышен!\n"
+                f"Текущий уровень: <b>{xp_res['level']}</b>.\n\n"
+                f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                parse_mode="HTML"
+            )
+        except:
+            pass
     card_key = pull_random_card(force_rarity=rarity) or pull_random_card()
     is_new, krw_earn, c = give_card_to_user(msg.from_user.id, card_key)
 
@@ -568,6 +587,24 @@ async def buy_pack_exec_cb(cq: CallbackQuery):
         return await cq.answer(f"❌ Недостаточно KRW. Нужно: {cost} 💴", show_alert=True)
 
     db_exec("UPDATE users SET krw = krw - ? WHERE id = ?", (cost, cq.from_user.id))
+    # === MANHWCARD PASS: ОПЫТ ЗА ПАКИ (60 XP ЛЕГА / 25 XP ЭПИК) ===
+    from database.db import add_pass_xp
+    xp_to_add = 60 if is_leg else 25
+    xp_res = add_pass_xp(cq.from_user.id, xp_to_add)
+
+    if xp_res["leveled_up"]:
+        try:
+            await cq.bot.send_message(
+                cq.from_user.id,
+                f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                f"Требования выполнены.\n"
+                f"Ваш уровень ManhwCard Pass повышен!\n"
+                f"Текущий уровень: <b>{xp_res['level']}</b>.\n\n"
+                f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                parse_mode="HTML"
+            )
+        except:
+            pass
     card_key = pull_random_card(force_rarity=rarity) or pull_random_card()
     is_new, krw_earn, c = give_card_to_user(cq.from_user.id, card_key)
 
@@ -1165,6 +1202,24 @@ async def claim_pass(cq: CallbackQuery):
         if reward_msg:
             await cq.message.answer(reward_msg, parse_mode="HTML")
 
+            # === MANHWCARD PASS: 100 XP ЗА СБОР ДНЯ В ПАССЕ ===
+        from database.db import add_pass_xp
+        xp_res = add_pass_xp(uid, 100)
+
+        if xp_res["leveled_up"]:
+            try:
+                await cq.bot.send_message(
+                    uid,
+                    f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                    f"Требования выполнены.\n"
+                    f"Ваш уровень ManhwCard Pass повышен!\n"
+                    f"Текущий уровень: <b>{xp_res['level']}</b>.\n\n"
+                    f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                    parse_mode="HTML"
+                )
+            except:
+                pass
+
         # Обновляем менюшку
         u2 = get_user(uid)
         _, days_in_month = calendar.monthrange(now.year, now.month)
@@ -1442,6 +1497,24 @@ async def exec_buy_days(cq: CallbackQuery):
                         (uid, now.month, day))
 
     _selected_days.pop(uid, None)
+
+    # === MANHWCARD PASS: 100 XP ЗА КАЖДЫЙ ВОССТАНОВЛЕННЫЙ ДЕНЬ ===
+    from database.db import add_pass_xp
+    xp_res = add_pass_xp(uid, 100 * len(selected))
+
+    if xp_res["leveled_up"]:
+        try:
+            await cq.bot.send_message(
+                uid,
+                f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                f"Требования выполнены.\n"
+                f"Ваш уровень ManhwCard Pass повышен!\n"
+                f"Текущий уровень: <b>{xp_res['level']}</b>.\n\n"
+                f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                parse_mode="HTML"
+            )
+        except:
+            pass
 
     summary_days = ", ".join(str(d) for d in selected)
     result_txt = (

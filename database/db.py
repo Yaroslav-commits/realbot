@@ -1,4 +1,5 @@
 import os
+import json
 import sqlite3
 import random
 import string
@@ -31,6 +32,16 @@ def init_db():
         premium_until TEXT DEFAULT NULL, battle_cooldown_notified INTEGER DEFAULT 1,
         anonymous INTEGER DEFAULT 0, season_wins INTEGER DEFAULT 0
     )''')
+
+    try:
+        db_exec("ALTER TABLE users ADD COLUMN pass_xp INTEGER DEFAULT 0")
+        db_exec("ALTER TABLE users ADD COLUMN pass_level INTEGER DEFAULT 1")
+        db_exec("ALTER TABLE users ADD COLUMN pass_quests TEXT")
+        db_exec("ALTER TABLE users ADD COLUMN quests_reset_time TEXT DEFAULT '2000-01-01 00:00:00'")
+        db_exec("ALTER TABLE users ADD COLUMN last_webapp_login TEXT DEFAULT '2000-01-01 00:00:00'")
+    except:
+        pass
+
     db_exec("CREATE TABLE IF NOT EXISTS cards_inv (user_id INTEGER, card_id TEXT)")
     db_exec("CREATE TABLE IF NOT EXISTS favorite_cards (user_id INTEGER, card_id TEXT, slot_index INTEGER)")
     db_exec("CREATE TABLE IF NOT EXISTS bgs_inv (user_id INTEGER, bg_id TEXT)")
@@ -715,3 +726,126 @@ def set_user_active_title(uid: int, title_id: str) -> bool:
     else:
         db_exec("UPDATE users SET active_title = NULL WHERE id = ?", (uid,))
     return True
+
+
+# ================== ROYALE PASS & QUESTS ==================
+
+ALL_QUESTS_POOL = {
+    "q_10_battles": {"name": "Проведи 10 боёв", "target": 10, "xp": 500},
+    "q_5_wins": {"name": "Одержи 5 побед", "target": 5, "xp": 400},
+    "q_15_pulls": {"name": "Сделай 15 круток", "target": 15, "xp": 300},
+    "q_3_invites": {"name": "Пригласи 3 друга по рефералу", "target": 3, "xp": 500},
+    "q_5_friendly": {"name": "Отыграй 5 дружеских боёв", "target": 5, "xp": 300},
+    "q_15_style_spd": {"name": "Успешно использовать стиль атаки 'Скорость' 15 раз", "target": 15, "xp": 350},
+    "q_15_style_str": {"name": "Успешно использовать стиль атаки 'Сила' 15 раз", "target": 15, "xp": 350},
+    "q_15_style_int": {"name": "Успешно использовать стиль атаки 'Интеллект' 15 раз", "target": 15, "xp": 350},
+    "q_30_rounds": {"name": "Продержаться суммарно 30 раундов в битвах", "target": 30, "xp": 450},
+    "q_2_fusions": {"name": "Запусти Fusion Reactor минимум 2 раза", "target": 2, "xp": 500},
+    "q_1_mythic": {"name": "Получить 1 Мифическую (🔴) карту", "target": 1, "xp": 450},
+    "q_10_stash": {"name": "Перенести 10 любых карт в Сундук", "target": 10, "xp": 200},
+    "q_4_packs": {"name": "Купить 4 Боевых Паков в BattleShop", "target": 4, "xp": 450},
+    "q_1_exchange": {"name": "Совершить обмен Алмазов на BattleCoin 1 раз", "target": 1, "xp": 250},
+    "q_20_bets": {"name": "Сделай 20 ставок в мини-играх", "target": 20, "xp": 350},
+    "q_3_bet_wins": {"name": "Сделать серию из 3-х побед подряд в Ставках", "target": 3, "xp": 300},
+    "q_3_trades": {"name": "Успешно завершить 3 обмена картами с другими игроками", "target": 3, "xp": 100},
+    "q_2_invites": {"name": "Пригласи двух друзей по рефералу", "target": 2, "xp": 350}
+}
+
+
+def generate_new_quests(uid: int):
+    """Генерирует 4 уникальных задания без повторов из пула 18 заданий"""
+    quest_keys = random.sample(list(ALL_QUESTS_POOL.keys()), 4)
+    user_quests = {}
+
+    for key in quest_keys:
+        q_data = ALL_QUESTS_POOL[key]
+        user_quests[key] = {
+            "name": q_data["name"],
+            "progress": 0,
+            "target": q_data["target"],
+            "xp": q_data["xp"],
+            "done": False
+        }
+
+    db_exec("UPDATE users SET pass_quests = ? WHERE id = ?", (json.dumps(user_quests, ensure_ascii=False), uid))
+    return user_quests
+
+
+def add_pass_xp(uid: int, amount: int) -> dict:
+    """
+    Добавляет XP пользователю. Если XP >= 3000, повышает уровень.
+    """
+    user = db_exec("SELECT pass_xp, pass_level FROM users WHERE id = ?", (uid,), fetch=True)
+    if not user:
+        return {"leveled_up": False, "xp": 0, "level": 1}
+
+    current_xp = user[0] or 0
+    current_level = user[1] or 1
+
+    new_xp = current_xp + amount
+    leveled_up = False
+    levels_gained = 0
+
+    while new_xp >= 3000:
+        new_xp -= 3000
+        current_level += 1
+        levels_gained += 1
+        leveled_up = True
+
+    db_exec("UPDATE users SET pass_xp = ?, pass_level = ? WHERE id = ?", (new_xp, current_level, uid))
+
+    return {
+        "leveled_up": leveled_up,
+        "levels_gained": levels_gained,
+        "xp": new_xp,
+        "level": current_level
+    }
+
+
+def check_and_update_quests(uid: int, quest_action: str, amount: int = 1) -> dict:
+    """
+    Тихо обновляет прогресс еженедельных заданий.
+    quest_action - это ключ действия, например 'battles', 'wins', 'pulls', 'style_spd', 'reactor' и т.д.
+    Возвращает словарь с инфой о левелапах (чтобы бот мог отправить уведомление, если нужно).
+    """
+    user = db_exec("SELECT pass_quests FROM users WHERE id = ?", (uid,), fetch=True)
+    if not user or not user[0]:
+        return {"leveled_up": False, "xp": 0, "level": 1}
+
+    try:
+        quests = json.loads(user[0])
+    except:
+        return {"leveled_up": False, "xp": 0, "level": 1}
+
+    leveled_up = False
+    final_level = 1
+    final_xp = 0
+    updated = False
+
+    for q_key, q_data in quests.items():
+        # Если задание еще не выполнено и ключ действия совпадает с нужным заданием
+        if not q_data.get("done", False) and quest_action in q_key:
+            q_data["progress"] += amount
+
+            # Если задание выполнено
+            if q_data["progress"] >= q_data["target"]:
+                q_data["progress"] = q_data["target"]
+                q_data["done"] = True
+
+                # Выдаем XP за задание (ТИХО)
+                xp_result = add_pass_xp(uid, q_data["xp"])
+                if xp_result["leveled_up"]:
+                    leveled_up = True
+                final_level = xp_result["level"]
+                final_xp = xp_result["xp"]
+
+            updated = True
+
+    if updated:
+        db_exec("UPDATE users SET pass_quests = ? WHERE id = ?", (json.dumps(quests, ensure_ascii=False), uid))
+
+    return {
+        "leveled_up": leveled_up,
+        "level": final_level,
+        "xp": final_xp
+    }

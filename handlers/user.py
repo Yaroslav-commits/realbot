@@ -108,6 +108,27 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         except Exception:
             pass
 
+        # === ROYALE PASS: ТИХОЕ НАЧИСЛЕНИЕ ЗА ИНВАЙТ (200 XP) ===
+        from database.db import add_pass_xp, check_and_update_quests
+        xp_res = add_pass_xp(referred_by, 200)
+        q_res = check_and_update_quests(referred_by, "invites", 1)  # Обновляем задания "q_3_invites" и "q_2_invites"
+
+        # SOLO LEVELING УВЕДОМЛЕНИЕ О ПОВЫШЕНИИ УРОВНЯ
+        if xp_res["leveled_up"] or q_res["leveled_up"]:
+            final_level = max(xp_res["level"], q_res["level"])
+            try:
+                await msg.bot.send_message(
+                    referred_by,
+                    f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                    f"Требования выполнены.\n"
+                    f"Ваш уровень ManhwCard Pass повышен!\n"
+                    f"Текущий уровень: <b>{final_level}</b>.\n\n"
+                    f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                    parse_mode="HTML"
+                )
+            except:
+                pass
+
     # === ЕСЛИ ЭТО ТРЕЙД, ЗАПУСКАЕМ МЕНЮ ОБМЕНА И ПРЕРЫВАЕМ СТАРТ ===
     if is_trade:
         if trade_sender_id == msg.from_user.id:
@@ -352,6 +373,31 @@ async def get_card_cmd(msg: types.Message):
             db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
                     (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
 
+        # === ROYALE PASS: ТИХОЕ НАЧИСЛЕНИЕ ЗА КРУТКУ (10 XP) ===
+        from database.db import add_pass_xp, check_and_update_quests
+        xp_res = add_pass_xp(uid, 10)
+        q_res = check_and_update_quests(uid, "pulls", 1)  # Обновляем задание "q_15_pulls"
+
+        mythic_res = {"leveled_up": False, "level": 1}
+        # Если выбил Мифическую карту, тихо засчитываем задание "q_1_mythic"
+        if "🔴" in c.get("rarity", ""):
+            mythic_res = check_and_update_quests(uid, "mythic", 1)
+
+        # SOLO LEVELING УВЕДОМЛЕНИЕ О ПОВЫШЕНИИ УРОВНЯ
+        if xp_res["leveled_up"] or q_res["leveled_up"] or mythic_res["leveled_up"]:
+            final_lvl = max(xp_res["level"], q_res["level"], mythic_res["level"])
+            try:
+                await msg.bot.send_message(
+                    uid,
+                    f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                    f"Требования выполнены.\n"
+                    f"Ваш уровень ManhwCard Pass повышен!\n"
+                    f"Текущий уровень: <b>{final_lvl}</b>.\n\n"
+                    f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                    parse_mode="HTML"
+                )
+            except:
+                pass
 
 RU_MONTHS_GENITIVE = {
     1: "января",

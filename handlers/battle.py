@@ -24,7 +24,8 @@ from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         AWAKENED_SKIN, ABSOLUTE_SKIN)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user, is_premium,
-                         stash_card, unstash_card, get_stash, get_active_skin)
+                         stash_card, unstash_card, get_stash, get_active_skin,
+                         add_pass_xp, check_and_update_quests)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 from media_cache import send_cached_video
@@ -1183,6 +1184,24 @@ async def resolve_round(gid, bot):
     val1, val2 = c1[s_map[g['p1_s']][2]], c2[s_map[g['p2_s']][2]]
     adv = check_advantage(g['p1_s'], g['p2_s'])
 
+    # === MANHWCARD PASS: ЗАДАНИЯ НА СТИЛИ ===
+    if g['p1'] != -1:
+        if g['p1_s'] == 'spd':
+            check_and_update_quests(g['p1'], 'q_15_style_spd', 1)
+        elif g['p1_s'] == 'str':
+            check_and_update_quests(g['p1'], 'q_15_style_str', 1)
+        elif g['p1_s'] == 'int':
+            check_and_update_quests(g['p1'], 'q_15_style_int', 1)
+
+    if g['p2'] != -1:
+        if g['p2_s'] == 'spd':
+            check_and_update_quests(g['p2'], 'q_15_style_spd', 1)
+        elif g['p2_s'] == 'str':
+            check_and_update_quests(g['p2'], 'q_15_style_str', 1)
+        elif g['p2_s'] == 'int':
+            check_and_update_quests(g['p2'], 'q_15_style_int', 1)
+    # ========================================
+
     m1, m2 = 1.0, 1.0
     bonus_txt_1, bonus_txt_2 = "", ""
 
@@ -1330,6 +1349,41 @@ async def finish_game(gid, bot):
 
     r1 = apply_res(p1, p1_win, draw, friendly)
     r2 = apply_res(p2, p2_win, draw, friendly)
+
+    # === MANHWCARD PASS: ОПЫТ И ЗАДАНИЯ ЗА БОЙ ===
+    rounds_played = max(1, g.get('round', 2) - 1)
+
+    def process_battle_pass(uid, is_win, is_draw, is_friendly, rounds):
+        if uid == -1: return
+
+        # Базовый опыт: 150 за победу, 100 за поражение/ничью
+        base_xp = 150 if is_win else 100
+        xp_res = add_pass_xp(uid, base_xp)
+
+        # Задания
+        check_and_update_quests(uid, 'q_10_battles', 1)
+        check_and_update_quests(uid, 'q_30_rounds', rounds)
+
+        if is_win:
+            check_and_update_quests(uid, 'q_5_wins', 1)
+
+        if is_friendly:
+            check_and_update_quests(uid, 'q_5_friendly', 1)
+
+        # Уведомление о повышении уровня
+        if xp_res and xp_res.get("leveled_up"):
+            try:
+                asyncio.create_task(bot.send_message(
+                    uid,
+                    f"⚡️ <b>[СИСТЕМА]</b>\n\nВаш уровень ManhwCard Pass повышен!\nТекущий уровень: <b>{xp_res['level']}</b>.\n\n<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                    parse_mode="HTML"
+                ))
+            except:
+                pass
+
+    process_battle_pass(p1, p1_win, draw, friendly, rounds_played)
+    process_battle_pass(p2, p2_win, draw, friendly, rounds_played)
+    # ===============================================
 
     # Формируем ссылки на профили игроков для красивого текста
     my_name_raw = get_user(p1)[2]
@@ -1850,6 +1904,8 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         # Списание валюты и обновление счетчика
         db_exec("UPDATE users SET battlecoin = battlecoin - 400 WHERE id = ?", (uid,))
         bought += 1
+        # === MANHWCARD PASS ===
+        check_and_update_quests(uid, 'q_4_packs', 1)
         if res:
             db_exec("UPDATE battle_shop_packs SET bought_count = ? WHERE user_id = ? AND week_number = ?", (bought, uid, week_num))
         else:
@@ -2340,6 +2396,8 @@ async def b_bet_play_cb(cq: CallbackQuery):
 
         db_exec("UPDATE users SET battlecoin = battlecoin - ? WHERE id = ?", (bet, uid))
         balance -= bet
+        # === MANHWCARD PASS ===
+        check_and_update_quests(uid, 'q_20_bets', 1)
 
         win = False
         result_val = None
@@ -2659,6 +2717,8 @@ async def b_craft_do_cb(cq: CallbackQuery):
 
         # БЕЗОПАСНОЕ СПИСАНИЕ МАТЕРИАЛОВ: удаляем по одному rowid
     db_exec("UPDATE users SET battlecoin = battlecoin - ? WHERE id = ?", (CRAFT_COIN_COST, uid))
+    # === MANHWCARD PASS ===
+    check_and_update_quests(uid, 'q_2_fusions', 1)
     for cid in filled:
         row = db_exec("SELECT rowid FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (uid, cid),
                           fetch=True)
@@ -2932,7 +2992,8 @@ async def b_dia_confirm_cb(cq: CallbackQuery, state: FSMContext):
             "INSERT INTO diamond_exchange_log (user_id, diamonds, coins) VALUES (?, ?, ?)",
             (uid, amount, coins)
         )
-
+        # === MANHWCARD PASS ===
+        check_and_update_quests(uid, 'q_1_exchange', 1)
         await state.clear()
         try:
             await cq.message.delete()
@@ -3257,6 +3318,8 @@ async def stash_do_put_cb(cq: CallbackQuery):
     ok = stash_card(uid, cid)
     if not ok:
         return await cq.answer("Карта не найдена в инвентаре.", show_alert=True)
+        # === MANHWCARD PASS ===
+    check_and_update_quests(uid, 'q_10_stash', 1)
 
     c = CARDS.get(cid, {})
     await cq.answer(f"📦 {c.get('name', cid)} → в Сундук", show_alert=False)
