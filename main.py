@@ -473,19 +473,27 @@ DAILY_REWARDS = {
 }
 
 
-# Синхронные эндпоинты (без async) FastAPI выполняет в отдельном потоке —
-# это защищает event loop от блокировок при работе с sqlite. Так и оставляем.
 @app.get("/api/profile/{user_id}")
-def get_profile(user_id: int = Depends(authed_user_id)):
+def get_profile(user_id: int):
     try:
-        # Импортируем функцию генерации заданий
-        from database.db import generate_new_quests
+        # Автоматически проверяем и создаем новые колонки для Пасса, если их нет
+        for col, col_type in [
+            ("pass_level", "INTEGER DEFAULT 1"),
+            ("pass_xp", "INTEGER DEFAULT 0"),
+            ("claimed_pass_levels", "INTEGER DEFAULT 1"),
+            ("pass_quests", "TEXT")
+        ]:
+            try:
+                db_exec_sync(f"ALTER TABLE users ADD COLUMN {col} {col_type}")
+            except Exception:
+                pass
 
         # === MANHWCARD PASS: 30 XP ЗА ЕЖЕДНЕВНЫЙ ВХОД ===
         try:
             db_exec_sync("ALTER TABLE users ADD COLUMN last_webapp_login TEXT DEFAULT '2000-01-01'")
         except Exception:
             pass
+
         msk_tz = timezone(timedelta(hours=3))
         today_str = datetime.now(msk_tz).strftime("%Y-%m-%d")
         res_login = db_exec_sync("SELECT last_webapp_login FROM users WHERE id = ?", (user_id,), fetch=True)
@@ -494,7 +502,7 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             db_exec_sync("UPDATE users SET last_webapp_login = ? WHERE id = ?", (today_str, user_id))
         # =================================================
 
-        # Достаём новые поля, включая pass_quests (12-й элемент в запросе)
+        # Извлекаем все необходимые данные пользователя одним запросом (включая Пасс и Квесты)
         user = db_exec_sync(
             "SELECT diamond, krw, battlecoin, wins, losses, max_streak, active_title, active_bg, pass_level, pass_xp, claimed_pass_levels, pass_quests FROM users WHERE id = ?",
             (user_id,), fetch=True
@@ -503,19 +511,22 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             return {"diamond": 0, "krw": 0, "battlecoin": 0, "is_premium": False,
                     "owned_cards": [], "daily_day": 0, "can_claim_daily": False,
                     "wins": 0, "losses": 0, "winrate": 0, "max_streak": 0,
-                    "active_title": None, "fav_cards": {}, "unlocked_titles": []}
+                    "active_title": None, "fav_cards": {}, "unlocked_titles": [],
+                    "pass_level": 1, "pass_xp": 0, "claimed_pass_levels": 1, "pass_quests": {}}
 
-        # === ЗАГРУЗКА ИЛИ ГЕНЕРАЦИЯ ЗАДАНИЙ ===
-        pass_quests_raw = user[11] if len(user) > 11 else None
+        # Обработка и генерация квестов Пасса
+        from database.db import generate_new_quests
+        pass_quests_dict = {}
+        pass_quests_raw = user[11]
         if not pass_quests_raw:
-            pass_quests_dict = generate_new_quests(user_id)  # Генерируем, если их вообще нет
+            pass_quests_dict = generate_new_quests(user_id)
         else:
             try:
                 pass_quests_dict = json.loads(pass_quests_raw)
             except Exception:
                 pass_quests_dict = generate_new_quests(user_id)
 
-        # Миграция ежедневных наград
+        # Логика миграции и проверки ежедневных наград Web App
         daily_day = 0
         last_claim_date = '2000-01-01'
         try:
@@ -531,6 +542,7 @@ def get_profile(user_id: int = Depends(authed_user_id)):
 
         now_msk = datetime.now(timezone(timedelta(hours=3)))
         today_date = now_msk.date()
+
         last_claim_date_str = last_claim_date.split(" ")[0] if last_claim_date else '2000-01-01'
         try:
             last_dt = datetime.strptime(last_claim_date_str, "%Y-%m-%d").date()
@@ -540,11 +552,14 @@ def get_profile(user_id: int = Depends(authed_user_id)):
 
         can_claim_daily = (days_passed > 0)
         needs_recovery = (days_passed > 1 and 0 < daily_day < 30)
-        is_prem = is_premium(user_id)
 
-        cards_rows = db_exec_sync("SELECT card_id FROM cards_inv WHERE user_id = ?", (user_id,), fetchall=True)
+        is_prem = is_premium(user_id)
+        cards_rows = db_exec_sync(
+            "SELECT card_id FROM cards_inv WHERE user_id = ?", (user_id,), fetchall=True
+        )
         owned_cards = [row[0] for row in cards_rows] if cards_rows else []
 
+        # Статистика боёв
         wins = user[3] or 0
         losses = user[4] or 0
         max_streak = user[5] or 0
@@ -553,13 +568,16 @@ def get_profile(user_id: int = Depends(authed_user_id)):
         total_battles = wins + losses
         winrate = int((wins / total_battles) * 100) if total_battles > 0 else 0
 
+        # Любимые карты
         fav_rows = db_exec_sync("SELECT slot_index, card_id FROM favorite_cards WHERE user_id = ?", (user_id,),
                                 fetchall=True)
         fav_cards = {str(row[0]): row[1] for row in fav_rows} if fav_rows else {}
 
+        # Инвентарь титулов
         titles_rows = db_exec_sync("SELECT title_id FROM titles_inv WHERE user_id = ?", (user_id,), fetchall=True)
         unlocked_titles = [row[0] for row in titles_rows] if titles_rows else []
 
+        # Инвентарь фонов
         bgs_rows = db_exec_sync("SELECT bg_id FROM bgs_inv WHERE user_id = ?", (user_id,), fetchall=True)
         unlocked_bgs = [row[0] for row in bgs_rows] if bgs_rows else []
 
@@ -584,13 +602,11 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             "all_titles": all_titles_list,
             "active_bg": user[7] if len(user) > 7 and user[7] else "default",
             "unlocked_bgs": unlocked_bgs,
-            "pass_level": user[8] if len(user) > 8 and user[8] is not None else 1,
-            "pass_xp": user[9] if len(user) > 9 and user[9] is not None else 0,
-            "claimed_pass_levels": user[10] if len(user) > 10 and user[10] is not None else 1,
-            "pass_quests": pass_quests_dict  # <-- ОТДАЁМ КВЕСТЫ НА ФРОНТ
+            "pass_level": user[8] if user[8] is not None else 1,
+            "pass_xp": user[9] if user[9] is not None else 0,
+            "claimed_pass_levels": user[10] if user[10] is not None else 1,
+            "pass_quests": pass_quests_dict
         }
-    except HTTPException:
-        raise
     except Exception as e:
         logging.error(f"Error in get_profile: {e}")
         return {"diamond": 0, "krw": 0, "battlecoin": 0, "is_premium": False,
