@@ -478,6 +478,9 @@ DAILY_REWARDS = {
 @app.get("/api/profile/{user_id}")
 def get_profile(user_id: int = Depends(authed_user_id)):
     try:
+        # Импортируем функцию генерации заданий
+        from database.db import generate_new_quests
+
         # === MANHWCARD PASS: 30 XP ЗА ЕЖЕДНЕВНЫЙ ВХОД ===
         try:
             db_exec_sync("ALTER TABLE users ADD COLUMN last_webapp_login TEXT DEFAULT '2000-01-01'")
@@ -491,9 +494,9 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             db_exec_sync("UPDATE users SET last_webapp_login = ? WHERE id = ?", (today_str, user_id))
         # =================================================
 
-        # Достаём новые поля: победы, поражения, стрик, активный титул, фон и ПАСС
+        # Достаём новые поля, включая pass_quests (12-й элемент в запросе)
         user = db_exec_sync(
-            "SELECT diamond, krw, battlecoin, wins, losses, max_streak, active_title, active_bg, pass_level, pass_xp, claimed_pass_levels FROM users WHERE id = ?",
+            "SELECT diamond, krw, battlecoin, wins, losses, max_streak, active_title, active_bg, pass_level, pass_xp, claimed_pass_levels, pass_quests FROM users WHERE id = ?",
             (user_id,), fetch=True
         )
         if not user:
@@ -501,6 +504,16 @@ def get_profile(user_id: int = Depends(authed_user_id)):
                     "owned_cards": [], "daily_day": 0, "can_claim_daily": False,
                     "wins": 0, "losses": 0, "winrate": 0, "max_streak": 0,
                     "active_title": None, "fav_cards": {}, "unlocked_titles": []}
+
+        # === ЗАГРУЗКА ИЛИ ГЕНЕРАЦИЯ ЗАДАНИЙ ===
+        pass_quests_raw = user[11] if len(user) > 11 else None
+        if not pass_quests_raw:
+            pass_quests_dict = generate_new_quests(user_id)  # Генерируем, если их вообще нет
+        else:
+            try:
+                pass_quests_dict = json.loads(pass_quests_raw)
+            except Exception:
+                pass_quests_dict = generate_new_quests(user_id)
 
         # Миграция ежедневных наград
         daily_day = 0
@@ -540,7 +553,8 @@ def get_profile(user_id: int = Depends(authed_user_id)):
         total_battles = wins + losses
         winrate = int((wins / total_battles) * 100) if total_battles > 0 else 0
 
-        fav_rows = db_exec_sync("SELECT slot_index, card_id FROM favorite_cards WHERE user_id = ?", (user_id,), fetchall=True)
+        fav_rows = db_exec_sync("SELECT slot_index, card_id FROM favorite_cards WHERE user_id = ?", (user_id,),
+                                fetchall=True)
         fav_cards = {str(row[0]): row[1] for row in fav_rows} if fav_rows else {}
 
         titles_rows = db_exec_sync("SELECT title_id FROM titles_inv WHERE user_id = ?", (user_id,), fetchall=True)
@@ -572,7 +586,8 @@ def get_profile(user_id: int = Depends(authed_user_id)):
             "unlocked_bgs": unlocked_bgs,
             "pass_level": user[8] if len(user) > 8 and user[8] is not None else 1,
             "pass_xp": user[9] if len(user) > 9 and user[9] is not None else 0,
-            "claimed_pass_levels": user[10] if len(user) > 10 and user[10] is not None else 1
+            "claimed_pass_levels": user[10] if len(user) > 10 and user[10] is not None else 1,
+            "pass_quests": pass_quests_dict  # <-- ОТДАЁМ КВЕСТЫ НА ФРОНТ
         }
     except HTTPException:
         raise
