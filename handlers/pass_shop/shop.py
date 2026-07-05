@@ -767,6 +767,31 @@ async def shop_pack_buy(cq: CallbackQuery):
             await cq.message.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
 
         await cq.answer(alert_text, show_alert=True)
+        
+# === MANHWCARD PASS: ОПЫТ ЗА ПАКИ И КВЕСТЫ ===
+    earned_xp = 0
+    if pack_type == "epic":
+        earned_xp = 45
+        check_and_update_quests(uid, 'q_3_epic_packs', 1)
+    elif pack_type == "leg":
+        earned_xp = 95
+    elif pack_type == "universe":
+        earned_xp = 140
+
+    if earned_xp > 0:
+        xp_res = add_pass_xp(uid, earned_xp)
+        if xp_res and xp_res.get("leveled_up"):
+            try:
+                await cq.bot.send_message(
+                    uid,
+                    f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                    f"Уровень ManhwCard Pass повышен!\n"
+                    f"Текущий уровень: <b>{xp_res['level']}</b>.\n\n"
+                    f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
 
 # ===== Евент =====
 @router.callback_query(F.data == "shop:ignore")
