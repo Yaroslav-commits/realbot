@@ -34,8 +34,11 @@ from handlers import (router, TradeState, SettingsState, PromoState,
 SHOP_IMG = FSInputFile("images/shop/shop.png")
 
 # Картинки паков
-PACK_LEG_IMG = FSInputFile("images/shop/pack_leg.jpeg")
-PACK_EPIC_IMG = FSInputFile("images/shop/pack_epic.jpeg")
+IMG_CAPSULE   = FSInputFile("images/shop/capsule.jpg")
+IMG_STASH     = FSInputFile("images/shop/stash.jpg")
+IMG_UNIVERSE  = FSInputFile("images/shop/universe.jpg")
+IMG_LEG_PACK  = FSInputFile("images/shop/pack_leg.jpeg")
+IMG_EPIC_PACK = FSInputFile("images/shop/pack_epic.jpeg")
 
 # Картинка Евента
 EVENT_IMG = FSInputFile("images/shop/event.jpg")
@@ -500,15 +503,16 @@ async def shop_bg_buy_cb(cq: CallbackQuery):
     db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (cq.from_user.id, bg_id))
     await cq.answer("✅ Фон куплен и добавлен в «🌄 Мои фоны»!", show_alert=True)
 
+
 # ===== Паки =====
 def _packs_kb():
     bld = InlineKeyboardBuilder()
-    bld.row(InlineKeyboardButton(text="🏆 Истинный Облик (125 💎)", callback_data="shop:pack:capsule"))
-    bld.row(InlineKeyboardButton(text="🔮 Тайник Обликов (40 💎)", callback_data="shop:pack:stash"))
-    bld.row(InlineKeyboardButton(text=f"🌌 Свежие Вселенные ({PRICE_NEW_UNIV} 💴)", callback_data="shop:pack:universe"))
+    bld.row(InlineKeyboardButton(text="🏆 Истинный Облик", callback_data="shop:pack_pre:capsule"))
+    bld.row(InlineKeyboardButton(text="🔮 Тайник Обликов", callback_data="shop:pack_pre:stash"))
+    bld.row(InlineKeyboardButton(text="🌌 Свежие Вселенные", callback_data="shop:pack_pre:universe"))
     bld.row(
-        InlineKeyboardButton(text="🔵 Лега Пак", callback_data="shop:pack:leg"),
-        InlineKeyboardButton(text="🟢 Эпик Пак", callback_data="shop:pack:epic")
+        InlineKeyboardButton(text="🔵 Легендарный пак", callback_data="shop:pack_pre:leg"),
+        InlineKeyboardButton(text="🟢 Эпический пак", callback_data="shop:pack_pre:epic")
     )
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="shop:main"))
     return bld.as_markup()
@@ -517,31 +521,97 @@ def _packs_kb():
 @router.callback_query(F.data == "shop:packs")
 async def shop_packs(cq: CallbackQuery):
     txt = (
-        "📦 <b>Магазин Паков</b> 📦\n\n"
-        "Испытайте удачу и пополните свою коллекцию редчайшими картами и эксклюзивными обликами!\n\n"
-        "🏆 <b>Истинный Облик</b> — 100% гарантия получения облика!\n"
-        f"<blockquote>Стоимость: {PRICE_CAPSULE} 💎</blockquote>\n\n"
-        "🔮 <b>Тайник Обликов</b> — Мифические карты и шанс на облик.\n"
-        f"<blockquote>Стоимость: {PRICE_STASH} 💎</blockquote>\n\n"
-        f"🌌 <b>Свежие Вселенные</b> — Только карты из: {', '.join(LATEST_UNIVERSES)}.\n"
-        f"<blockquote>Стоимость: {PRICE_NEW_UNIV} 💴</blockquote>\n\n"
-        "🔵 <b>Легендарный пак</b> — Гарантированная Легендарная или Мифическая/Божественная карта!\n"
-        f"<blockquote>Стоимость: {PRICE_LEG} 💴</blockquote>\n\n"
-        "🟢 <b>Эпический пак</b> — Гарантированная Эпическая или Легендарная карта!\n"
-        f"<blockquote>Стоимость: {PRICE_EPIC} 💴</blockquote>"
+        "📦 <b>Магазин Наборов</b> 📦\n\n"
+        "Добро пожаловать в раздел паков! Выберите интересующий вас набор, "
+        "чтобы изучить его содержимое, точные шансы выпадения и перейти к покупке.\n\n"
+        "<i>Каждый пак содержит уникальные награды для вашей коллекции персонажей и обликов!</i>"
     )
     try:
-        await cq.message.edit_text(txt, reply_markup=_packs_kb(), parse_mode="HTML")
+        await cq.message.delete()
     except Exception:
-        try:
-            await cq.message.delete()
-        except Exception:
-            pass
-        await cq.message.answer(txt, reply_markup=_packs_kb(), parse_mode="HTML")
+        pass
+    await cq.message.answer(txt, reply_markup=_packs_kb(), parse_mode="HTML")
     await cq.answer()
 
 
-@router.callback_query(F.data.startswith("shop:pack:"))
+@router.callback_query(F.data.startswith("shop:pack_pre:"))
+async def shop_pack_preview(cq: CallbackQuery):
+    pack_type = cq.data.split(":")[2]
+    bld = InlineKeyboardBuilder()
+
+    if pack_type == "capsule":
+        img = IMG_CAPSULE
+        txt = (
+            "🏆 <b>Капсула «Истинный Облик»</b>\n\n"
+            "Премиальный элитный набор, гарантирующий получение косметического облика!\n\n"
+            "✨ <b>Шансы распределения:</b>\n"
+            "🔮 Абсолютный скин — <b>40%</b>\n"
+            "💠 Пробужденный скин — <b>60%</b>\n\n"
+            "♻️ <i>При выпадении дубликата вы мгновенно получаете назад 35% от потраченной суммы на баланс!</i>"
+        )
+        bld.row(InlineKeyboardButton(text=f"Купить за {PRICE_CAPSULE} 💎", callback_data="shop:pack_buy:capsule"))
+
+    elif pack_type == "stash":
+        img = IMG_STASH
+        txt = (
+            "🔮 <b>Тайник Обликов</b>\n\n"
+            "Сбалансированный набор для тех, кто хочет получить ценных персонажей и испытать удачу в выпадении скинов!\n\n"
+            "✨ <b>Шансы распределения:</b>\n"
+            "🔮 Абсолютный скин — <b>4%</b>\n"
+            "💠 Пробужденный скин — <b>16%</b>\n"
+            "🔴 Мифическая карта — <b>10%</b>\n"
+            "🔵 Легендарная карта — <b>30%</b>\n"
+            "🟢 Эпическая карта — <b>40%</b>\n\n"
+            "♻️ <i>Дубликаты скинов компенсируются возвратом 35% алмазов!</i>"
+        )
+        bld.row(InlineKeyboardButton(text=f"Купить за {PRICE_STASH} 💎", callback_data="shop:pack_buy:stash"))
+
+    elif pack_type == "universe":
+        img = IMG_UNIVERSE
+        txt = (
+            "🌌 <b>Пак «Свежие Вселенные»</b>\n\n"
+            "Уникальный тематический набор, содержащий карты исключительно из последних добавленных тайтлов:\n"
+            f"👉 <i>{', '.join(LATEST_UNIVERSES)}</i>\n\n"
+            "✨ <b>Шансы распределения:</b>\n"
+            "🔴 Мифическая карта — <b>10%</b>\n"
+            "🔵 Легендарная карта — <b>40%</b>\n"
+            "🟢 Эпическая карта — <b>50%</b>\n\n"
+            "⚠️ <i>Божественные, Редкие и Обычные карты полностью исключены!</i>"
+        )
+        bld.row(InlineKeyboardButton(text=f"Купить за {PRICE_NEW_UNIV} 💴", callback_data="shop:pack_buy:universe"))
+
+    elif pack_type == "leg":
+        img = IMG_LEG_PACK
+        txt = (
+            "🔵 <b>Легендарный Пак</b>\n\n"
+            "Элитный набор карт для профессиональных игроков. Идеальное решение для сбора лег на крафт!\n\n"
+            "✨ <b>Содержимое:</b>\n"
+            "🔵 Гарантированное получение <b>Легендарной карты (100%)</b>!"
+        )
+        bld.row(InlineKeyboardButton(text=f"Купить за {PRICE_LEG} 💴", callback_data="shop:pack_buy:leg"))
+
+    else:  # epic
+        img = IMG_EPIC_PACK
+        txt = (
+            "🟢 <b>Эпический Пак</b>\n\n"
+            "Классический базовый набор карт, позволяющий быстро и уверенно усилить вашу основную колоду персонажей.\n\n"
+            "✨ <b>Содержимое:</b>\n"
+            "🟢 Гарантированное получение <b>Эпической карты (100%)</b>!"
+        )
+        bld.row(InlineKeyboardButton(text=f"Купить за {PRICE_EPIC} 💴", callback_data="shop:pack_buy:epic"))
+
+    bld.row(InlineKeyboardButton(text="Назад к пакам 🔙", callback_data="shop:packs"))
+
+    try:
+        await cq.message.delete()
+    except Exception:
+        pass
+
+    await cq.message.answer_photo(photo=img, caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("shop:pack_buy:"))
 async def shop_pack_buy(cq: CallbackQuery):
     pack_type = cq.data.split(":")[2]
     uid = cq.from_user.id
@@ -579,7 +649,7 @@ async def shop_pack_buy(cq: CallbackQuery):
         result_type = "skin"
     elif pack_type == "stash":
         choices = ["skin_abs", "skin_awa", "mythic", "legendary", "epic"]
-        weights = [4, 16, 10, 30, 40]
+        weights = [4, 18, 8, 30, 40]
         res = random.choices(choices, weights=weights, k=1)[0]
         if res == "skin_abs":
             skin_type, result_type = "absolute", "skin"
@@ -592,26 +662,21 @@ async def shop_pack_buy(cq: CallbackQuery):
         else:
             card_key = pull_random_card(force_rarity="Эпическая 🟢")
     elif pack_type == "universe":
-        weights = {'Мифическая 🔴': 2, 'Легендарная 🔵': 18, 'Эпическая 🟢': 40, 'Редкая 🟡': 40}
+        weights = {'Мифическая 🔴': 10, 'Легендарная 🔵': 40, 'Эпическая 🟢': 50}
         card_key = pull_universe_card(LATEST_UNIVERSES, weights)
     elif pack_type == "leg":
-        weights = {'Божественная ⚫️': 1, 'Мифическая 🔴': 9, 'Легендарная 🔵': 90}
-        valid_rarities = list(weights.keys())
-        chosen_r = random.choices(valid_rarities, weights=list(weights.values()), k=1)[0]
-        card_key = pull_random_card(force_rarity=chosen_r)
+        card_key = pull_random_card(force_rarity="Легендарная 🔵")
     elif pack_type == "epic":
-        weights = {'Легендарная 🔵': 5, 'Эпическая 🟢': 95}
-        chosen_r = random.choices(list(weights.keys()), weights=list(weights.values()), k=1)[0]
-        card_key = pull_random_card(force_rarity=chosen_r)
+        card_key = pull_random_card(force_rarity="Эпическая 🟢")
 
     bld = InlineKeyboardBuilder()
-    bld.button(text="Открыть еще 🔄", callback_data=f"shop:pack:{pack_type}")
+    bld.button(text="Открыть еще 🔄", callback_data=f"shop:pack_buy:{pack_type}")
     bld.button(text="Назад к пакам 🔙", callback_data="shop:packs")
     bld.adjust(1)
 
     try:
         await cq.message.delete()
-    except:
+    except Exception:
         pass
 
     # ЕСЛИ ВЫПАЛ СКИН:
@@ -621,28 +686,28 @@ async def shop_pack_buy(cq: CallbackQuery):
         c = CARDS[cid]
 
         is_new = give_skin_to_user(uid, cid, skin_type)
-        type_name = "Абсолютный (Видео) 🔮" if skin_type == "absolute" else "Пробужденный (Арт) 💠"
+        type_name = "Абсолютный 🔮" if skin_type == "absolute" else "Пробужденный 💠"
 
         if is_new:
             txt = (
-                f"🎉 <b>ВЕЛИКОЛЕПНАЯ УДАЧА!</b>\n\n"
-                f"Вам выпал редчайший облик!\n"
-                f"🎭 Тип: <b>{type_name}</b>\n"
-                f"🃏 Для карты: <b>{c['name']}</b>\n\n"
+                f"<b>Вам выпал новый скин!</b>\n\n"
+                f"🎭 <b>Тип:</b> {type_name}\n"
+                f"🃏 <b>Для карты:</b> {c['name']}\n\n"
                 f"<i>Облик добавлен в вашу Галерею 🏵️</i>"
             )
-            await cq.answer("🎉 Получен редчайший облик!", show_alert=True)
+            await cq.answer("🎉 Получен редчайший скин!", show_alert=True)
         else:
-            cashback = 75 if skin_type == "absolute" else 50
-            if pack_type == "stash": cashback = 20
+            # Математический расчет: ровно 35% от стоимости конкретного пака
+            spent = PRICE_CAPSULE if pack_type == "capsule" else PRICE_STASH
+            cashback = int(spent * 0.35)
 
             db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (cashback, uid))
             txt = (
-                f"♻️ <b>ДУБЛИКАТ ОБЛИКА!</b>\n\n"
+                f"♻️ <b>ДУБЛИКАТ СКИНА!</b>\n\n"
                 f"Вам выпал <b>{type_name}</b> для <b>{c['name']}</b>, но он у вас уже есть!\n\n"
-                f"💎 <b>Вы получаете кэшбек: +{cashback} Алмазов!</b>"
+                f"💎 <b>Утешительный бонус (35% от цены пака): +{cashback} Алмазов!</b>"
             )
-            await cq.answer(f"♻️ Дубликат облика! Возврат: +{cashback} Алмазов", show_alert=True)
+            await cq.answer(f"♻️ Дубликат скина! Бонус: +{cashback} Алмазов", show_alert=True)
 
         is_video = (skin_type == "absolute")
         asset_path = f"images/cards/{pool[cid].get('skin_video_file') or pool[cid].get('skin_art_file')}"
@@ -677,7 +742,7 @@ async def shop_pack_buy(cq: CallbackQuery):
             alert_text = "🎉 Получен новый персонаж!"
         else:
             txt = (
-                f"🛑 <b>Вам попался повторная карта!</b>\n"
+                f"🛑 <b>Вам попалась повторная карта!</b>\n"
                 f"Вы получаете компенсацию: <b>{krw_earn} 💴</b>\n\n"
                 f"🎴 <b>Персонаж:</b> {card_c['name']}\n"
                 f"🔮 <b>Редкость:</b> {card_c['rarity']}\n"

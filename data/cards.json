@@ -1,5 +1,29 @@
 [
     {
+        "name": "Ронан",
+        "rarity": "Эпическая 🟢",
+        "style": "Магический мечник",
+        "series": "Гениальный мечник академии",
+        "speed": 80,
+        "strength": 80,
+        "intellect": 80,
+        "file": "ronan.jpeg",
+        "exclusive": true,
+        "id": "ronan"
+    },
+    {
+        "name": "Лу Гуан и Чэн Сяоши",
+        "rarity": "Эпическая 🟢",
+        "style": "Хроно-саботаж",
+        "series": "Агенты времени",
+        "speed": 80,
+        "strength": 80,
+        "intellect": 80,
+        "file": "premium_card2.jpeg",
+        "exclusive": true,
+        "id": "premium_card_2"
+    },
+    {
         "name": "Летний Джин-Ву",
         "rarity": "Эпическая 🟢",
         "style": "Вайб теней",
@@ -48,7 +72,7 @@
         "id": "letnyaya_endorsi_zahard"
     },
     {
-        "name": "Летняя Ю Хва Йеон",
+        "name": "Летняя Йи-Хва Йеон",
         "rarity": "Эпическая 🟢",
         "style": "Адский пляж",
         "series": "Башня Бога",
@@ -936,7 +960,7 @@
         "id": "evan"
     },
     {
-        "name": "Йеон Ю Хва",
+        "name": "Йеон Йи-Хва",
         "rarity": "Эпическая 🟢",
         "style": "Контроль шинсу",
         "series": "Башня Бога",
