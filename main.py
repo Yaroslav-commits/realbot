@@ -748,7 +748,7 @@ def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
             if 'dia' in reward:
                 c.execute("UPDATE users SET diamond = diamond + ? WHERE id = ?", (reward['dia'], user_id))
 
-            # === ЧЕСТНОЕ ЗАЧИСЛЕНИЕ И ПРОВЕРКА НА ДУБЛИКАТ ===
+            # Логика выдачи пака
             if is_pack:
                 rarity = "Мифическая 🔴" if pack_type == 'mythic' else "Легендарная 🔵"
                 card_key = pull_random_card(force_rarity=rarity)
@@ -771,21 +771,28 @@ def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
                 (current_day, today_str, user_id)
             )
 
-            # =========================================================
-            # === MANHWCARD PASS: 70 XP ЗА СБОР ЕЖЕДНЕВКИ В WEB APP ===
-            # =========================================================
-            add_pass_xp(user_id, 70)
-
             conn.commit()
         finally:
+            # ЗАКРЫВАЕМ БАЗУ ДАННЫХ И СНИМАЕМ БЛОКИРОВКУ
             conn.close()
 
-        new_user = db_exec_sync("SELECT diamond, krw FROM users WHERE id = ?", (user_id,), fetch=True)
+        # =========================================================
+        # === MANHWCARD PASS: 70 XP ЗА СБОР ЕЖЕДНЕВКИ В WEB APP ===
+        # Теперь это вызывается безопасно, когда база свободна!
+        # =========================================================
+        try:
+            add_pass_xp(user_id, 70)
+        except Exception as pass_err:
+            logging.error(f"Ошибка при выдаче XP за пасс: {pass_err}")
+
+        # Получаем обновленные данные пользователя для ответа фронту
+        from database.db import db_exec
+        new_user = db_exec("SELECT diamond, krw FROM users WHERE id = ?", (user_id,), fetch=True)
 
         resp = {
             "success": True,
-            "new_krw": new_user[1],
-            "new_dia": new_user[0]
+            "new_krw": new_user[1] if new_user else 0,
+            "new_dia": new_user[0] if new_user else 0
         }
 
         if is_pack and card_key:

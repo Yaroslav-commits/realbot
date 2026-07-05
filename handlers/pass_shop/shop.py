@@ -68,8 +68,8 @@ SPIN_PACKS_KRW = [
 ]
 # Фоны в магазине: ключ, цена, валюта, дата окончания (ГГГГ-ММ-ДД), текст даты
 SHOP_BG_LIST = [
-    {"id": "yoo_han_kim", "price": 1500,  "currency": "krw", "icon": "💴", "ends_at": "2026-07-05", "date_str": "5-го Июля"},
-    {"id": "king_grey", "price": 12999, "currency": "krw", "icon": "💴", "ends_at": "2026-07-05", "date_str": "5-го Июля"},
+    {"id": "yoo_han_kim", "price": 1500,  "currency": "krw", "icon": "💴", "ends_at": "2026-07-10", "date_str": "10-го Июля"},
+    {"id": "king_grey", "price": 10999, "currency": "krw", "icon": "💴", "ends_at": "2026-07-10", "date_str": "10-го Июля"},
 ]
 # ВИДЕО-ФОНЫ. Сюда кидаешь ключи тех фонов, которые у тебя загружены как видео.
 VIDEO_BGS = {"yamzaki_clan", "admin, jaehwan", "king_grey"}

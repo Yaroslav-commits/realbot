@@ -142,7 +142,8 @@ def _build_inv_main_kb() -> InlineKeyboardMarkup:
     bld.button(text="🔍 Поиск по названию", callback_data="inv_search_start")
     bld.button(text="📊 Коллекция",         callback_data="inv_collection")
     bld.button(text="📦 Сундук",            callback_data="stash_menu:0:inv")
-    bld.adjust(1,1,2)
+    bld.row(InlineKeyboardButton(text="Мои скины 🏵️", callback_data="my_skins_categories"))
+    bld.adjust(1,1,2,1)
     return bld.as_markup()
 
 @router.message(F.text == "🧳 Мои Карты")
@@ -1484,3 +1485,175 @@ async def trade_decline(cq: CallbackQuery):
 @router.callback_query(F.data == "ignore")
 async def ignore_cb(cq: CallbackQuery):
     await cq.answer()
+
+def _render_skin_slide_data(uid: int, skin_type: str, index: int, owned_cids: list):
+    """Вспомогательный хелпер для генерации красивого текста и кнопок слайдера"""
+    total = len(owned_cids)
+    cid = owned_cids[index]
+    c = CARDS.get(cid)
+
+    # Проверяем наличие базовой карты
+    base_owned = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ? LIMIT 1", (uid, cid), fetch=True)
+    has_base_str = "🟢 Есть в инвентаре ✅" if base_owned else "🔴 Отсутствует в инвентаре ❌"
+
+    # Динамические заголовки по твоей просьбе
+    if skin_type == "awakened":
+        header_title = "Пробужденные скины 💠"
+        asset_path = f"images/cards/{AWAKENED_SKIN[cid]['skin_art_file']}"
+        is_video = False
+    else:
+        header_title = "Абсолютные скины 🔮"
+        asset_path = f"images/cards/{ABSOLUTE_SKIN[cid]['skin_video_file']}"
+        is_video = True
+
+    active_skin = get_active_skin(uid, cid)
+    is_current_active = (active_skin == skin_type)
+
+    # Дополнительная красота: Жирный и заметный статус-баннер облика
+    if is_current_active:
+        status_banner = "✨ <b>Активен и надет</b>"
+    elif base_owned:
+        status_banner = "📦 <b>Доступен к применению</b>"
+    else:
+        status_banner = "🔒 <b>Базовая карта отсутствует</b>"
+
+    txt = (
+        f"<b>{header_title}</b>\n"
+        f"━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>Персонаж:</b> {c['name']}\n"
+        f"🔮 <b>Редкость карты:</b> {c['rarity']}\n"
+        f"👊 <b>Стиль боя:</b> {c.get('style', '—')}\n\n"
+        f"<blockquote>🎭 Статус облика:\n└ {status_banner}</blockquote>\n"
+        f"<blockquote>📋 Наличие карты:\n└ {has_base_str}</blockquote>\n"
+        f"Порядковый номер: <b>{index + 1} из {total}</b>"
+    )
+
+    bld = InlineKeyboardBuilder()
+
+    # Ряд навигации
+    bld.row(
+        InlineKeyboardButton(text="⬅️ Назад", callback_data=f"view_skins_slider:{skin_type}:{index - 1}"),
+        InlineKeyboardButton(text=f"▪️ {index + 1} / {total} ▪️", callback_data="ignore"),
+        InlineKeyboardButton(text="Вперед ➡️", callback_data=f"view_skins_slider:{skin_type}:{index + 1}")
+    )
+
+    # Кнопка моментального переключения
+    if base_owned:
+        if is_current_active:
+            bld.row(
+                InlineKeyboardButton(text="❌ Снять этот скин", callback_data=f"sl_sk_act:un:{skin_type}:{cid}:{index}"))
+        else:
+            bld.row(InlineKeyboardButton(text="✅ Применить этот скин",
+                                         callback_data=f"sl_sk_act:eq:{skin_type}:{cid}:{index}"))
+
+    bld.row(InlineKeyboardButton(text="🔙 К категориям", callback_data="my_skins_categories"))
+
+    return asset_path, is_video, txt, bld.as_markup()
+
+
+@router.callback_query(F.data == "my_skins_categories")
+async def my_skins_categories_menu(cq: CallbackQuery):
+    txt = (
+        "🏵️ <b>ГАЛЕРЕЯ ОБЛИКОВ</b> 🏵️\n\n"
+        "Добро пожаловать в ваш личный гардероб редких обликов персонажей!\n\n"
+        "<i>Выберите интересующую вас редкость, чтобы открыть просмотр вашей коллекции:</i>"
+    )
+    bld = InlineKeyboardBuilder()
+    # Убрали приписки (Арт/Видео) в скобках, теперь кнопки чистые и красивые
+    bld.row(
+        InlineKeyboardButton(text="💠 Пробужденные", callback_data="view_skins_slider:awakened:0"),
+        InlineKeyboardButton(text="🔮 Абсолютные", callback_data="view_skins_slider:absolute:0")
+    )
+    bld.row(InlineKeyboardButton(text="🔙 Назад в инвентарь", callback_data="inv_main"))
+    bld.adjust(1)
+
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    except Exception:
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("view_skins_slider:"))
+async def view_skins_slider(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    skin_type = parts[1]
+    index = int(parts[2])
+    uid = cq.from_user.id
+
+    rows = db_exec("SELECT card_id FROM skins_inv WHERE user_id = ? AND skin_type = ?", (uid, skin_type), fetchall=True)
+    owned_cids = [r[0] for r in rows] if rows else []
+
+    if not owned_cids:
+        type_name = "Пробужденный 💠" if skin_type == "awakened" else "Абсолютный 🔮"
+        txt = (
+            f"🔒 <b>Коллекция пуста</b>\n\n"
+            f"У вас пока нет обликов редкости <b>{type_name}</b>.\n"
+            f"Вы можете получить их в магазине! 🛒"
+        )
+        bld = InlineKeyboardBuilder()
+        bld.button(text="🔙 Назад к категориям", callback_data="my_skins_categories")
+
+        try:
+            await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        except Exception:
+            try:
+                await cq.message.delete()
+            except Exception:
+                pass
+            await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        return await cq.answer()
+
+    total = len(owned_cids)
+    if index >= total: index = 0
+    if index < 0: index = total - 1
+
+    asset_path, is_video, txt, reply_markup = _render_skin_slide_data(uid, skin_type, index, owned_cids)
+    c = CARDS.get(owned_cids[index])
+
+    await cq.message.delete()
+
+    if is_video:
+        await send_cached_video(
+            cq.bot, chat_id=cq.message.chat.id, file_path=asset_path, caption=txt,
+            width=c.get("width", 960), height=c.get("height", 1280),
+            reply_markup=reply_markup, parse_mode="HTML", supports_streaming=True
+        )
+    else:
+        await cq.message.answer_photo(
+            photo=FSInputFile(asset_path), caption=txt, parse_mode="HTML", reply_markup=reply_markup
+        )
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("sl_sk_act:"))
+async def slider_skin_action(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    action = parts[1]
+    skin_type = parts[2]
+    cid = parts[3]
+    index = int(parts[4])
+    uid = cq.from_user.id
+
+    if action == "eq":
+        equip_skin(uid, cid, skin_type)
+        await cq.answer("✨ Облик успешно надет!")
+    else:
+        unequip_skin(uid, cid)
+        await cq.answer("❌ Облик снят!")
+
+    # БЕСШОВНОЕ ОБНОВЛЕНИЕ: Пересобираем только текст и кнопки в ту же секунду!
+    rows = db_exec("SELECT card_id FROM skins_inv WHERE user_id = ? AND skin_type = ?", (uid, skin_type), fetchall=True)
+    owned_cids = [r[0] for r in rows] if rows else []
+
+    if owned_cids:
+        _, _, txt, reply_markup = _render_skin_slide_data(uid, skin_type, index, owned_cids)
+        try:
+            # Магия aiogram: меняем только описание и разметку кнопок под медиафайлом
+            await cq.message.edit_caption(caption=txt, reply_markup=reply_markup, parse_mode="HTML")
+        except Exception:
+            pass
