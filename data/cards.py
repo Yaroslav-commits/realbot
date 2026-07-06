@@ -14,7 +14,7 @@ CARDS = {
 "ronan": {"name": "Ронан", "rarity": "Эпическая 🟢", "style": "Магический мечник", "series": "Гениальный мечник академии", "speed": 80, "strength": 80, "intellect": 80, "file": "ronan.jpeg", "exclusive": True},
 "premium_card_2": {"name": "Лу Гуан и Чэн Сяоши", "rarity": "Эпическая 🟢", "style": "Хроно-саботаж", "series": "Агенты времени", "speed": 80, "strength": 80, "intellect": 80, "file": "premium_card2.jpeg", "exclusive": True},
 # ============== Summer Drop ========
-"letniy_dzhin_vu": {"name": "Летний Джин-Ву", "rarity": "Эпическая 🟢", "style": "Вайб теней", "series": "Поднятие уровня в одиночку", "speed": 80, "strength": 80, "intellect": 80, "file": "letniy_dzhin_vu.jpeg", "exclusive": False},
+"letniy_dzhin_vu": {"name": "Летний Джин-Ву", "rarity": "Эпическая 🟢", "style": "Вайб теней", "series": "Поднятие уровня в одиночку", "speed": 80, "strength": 80, "intellect": 80, "file": "letniy_dzhin_vu.jpeg", "exclusive": True},
 "letnyaya_cha_he_in": {"name": "Летняя Ча Хэ-Ин", "rarity": "Эпическая 🟢", "style": "Летний танец", "series": "Поднятие уровня в одиночку", "speed": 80, "strength": 77, "intellect": 78, "file": "letnyaya_cha_he_in.jpeg", "exclusive": False},
 "letniy_gu_kim": {"name": "Летний Гу Ким", "rarity": "Эпическая 🟢", "style": "Пляжный разрез", "series": "Лукизм", "speed": 80, "strength": 79, "intellect": 78, "file": "letniy_gu_kim.jpeg", "exclusive": False},
 "letnyaya_endorsi_zahard": {"name": "Летняя Эндорси Захард", "rarity": "Эпическая 🟢", "style": "Морской Ураган", "series": "Башня Бога", "speed": 79, "strength": 78, "intellect": 77, "file": "letnyaya_endorsi_zahard.jpeg", "exclusive": False},
@@ -514,7 +514,7 @@ CARDS = {
 "yu_cha_ryeon": {"name": "Ю Ча Рён", "rarity": "Легендарная 🔵", "style": "Зыбь", "series": "Факультет зачистки подземелий", "speed": 85, "strength": 85, "intellect": 84, "file": "yu_cha_ryeon.jpeg", "exclusive": False},
 # ======== СОЛО ЛЕВЕЛИНГ ========
 "son_jin_woo": {
-    "name": "Сон Джин Ву",
+    "name": "Сон Джин-Ву",
     "rarity": "Божественная ⚫️",
     "style": "Правитель теней",
     "series": "Поднятие уровня в одиночку",
