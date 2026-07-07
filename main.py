@@ -643,14 +643,27 @@ def set_active_bg_api(payload: BgPayload, user_id: int = Depends(authed_user_id)
         logging.error(f"Bg update error: {e}")
         return {"success": False, "error": str(e)}
 
-@app.post("/api/profile/favorite/{user_id}")
+@app.post("/api/set_favorite/{user_id}")
 def set_favorite_card_api(payload: FavPayload, user_id: int = Depends(authed_user_id)):
     try:
-        # Удаляем старую карту из этого слота
+        # 1. Гарантируем, что таблица любимых карт существует
+        db_exec_sync("""
+            CREATE TABLE IF NOT EXISTS favorite_cards (
+                user_id INTEGER,
+                slot_index INTEGER,
+                card_id TEXT,
+                PRIMARY KEY (user_id, slot_index)
+            )
+        """)
+
+        # 2. Удаляем старую карту из этого слота
         db_exec_sync("DELETE FROM favorite_cards WHERE user_id = ? AND slot_index = ?", (user_id, payload.slot_index))
-        # Ставим новую (если id передан)
+
+        # 3. Ставим новую (если id передан и это не 'none')
         if payload.card_id and payload.card_id != "none":
-            db_exec_sync("INSERT INTO favorite_cards (user_id, card_id, slot_index) VALUES (?, ?, ?)", (user_id, payload.card_id, payload.slot_index))
+            db_exec_sync("INSERT INTO favorite_cards (user_id, card_id, slot_index) VALUES (?, ?, ?)",
+                         (user_id, payload.card_id, payload.slot_index))
+
         return {"success": True}
     except Exception as e:
         logging.error(f"Fav update error: {e}")
