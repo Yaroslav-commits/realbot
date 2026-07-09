@@ -1565,7 +1565,7 @@ async def my_skins_categories_menu(cq: CallbackQuery):
     bld.add(InlineKeyboardButton(text="🔮 Абсолютные", callback_data="view_skins_slider:absolute:0"))
     bld.add(InlineKeyboardButton(text="Трейд ♻️", callback_data="skin_trade_menu"))
     bld.add(InlineKeyboardButton(text="Назад 🔙", callback_data="inv_main"))
-    bld.adjust(4)
+    bld.adjust(1)
 
     try:
         await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
