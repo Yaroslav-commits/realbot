@@ -1577,11 +1577,7 @@ async def my_skins_categories_menu(cq: CallbackQuery):
         await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
 
-
-# ==========================================
 # ♻️ СИСТЕМА ТРЕЙДА СКИНАМИ ♻️
-# ==========================================
-
 PENDING_SKIN_TRADES = {}  # Ожидающие заявки {receiver_id: {'sender_id': id, 'type': type, 'task': task}}
 ACTIVE_SKIN_TRADES = {}  # Активные трейды {trade_id: {'p1': id, 'p2': id, 'type': type, 'p1_skin': None, 'p2_skin': None}}
 
@@ -1596,16 +1592,18 @@ kb_trade_cancel = ReplyKeyboardMarkup(
 )
 
 
+# ИСПРАВЛЕНО: Четкий перехват callback_data="skin_trade_menu" без зависаний кнопки
 @router.callback_query(F.data == "skin_trade_menu")
 async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
     me = await bot.get_me()
     uid = cq.from_user.id
 
-    # Генерируем персональные ссылки (через команду start)
+    # Твои оригинальные глубокие ссылки
     link_awa = f"https://t.me/{me.username}?start=sktrad_awa_{uid}"
     link_abs = f"https://t.me/{me.username}?start=sktrad_abs_{uid}"
 
-    txt = "♻️ <b>Трейд Скинами</b>\n\nВыберите редкость скина для обмена и отправьте ссылку партнеру в чат:"
+    # Твой сохраненный текст один в один
+    txt = "♻️ <b>Трейд Обликами</b>\n\nВыберите редкость скина для обмена и отправьте ссылку партнеру in чат:"
 
     bld = InlineKeyboardBuilder()
     bld.row(InlineKeyboardButton(text="Пробуждённый трейд 💠",
@@ -1614,7 +1612,18 @@ async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
                                  url=f"https://t.me/share/url?url={link_abs}&text=Го трейд Абсолютными скинами!"))
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="my_skins_categories"))
 
-    await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    except Exception:
+        try:
+            await cq.message.delete()
+        except Exception:
+            pass
+        await cq.message.answer_photo(photo=FSInputFile("images/shop/shop.png"), caption=txt,
+                                      reply_markup=bld.as_markup(), parse_mode="HTML")
+
+    # ВСЕГДА отвечаем на callback, чтобы кнопка не «висела» нажатой
+    await cq.answer()
 
 
 # Обработка перехода по ссылке
