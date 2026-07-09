@@ -390,7 +390,7 @@ CARDS = {
 "jin_hobin": {"name": "Джин Хобин", "rarity": "Эпическая 🟢", "style": "Дзюдо", "series": "Лукизм", "speed": 77, "strength": 69, "intellect": 66, "file": "jin_hobin.jpeg", "exclusive": False},
 "shigeaki_kojima": {"name": "Шигеаки Кодзима", "rarity": "Эпическая 🟢", "style": "Каратэ", "series": "Лукизм", "speed": 65, "strength": 67, "intellect": 79, "file": "shigeaki_kojima.jpeg", "exclusive": False},
 "hiroaki_kojima": {"name": "Хироаки Кодзима", "rarity": "Эпическая 🟢", "style": "Каратэ", "series": "Лукизм", "speed": 68, "strength": 65, "intellect": 78, "file": "hiroaki_kojima.jpeg", "exclusive": False},
-"lineman": {"name": "Лайнмен", "rarity": "Эпическая 🟢", "style": "Молния Чоя", "series": "Лукизм", "speed": 75, "strength": 70, "intellect": 69, "file": "lineman.jpeg", "exclusive": False},
+"lineman": {"name": "Лайнмен", "rarity": "Эпическая 🟢", "style": "Молния Чоя", "series": "Лукизм", "speed": 80, "strength": 70, "intellect": 69, "file": "lineman.jpeg", "exclusive": False},
 "xiao_long": {"name": "Сяо Лун", "rarity": "Эпическая 🟢", "style": "Чхон Хохуйгун", "series": "Лукизм", "speed": 74, "strength": 68, "intellect": 70, "file": "xiao_long.jpeg", "exclusive": False},
 "masashi_takanobu": {"name": "Масаши Таканобу", "rarity": "Редкая 🟡", "style": "Уличный ✊", "series": "Лукизм", "speed": 48, "strength": 50, "intellect": 49, "file": "masashi.png", "exclusive": False},
 "haruto": {"name": "Харуто", "rarity": "Обычная ⚪️", "style": "Отсутствует", "series": "Лукизм", "speed": 11, "strength": 12, "intellect": 10, "file": "haruto.png", "exclusive": False},

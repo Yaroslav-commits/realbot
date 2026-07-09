@@ -7,11 +7,9 @@
     <list default="true" id="9e9a111f-dea5-49ef-9a80-af6150603ae2" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/data/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/cards.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/images/cards/alfina_awakened.jpeg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/images/cards/hong_jayeol_absolute.mp4" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/images/cards/lineman_absolute.mp4" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/images/cards/park_jinyeong__awakened.jpeg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/images/cards/yu_cha_ryeon_awakened.jpeg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/database/db.py" beforeDir="false" afterPath="$PROJECT_DIR$/database/db.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/handlers/deck.py" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/deck.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/images/cards/lineman.jpeg" beforeDir="false" afterPath="$PROJECT_DIR$/images/cards/lineman.jpeg" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

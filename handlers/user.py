@@ -224,6 +224,103 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         parse_mode="Markdown"
     )
 
+
+# ==========================================
+# ♻️ ОБРАБОТКА СТАРТА ТРЕЙДА СКИНАМИ ♻️
+# ==========================================
+@router.message(F.text.startswith("/start sktrad_"))
+async def skin_trade_start_link(message: types.Message, bot: Bot):
+    # Разбираем параметры ссылки (например: /start sktrad_awa_123456)
+    try:
+        parts = message.text.split()[1].split("_")
+        if len(parts) != 3:
+            return
+    except (IndexError, ValueError):
+        return
+
+    skin_type = "awakened" if parts[1] == "awa" else "absolute"
+    sender_id = int(parts[2])
+    receiver_id = message.from_user.id
+
+    # Проверка: нельзя торговать с самим собой
+    if sender_id == receiver_id:
+        return await message.answer("❌ Вы не можете совершить обмен с самим собой!")
+
+    # Ленивый импорт из deck, чтобы избежать циклической зависимости файлов
+    from deck import (PENDING_SKIN_TRADES, kb_trade_accept,
+                      kb_trade_cancel, send_skin_selection_ui)
+    from database.db import get_user, get_all_user_skins_by_type
+    from handlers import kb_main
+    from html import escape
+
+    s_u = get_user(sender_id)
+    if not s_u:
+        return await message.answer("❌ Игрок, создавший ссылку, не найден в системе.")
+
+    # Получаем скины обоих игроков для проверки пула обмена
+    s_skins = get_all_user_skins_by_type(sender_id, skin_type)
+    r_skins = get_all_user_skins_by_type(receiver_id, skin_type)
+
+    type_lbl = "Пробужденная 💠" if skin_type == "awakened" else "Абсолютная 🔮"
+
+    # Проверка 1: Есть ли вообще хоть один скин нужной редкости у принимающего ссылку
+    if not r_skins:
+        return await message.answer(
+            f"❌ Нельзя совершить обмен, так как у вас нету подходящих скинов для обмена.\n"
+            f"<i>(У вас полностью отсутствуют облики редкости {type_lbl})</i>",
+            parse_mode="HTML"
+        )
+
+    # Проверка 2: Есть ли уникальные скины для обмена (если наборы скинов 1 в 1 совпадают, меняться нечем)
+    s_diff = set(s_skins) - set(r_skins)
+    r_diff = set(r_skins) - set(s_skins)
+
+    if not s_diff or not r_diff:
+        return await message.answer(
+            "❌ Нельзя совершить обмен, так как у вас нету подходящих скинов для обмена.\n"
+            "<i>(Все ваши доступные облики полностью совпадают с обликами партнера)</i>",
+            parse_mode="HTML"
+        )
+
+    # Формируем красивую ссылку на профиль инициатора
+    sender_name = escape(s_u[2] if s_u[2] else f"Игрок {sender_id}")
+    sender_profile_link = f"<a href='tg://user?id={sender_id}'>{sender_name}</a>"
+
+    txt = (
+        f"🎭 {sender_profile_link} хочет совершить с вами обмен скинами, "
+        f"если хотите начать трейд, то нажмите ниже <b>Принять ✅</b>\n\n"
+        f"Без действие обнулит заявку через 30 секунд"
+    )
+
+    # Меняем обычную клавиатуру на Принять/Отказать
+    await message.answer(txt, reply_markup=kb_trade_accept, parse_mode="HTML")
+
+    # Функция-таймаут для автоматического обнуления заявки через 30 секунд
+    async def timeout_trade_task():
+        await asyncio.sleep(30)
+        if receiver_id in PENDING_SKIN_TRADES and PENDING_SKIN_TRADES[receiver_id]['sender_id'] == sender_id:
+            del PENDING_SKIN_TRADES[receiver_id]
+            # Сбрасываем Reply-клавиатуру обратно на главную
+            await bot.send_message(
+                receiver_id,
+                "⏳ Время ожидания вышло. Заявка на обмен скинами автоматически обнулена.",
+                reply_markup=kb_main
+            )
+            await bot.send_message(
+                sender_id,
+                f"⏳ Игрок не принял вашу заявку на обмен в течение 30 секунд. Трейд аннулирован."
+            )
+
+    # Если у игрока уже висела какая-то заявка от кого-то, отменяем старый таймер
+    if receiver_id in PENDING_SKIN_TRADES:
+        PENDING_SKIN_TRADES[receiver_id]['task'].cancel()
+
+    # Запускаем асинхронный таймер на 30 секунд
+    task = asyncio.create_task(timeout_trade_task())
+
+    # Сохраняем в глобальный буфер ожидания
+    PENDING_SKIN_TRADES[receiver_id] = {'sender_id': sender_id, 'type': skin_type, 'task': task}
+
 @router.message(F.text == "⛩️ Банды")
 async def gangs(msg: types.Message):
     await msg.answer("В разработке")

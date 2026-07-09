@@ -850,3 +850,22 @@ def check_and_update_quests(uid: int, quest_action: str, amount: int = 1) -> dic
         "level": final_level,
         "xp": final_xp
     }
+
+# ================== ФУНКЦИИ ДЛЯ ТРЕЙДА СКИНАМИ ==================
+
+def get_all_user_skins_by_type(uid: int, skin_type: str) -> list:
+    """Возвращает список ID всех карт, на которые у игрока есть скин определенного типа."""
+    rows = db_exec(
+        "SELECT card_id FROM skins_inv WHERE user_id = ? AND skin_type = ?",
+        (uid, skin_type), fetchall=True
+    )
+    return [row[0] for row in rows] if rows else []
+
+def swap_skins(uid1: int, cid1: str, uid2: int, cid2: str, skin_type: str):
+    """Меняет скины местами между двумя игроками."""
+    # Забираем скины
+    db_exec("DELETE FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?", (uid1, cid1, skin_type))
+    db_exec("DELETE FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?", (uid2, cid2, skin_type))
+    # Отдаем друг другу
+    db_exec("INSERT INTO skins_inv (user_id, card_id, skin_type) VALUES (?, ?, ?)", (uid1, cid2, skin_type))
+    db_exec("INSERT INTO skins_inv (user_id, card_id, skin_type) VALUES (?, ?, ?)", (uid2, cid1, skin_type))
