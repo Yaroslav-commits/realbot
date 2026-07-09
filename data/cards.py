@@ -341,7 +341,7 @@ CARDS = {
     "doch": {"name": "Дочь Чансу", "rarity": "Обычная ⚪️", "style": "Отсутсвует", "series": "Лукизм", "speed": 10, "strength": 10, "intellect": 10, "file": "doch.png", "exclusive": False},
     "yujin": {"name": "Юджин", "rarity": "Обычная ⚪️", "style": "Отсутсвует", "series": "Лукизм", "speed": 12, "strength": 10, "intellect": 20, "file": "yujin.png", "exclusive": False},
     "seo_soneun": {"name": "Со Сонын", "rarity": "Эпическая 🟢", "style": "Уличный", "series": "Лукизм", "speed": 80, "strength": 80, "intellect": 79, "file": "sosun.png", "exclusive": False},
-"kim_kimyeon": {"name": "Ким Кимён", "rarity": "Эпическая 🟢", "style": "ММА", "series": "Лукизм", "speed": 80,"strength": 80, "intellect": 80, "file": "kimen.png", "exclusive": False},
+"kim_kimyeon": {"name": "Ким Кимен", "rarity": "Эпическая 🟢", "style": "ММА", "series": "Лукизм", "speed": 80,"strength": 80, "intellect": 80, "file": "kimen.png", "exclusive": False},
 "kwak_jichan": {"name": "Квак Джичан", "rarity": "Эпическая 🟢", "style": "Лезвия рук", "series": "Лукизм", "speed": 80, "strength": 79, "intellect": 80, "file": "jichan.png", "exclusive": False},
 "ma_tesu": {"name": "Ма Тэсу", "rarity": "Эпическая 🟢", "style": "Железный кулак", "series": "Лукизм", "speed": 79, "strength": 80, "intellect": 78, "file": "ma.png", "exclusive": False},
 "ji_gonsop": {"name": "Джи Гонсоп", "rarity": "Эпическая 🟢", "style": "Бокс", "series": "Лукизм", "speed": 79, "strength": 80, "intellect": 78, "file": "gonsop.png", "exclusive": False},
@@ -749,15 +749,27 @@ ROYALE_PASS = {1:('krw',550), 2:('atm',20), 3:('bc',250), 4:('atm',18), 5:('pack
 
 AWAKENED_SKIN = {
     # Пробужденный скин (Арт - 💠)
-    "yu_cha_ryeon": {"skin_art_file": "yu_cha_ryeon_awakened.jpeg", "exclusive": False}, # Ю Ча Рён
-    "alfina": {"skin_art_file": "alfina_awakened.jpeg", "exclusive": False},             # Альфина
-    "park_jinyeong": {"skin_art_file": "park_jinyeong_awakened.jpeg", "exclusive": False} # Пак Джинён
+    "kim_gapryeon": {"skin_art_file": "kim_garyeon_aw.jpeg", "exclusive": False},
+    "jin_mu_won": {"skin_art_file": "jin_mo_won_aw.jpeg", "exclusive": False},
+    "park_jinyeong": {"skin_art_file": "park_jinyeong_aw.jpeg", "exclusive": False},
+    "liu_zhigang": {"skin_art_file": "liu_zhigang_aw.jpeg", "exclusive": False},
+    "arges": {"skin_art_file": "arges_aw.jpeg", "exclusive": False},
+    "yu_cha_ryeon": {"skin_art_file": "yu_cha_aw.jpeg", "exclusive": False},
+    "go_gun_hee": {"skin_art_file": "go_gun_hee_aw.jpeg", "exclusive": False},
+    "kim_kimyeon": {"skin_art_file": "kim_kimyeon_aw.jpeg", "exclusive": False},
+    "seo_soneun": {"skin_art_file": "sosun_aw.jpeg", "exclusive": False},
+    "cha_hae_in": {"skin_art_file": "cha_hae_in_aw.jpeg", "exclusive": False},
+    "choi_jong_in": {"skin_art_file": "choi_jong_in_aw.jpeg", "exclusive": False},
+    "ji_yeonu": {"skin_art_file": "ji_yeonu_aw.jpeg", "exclusive": False},
+    "hwang_man_gi": {"skin_art_file": "hwang_man_gi_aw.jpeg", "exclusive": False},
+    "alfina": {"skin_art_file": "alfina_aw.jpeg", "exclusive": False},
+    "denial_hetchid": {"skin_art_file": "denial_hetchid_aw.jpeg", "exclusive": False},
 }
 
 ABSOLUTE_SKIN = {
     # Абсолютный скин (Видео - 🔮)
-    "hong_jayeol": {"skin_video_file": "hong_jayeol_absolute.mp4", "exclusive": False},  # Хон Джаёль
-    "lineman": {"skin_video_file": "lineman_absolute.mp4", "exclusive": False}           # Лайнмен
+    "hong_jayeol": {"skin_video_file": "hong_jayeol_ab.mp4", "exclusive": False},
+    "lineman": {"skin_video_file": "lineman_ab.mp4", "exclusive": False},
 }
 
 # ===== Хелперы для скинов =====
