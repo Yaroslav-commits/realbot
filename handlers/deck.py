@@ -1578,8 +1578,8 @@ async def my_skins_categories_menu(cq: CallbackQuery):
     await cq.answer()
 
 # ♻️ СИСТЕМА ТРЕЙДА СКИНАМИ ♻️
-PENDING_SKIN_TRADES = {}  # Ожидающие заявки {receiver_id: {'sender_id': id, 'type': type, 'task': task}}
-ACTIVE_SKIN_TRADES = {}  # Активные трейды {trade_id: {'p1': id, 'p2': id, 'type': type, 'p1_skin': None, 'p2_skin': None}}
+PENDING_SKIN_TRADES = {}
+ACTIVE_SKIN_TRADES = {}
 
 kb_trade_accept = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="Принять ✅"), KeyboardButton(text="Отказать ❌")]],
@@ -1592,24 +1592,22 @@ kb_trade_cancel = ReplyKeyboardMarkup(
 )
 
 
-# ИСПРАВЛЕНО: Четкий перехват callback_data="skin_trade_menu" без зависаний кнопки
 @router.callback_query(F.data == "skin_trade_menu")
 async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
     me = await bot.get_me()
     uid = cq.from_user.id
 
-    # Твои оригинальные глубокие ссылки
     link_awa = f"https://t.me/{me.username}?start=sktrad_awa_{uid}"
     link_abs = f"https://t.me/{me.username}?start=sktrad_abs_{uid}"
 
-    # Твой сохраненный текст один в один
     txt = "♻️ <b>Трейд Обликами</b>\n\nВыберите редкость скина для обмена и отправьте ссылку партнеру в чат:"
 
     bld = InlineKeyboardBuilder()
+    # ИСПРАВЛЕНО: Добавлен quote(), чтобы Telegram не ломал структуру ссылки при отправке в чат
     bld.row(InlineKeyboardButton(text="Пробуждённый трейд 💠",
-                                 url=f"https://t.me/share/url?url={link_awa}&text=Го трейд Пробужденными скинами!"))
+                                 url=f"https://t.me/share/url?url={quote(link_awa)}&text={quote('Го трейд Пробужденными скинами!')}"))
     bld.row(InlineKeyboardButton(text="Абсолютный трейд 🔮",
-                                 url=f"https://t.me/share/url?url={link_abs}&text=Го трейд Абсолютными скинами!"))
+                                 url=f"https://t.me/share/url?url={quote(link_abs)}&text={quote('Го трейд Абсолютными скинами!')}"))
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="my_skins_categories"))
 
     try:
@@ -1619,84 +1617,26 @@ async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
             await cq.message.delete()
         except Exception:
             pass
-        await cq.message.answer_photo(photo=FSInputFile("images/shop/shop.png"), caption=txt,
-                                      reply_markup=bld.as_markup(), parse_mode="HTML")
-
-    # ВСЕГДА отвечаем на callback, чтобы кнопка не «висела» нажатой
+        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
-
-
-# Обработка перехода по ссылке
-@router.message(F.text.startswith("/start sktrad_"))
-async def skin_trade_start(message: types.Message, bot: Bot):
-    args = message.text.split()[1].split("_")
-    if len(args) != 3: return
-
-    skin_type = "awakened" if args[1] == "awa" else "absolute"
-    sender_id = int(args[2])
-    receiver_id = message.from_user.id
-
-    if sender_id == receiver_id:
-        return await message.answer("❌ Вы не можете торговать сами с собой!")
-
-    s_u = get_user(sender_id)
-    if not s_u: return await message.answer("Игрок не найден.")
-
-    from database.db import get_all_user_skins_by_type
-    s_skins = get_all_user_skins_by_type(sender_id, skin_type)
-    r_skins = get_all_user_skins_by_type(receiver_id, skin_type)
-
-    type_lbl = "Пробужденная 💠" if skin_type == "awakened" else "Абсолютная 🔮"
-
-    if not r_skins:
-        return await message.answer(f"❌ Нельзя совершить обмен: у вас нет скинов редкости <b>{type_lbl}</b>.",
-                                    parse_mode="HTML")
-
-    # Проверка на то, есть ли вообще скины, которыми можно обменяться (исключаем одинаковые)
-    s_diff = set(s_skins) - set(r_skins)
-    r_diff = set(r_skins) - set(s_skins)
-
-    if not s_diff or not r_diff:
-        return await message.answer(
-            "❌ Нельзя совершить обмен: у вас с партнером нет подходящих уникальных скинов для обмена (либо все совпадают).")
-
-    name = f"<a href='tg://user?id={sender_id}'>{escape(s_u[2])}</a>"
-    txt = (
-        f"{name} хочет совершить с вами обмен скинами,\n"
-        f"если хотите начать трейд, то нажмите ниже <b>Принять ✅</b>\n\n"
-        f"<i>Без действие обнулит заявку через 30 секунд</i>"
-    )
-
-    await message.answer(txt, reply_markup=kb_trade_accept, parse_mode="HTML")
-
-    # Логика 30 секундного таймера
-    async def timeout_trade():
-        await asyncio.sleep(30)
-        if receiver_id in PENDING_SKIN_TRADES and PENDING_SKIN_TRADES[receiver_id]['sender_id'] == sender_id:
-            del PENDING_SKIN_TRADES[receiver_id]
-            await bot.send_message(receiver_id, "⏳ Время вышло. Заявка на обмен скинами аннулирована.",
-                                   reply_markup=kb_main)
-            await bot.send_message(sender_id, "⏳ Игрок не принял заявку на обмен скинами в течение 30 секунд.")
-
-    task = asyncio.create_task(timeout_trade())
-    PENDING_SKIN_TRADES[receiver_id] = {'sender_id': sender_id, 'type': skin_type, 'task': task}
-
 
 @router.message(F.text == "Отказать ❌")
 async def decline_skin_trade(message: types.Message, bot: Bot):
     uid = message.from_user.id
+    from handlers import kb_main
     if uid in PENDING_SKIN_TRADES:
         data = PENDING_SKIN_TRADES.pop(uid)
         data['task'].cancel()
-        await message.answer("❌ Заявка на обмен отклонена.", reply_markup=kb_main)
+        await message.answer("❌ Заявка на обмен отклонена.", reply_markup=kb_main())
         await bot.send_message(data['sender_id'], "❌ Партнер отклонил заявку на обмен скинами.")
 
 
 @router.message(F.text == "Принять ✅")
 async def accept_skin_trade(message: types.Message, bot: Bot):
     uid = message.from_user.id
+    from handlers import kb_main
     if uid not in PENDING_SKIN_TRADES:
-        return await message.answer("У вас нет активных заявок на обмен.", reply_markup=kb_main)
+        return await message.answer("У вас нет активных заявок на обмен.", reply_markup=kb_main())
 
     data = PENDING_SKIN_TRADES.pop(uid)
     data['task'].cancel()
@@ -1705,27 +1645,32 @@ async def accept_skin_trade(message: types.Message, bot: Bot):
     skin_type = data['type']
     trade_id = f"sktr_{sender_id}_{uid}"
 
-    # Создаем сессию активного трейда
     ACTIVE_SKIN_TRADES[trade_id] = {'p1': sender_id, 'p2': uid, 'type': skin_type, 'p1_skin': None, 'p2_skin': None}
 
     r_u = get_user(uid)
-    name = f"<a href='tg://user?id={uid}'>{escape(r_u[2])}</a> 🧩"
+    receiver_name = escape(r_u[2] if r_u and r_u[2] else f"Игрок {uid}")
+    receiver_link = f"<a href='tg://user?id={uid}'>{receiver_name}</a>"
     type_lbl = "Пробужденный 💠" if skin_type == "awakened" else "Абсолютный 🔮"
+
+    # Находим данные создателя ссылки
+    s_u = get_user(sender_id)
+    sender_name = escape(s_u[2] if s_u and s_u[2] else f"Игрок {sender_id}")
+    sender_link = f"<a href='tg://user?id={sender_id}'>{sender_name}</a> 🧩"
 
     # Уведомляем создателя ссылки
     s_txt = (
-        f"<b>🎭 Заявка на обмен от {name} принята</b> ✅\n\n"
+        f"🎭 <b>Заявка на обмен от {receiver_link} принята</b> ✅\n\n"
         f"Редкость скина - {type_lbl}\n\n"
-        f"<i>В данный момент выберите скин для обмена ниже</i>:"
+        f"В данный момент выберите скин для обмена ниже:"
     )
     await bot.send_message(sender_id, s_txt, reply_markup=kb_trade_cancel, parse_mode="HTML")
-    await send_skin_selection_ui(bot, sender_id, trade_id, 1, 0)  # p1 выбирает скин
+    await send_skin_selection_ui(bot, sender_id, trade_id, 1, 0)
 
-    # Уведомляем того, кто перешел
+    # Уведомляем согласишегося игрока по твоим точным текстам
     r_txt = (
-        f"<b>🎭 Вы приняли заявку ✅</b>\n\n"
+        f"🎭 <b>Заявка на обмен от {sender_link} принята</b> ✅\n\n"
         f"Редкость скина - {type_lbl}\n\n"
-        f"<i>В данный момент игрок выбирает скин для обмена, ожидайте…</i>"
+        f"В данный момент игрок выбирает скин для обмена, ожидайте…"
     )
     await message.answer(r_txt, reply_markup=kb_trade_cancel, parse_mode="HTML")
 
@@ -1733,6 +1678,7 @@ async def accept_skin_trade(message: types.Message, bot: Bot):
 @router.message(F.text == "Отменить трейд ❌")
 async def cancel_active_skin_trade(message: types.Message, bot: Bot):
     uid = message.from_user.id
+    from handlers import kb_main
     to_del, other_id = None, None
 
     for tid, tdata in ACTIVE_SKIN_TRADES.items():
@@ -1743,13 +1689,12 @@ async def cancel_active_skin_trade(message: types.Message, bot: Bot):
 
     if to_del:
         del ACTIVE_SKIN_TRADES[to_del]
-        await message.answer("❌ Вы отменили трейд.", reply_markup=kb_main)
-        await bot.send_message(other_id, "❌ Партнер отменил трейд.", reply_markup=kb_main)
+        await message.answer("❌ Вы отменили трейд.", reply_markup=kb_main())
+        await bot.send_message(other_id, "❌ Партнер отменил трейд.", reply_markup=kb_main())
     else:
-        await message.answer("У вас нет активного трейда.", reply_markup=kb_main)
+        await message.answer("У вас нет активного трейда.", reply_markup=kb_main())
 
 
-# Функция генерации инлайн-клавиатуры для выбора скина
 async def send_skin_selection_ui(bot: Bot, uid: int, trade_id: str, player_num: int, page: int, message_to_edit=None):
     tdata = ACTIVE_SKIN_TRADES.get(trade_id)
     if not tdata: return
@@ -1757,17 +1702,16 @@ async def send_skin_selection_ui(bot: Bot, uid: int, trade_id: str, player_num: 
     other_id = tdata['p2'] if player_num == 1 else tdata['p1']
     skin_type = tdata['type']
 
-    from database.db import get_all_user_skins_by_type
     my_skins = get_all_user_skins_by_type(uid, skin_type)
     their_skins = get_all_user_skins_by_type(other_id, skin_type)
 
-    # Исключаем скины, которые уже есть у партнера
+    # Исключаем дубликаты, которые уже есть у напарника
     diff = list(set(my_skins) - set(their_skins))
 
     # Сортировка по статам (от сильнейших к слабейшим)
     diff.sort(key=lambda cid: CARDS[cid]['speed'] + CARDS[cid]['strength'] + CARDS[cid]['intellect'], reverse=True)
 
-    # Пагинация (10 штук на страницу)
+    # Пагинация по 10 штук на страницу
     per_page = 10
     total_pages = max(1, (len(diff) + per_page - 1) // per_page)
     if page >= total_pages: page = total_pages - 1
@@ -1799,7 +1743,6 @@ async def send_skin_selection_ui(bot: Bot, uid: int, trade_id: str, player_num: 
         await bot.send_message(uid, txt, reply_markup=bld.as_markup(), parse_mode="HTML")
 
 
-# Навигация по страницам
 @router.callback_query(F.data.startswith("sksel_p:"))
 async def skin_sel_page_cb(cq: CallbackQuery):
     parts = cq.data.split(":")
@@ -1808,7 +1751,6 @@ async def skin_sel_page_cb(cq: CallbackQuery):
     await cq.answer()
 
 
-# Клик по скину
 @router.callback_query(F.data.startswith("sksel:"))
 async def skin_sel_action_cb(cq: CallbackQuery):
     parts = cq.data.split(":")
@@ -1825,7 +1767,6 @@ async def skin_sel_action_cb(cq: CallbackQuery):
         p2_id = tdata['p2']
         type_lbl = "Пробужденный 💠" if tdata['type'] == "awakened" else "Абсолютный 🔮"
 
-        # Уведомляем второго игрока о выборе первого и предлагаем выбрать ему
         s_u = get_user(tdata['p1'])
         name1 = f"<a href='tg://user?id={tdata['p1']}'>{escape(s_u[2])}</a> 🧩"
 
@@ -1835,27 +1776,26 @@ async def skin_sel_action_cb(cq: CallbackQuery):
             parse_mode="HTML"
         )
         await send_skin_selection_ui(cq.bot, p2_id, trade_id, 2, 0)
-
-        # Первому пишем ожидание
         await cq.bot.send_message(cq.from_user.id, "Ожидайте, пока партнер выберет свой скин...", parse_mode="HTML")
 
     elif p_num == 2:
         tdata['p2_skin'] = cid
-        # ФИНАЛ: Совершаем обмен!
+        # ФИНАЛ: Передаем функции БД
         from database.db import swap_skins
         swap_skins(tdata['p1'], tdata['p1_skin'], tdata['p2'], tdata['p2_skin'], tdata['type'])
 
         c1, c2 = CARDS[tdata['p1_skin']], CARDS[tdata['p2_skin']]
+        from handlers import kb_main
 
         await cq.bot.send_message(
             tdata['p1'],
             f"🎉 <b>Трейд успешно завершен!</b>\n\nВы отдали: <b>{c1['name']}</b>\nВы получили: <b>{c2['name']}</b>",
-            reply_markup=kb_main, parse_mode="HTML"
+            reply_markup=kb_main(), parse_mode="HTML"
         )
         await cq.bot.send_message(
             tdata['p2'],
             f"🎉 <b>Трейд успешно завершен!</b>\n\nВы отдали: <b>{c2['name']}</b>\nВы получили: <b>{c1['name']}</b>",
-            reply_markup=kb_main, parse_mode="HTML"
+            reply_markup=kb_main(), parse_mode="HTML"
         )
 
         del ACTIVE_SKIN_TRADES[trade_id]

@@ -86,10 +86,9 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
                     return await msg.answer("❌ Вы не можете совершить обмен с самим собой!")
 
                 # Ленивые импорты из deck, чтобы избежать циклической зависимости
-                from deck import (PENDING_SKIN_TRADES, kb_trade_accept)
-                from database.db import get_user, get_all_user_skins_by_type
-                from handlers import kb_main
-                from html import escape
+                # (Локальные дубликаты escape и get_user убраны для предотвращения UnboundLocalError)
+                from deck import PENDING_SKIN_TRADES, kb_trade_accept
+                from database.db import get_all_user_skins_by_type
 
                 s_u = get_user(sender_id)
                 if not s_u:
@@ -152,6 +151,9 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
                 return
         except Exception as e:
             logging.error(f"Ошибка в перехвате старта трейда скинов: {e}")
+            # Выводим реальную ошибку на экран для легкой отладки
+            return await msg.answer(f"❌ Ошибка инициализации трейда:\n<code>{escape(str(e))}</code>",
+                                        parse_mode="HTML")
 
     # =========================================================
     # 🎴 ЧАСТЬ 2: ОБЫЧНЫЙ ТРЕЙД КАРТ (base64) И РЕФЕРАЛКИ
@@ -247,7 +249,12 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         }
 
         u_sender = get_user(trade_sender_id)
-        sender_name = escape(u_sender[2] if u_sender and u_sender[2] else f"Игрок {trade_sender_id}")
+        if u_sender and u_sender[2]:  # Если юзер найден и у него есть никнейм
+            sender_name = escape(u_sender[2])
+        elif u_sender and u_sender[1]:  # Подстраховка: если ника нет, берем юзернейм
+            sender_name = escape(u_sender[1])
+        else:  # Если ничего не нашли или игрока нет в базе
+            sender_name = f"Игрок {trade_sender_id}"
 
         has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
                            (uid, trade_card_id), fetch=True)
