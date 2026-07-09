@@ -676,8 +676,8 @@ async def skin_action(cq: CallbackQuery):
 
         # Если нажали из главного меню Обликов — моментально обновляем его
         if source == "m":
-            cq.data = f"card_skins:{cid}:{page}:{r_filter}:{excl_filter}"
-            return await card_skins_menu(cq)
+            new_cq = cq.model_copy(update={"data": f"card_skins:{cid}:{page}:{r_filter}:{excl_filter}"})
+            return await card_skins_menu(new_cq)
 
         # Если нажали прямо во время просмотра скина — моментально обновляем меню под скином
         elif source == "v":

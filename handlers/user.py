@@ -63,24 +63,110 @@ class BroadcastState(StatesGroup):
     waiting_for_message = State()
 class NicknameState(StatesGroup):
     waiting_for_nick = State()
+
+
 # ================== HANDLERS ==================
 @router.message(CommandStart())
 async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContext):
     payload = command.args  # Получаем данные из ссылки
+    uid = msg.from_user.id
+
+    # =========================================================
+    # ♻️ ЧАСТЬ 1: ПРОВЕРКА НА ТРЕЙД СКИНАМИ (sktrad_)
+    # =========================================================
+    if payload and payload.startswith("sktrad_"):
+        try:
+            parts = payload.split("_")
+            if len(parts) == 3:
+                skin_type = "awakened" if parts[1] == "awa" else "absolute"
+                sender_id = int(parts[2])
+                receiver_id = uid
+
+                if sender_id == receiver_id:
+                    return await msg.answer("❌ Вы не можете совершить обмен с самим собой!")
+
+                # Ленивые импорты из deck, чтобы избежать циклической зависимости
+                from deck import (PENDING_SKIN_TRADES, kb_trade_accept)
+                from database.db import get_user, get_all_user_skins_by_type
+                from handlers import kb_main
+                from html import escape
+
+                s_u = get_user(sender_id)
+                if not s_u:
+                    return await msg.answer("❌ Игрок, создавший ссылку, не найден в системе.")
+
+                s_skins = get_all_user_skins_by_type(sender_id, skin_type)
+                r_skins = get_all_user_skins_by_type(receiver_id, skin_type)
+                type_lbl = "Пробужденная 💠" if skin_type == "awakened" else "Абсолютная 🔮"
+
+                if not r_skins:
+                    return await msg.answer(
+                        f"❌ Нельзя совершить обмен, так как у вас нету подходящих скинов для обмена.\n"
+                        f"<i>(У вас полностью отсутствуют облики редкости {type_lbl})</i>",
+                        parse_mode="HTML"
+                    )
+
+                s_diff = set(s_skins) - set(r_skins)
+                r_diff = set(r_skins) - set(s_skins)
+
+                if not s_diff or not r_diff:
+                    return await msg.answer(
+                        "❌ Нельзя совершить обмен, так как у вас нету подходящих скинов для обмена.\n"
+                        "<i>(Все ваши доступные облики полностью совпадают с обликами партнера)</i>",
+                        parse_mode="HTML"
+                    )
+
+                sender_name = escape(s_u[2] if s_u[2] else f"Игрок {sender_id}")
+                sender_profile_link = f"<a href='tg://user?id={sender_id}'>{sender_name}</a>"
+
+                txt = (
+                    f"🎭 {sender_profile_link} хочет совершить с вами обмен скинами, "
+                    f"если хотите начать трейд, то нажмите ниже <b>Принять ✅</b>\n\n"
+                    f"Без действие обнулит заявку через 30 секунд"
+                )
+
+                await msg.answer(txt, reply_markup=kb_trade_accept, parse_mode="HTML")
+
+                async def timeout_trade_task():
+                    await asyncio.sleep(30)
+                    if receiver_id in PENDING_SKIN_TRADES and PENDING_SKIN_TRADES[receiver_id][
+                        'sender_id'] == sender_id:
+                        del PENDING_SKIN_TRADES[receiver_id]
+                        await msg.bot.send_message(
+                            receiver_id,
+                            "⏳ Время ожидания вышло. Заявка на обмен скинами автоматически обнулена.",
+                            reply_markup=kb_main()
+                        )
+                        await msg.bot.send_message(
+                            sender_id,
+                            f"⏳ Игрок не принял вашу заявку на обмен в течение 30 секунд. Трейд аннулирован."
+                        )
+
+                if receiver_id in PENDING_SKIN_TRADES:
+                    PENDING_SKIN_TRADES[receiver_id]['task'].cancel()
+
+                task = asyncio.create_task(timeout_trade_task())
+                PENDING_SKIN_TRADES[receiver_id] = {'sender_id': sender_id, 'type': skin_type, 'task': task}
+
+                # ВАЖНО: Выходим из функции, чтобы дефолтное приветствие не отправлялось
+                return
+        except Exception as e:
+            logging.error(f"Ошибка в перехвате старта трейда скинов: {e}")
+
+    # =========================================================
+    # 🎴 ЧАСТЬ 2: ОБЫЧНЫЙ ТРЕЙД КАРТ (base64) И РЕФЕРАЛКИ
+    # =========================================================
     referred_by = None
     is_trade = False
     trade_sender_id = None
     trade_card_id = None
 
     if payload:
-        # 1. Проверяем, не трейд-ссылка ли это
+        # Проверяем, не классическая ли это трейд-ссылка (для карт)
         try:
-            # Восстанавливаем паддинг base64, если нужно
             padding = 4 - (len(payload) % 4)
             padded_payload = payload + "=" * padding if padding != 4 else payload
             raw = base64.urlsafe_b64decode(padded_payload.encode()).decode()
-
-            # Делим ровно на 3 части (так как ID карты может содержать двоеточие)
             parts = raw.split(":", 2)
 
             if len(parts) == 3 and parts[0] == "trade":
@@ -88,16 +174,16 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
                 trade_sender_id = int(parts[1])
                 trade_card_id = parts[2]
         except Exception:
-            pass  # Если расшифровать не вышло, значит это не трейд
+            pass  # Не получилось расшифровать — значит не трейд карт
 
-        # 2. Если это не трейд, проверяем на рефералку
+        # Если это не трейд, ищем рефералку
         if not is_trade:
             referrer = get_user_by_ref_code(payload)
             if referrer:
                 referred_by = referrer[0]
 
-    # ДОБАВЛЯЕМ ЮЗЕРА В БАЗУ (даже если он перешел по трейд-ссылке впервые)
-    reward_amount = add_user(msg.from_user.id, msg.from_user.username, msg.from_user.first_name, referred_by)
+    # ДОБАВЛЯЕМ ЮЗЕРА В БАЗУ
+    reward_amount = add_user(uid, msg.from_user.username, msg.from_user.first_name, referred_by)
 
     if reward_amount and referred_by:
         try:
@@ -108,12 +194,11 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         except Exception:
             pass
 
-        # === ROYALE PASS: ТИХОЕ НАЧИСЛЕНИЕ ЗА ИНВАЙТ (200 XP) ===
+        # Рояль Пасс начисления
         from database.db import add_pass_xp, check_and_update_quests
         xp_res = add_pass_xp(referred_by, 200)
-        q_res = check_and_update_quests(referred_by, "invites", 1)  # Обновляем задания "q_3_invites" и "q_2_invites"
+        q_res = check_and_update_quests(referred_by, "invites", 1)
 
-        # SOLO LEVELING УВЕДОМЛЕНИЕ О ПОВЫШЕНИИ УРОВНЯ
         if xp_res["leveled_up"] or q_res["leveled_up"]:
             final_level = max(xp_res["level"], q_res["level"])
             try:
@@ -129,25 +214,23 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
             except:
                 pass
 
-    # === ЕСЛИ ЭТО ТРЕЙД, ЗАПУСКАЕМ МЕНЮ ОБМЕНА И ПРЕРЫВАЕМ СТАРТ ===
+    # === ЛОГИКА ТРЕЙДА КАРТ ===
     if is_trade:
-        if trade_sender_id == msg.from_user.id:
+        if trade_sender_id == uid:
             return await msg.answer("❌ Вы не можете обмениваться сами с собой по своей же ссылке!")
 
-        # ЗАЩИТА: Проверка на занятость игроков (Trade Lock)
-        def is_user_busy(uid):
-            if uid in PENDING_TRADES: return True
+        def is_user_busy(check_uid):
+            if check_uid in PENDING_TRADES: return True
             for tr in PENDING_TRADES.values():
-                if tr.get('receiver_id') == uid: return True
+                if tr.get('receiver_id') == check_uid: return True
             return False
 
-        if is_user_busy(msg.from_user.id):
+        if is_user_busy(uid):
             return await msg.answer("❌ Вы уже участвуете в активном обмене! Сначала завершите или отмените его.")
 
         if is_user_busy(trade_sender_id):
             return await msg.answer("❌ Владелец ссылки сейчас занят другим обменом.")
 
-        # Проверяем, есть ли всё ещё эта карта у инициатора
         sender_has = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
                              (trade_sender_id, trade_card_id), fetch=True)
         if not sender_has:
@@ -157,10 +240,9 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         if not c:
             return await msg.answer("❌ Ошибка: карта не найдена в базе данных.")
 
-        # Записываем трейд
         PENDING_TRADES[trade_sender_id] = {
             'sender_card': trade_card_id,
-            'receiver_id': msg.from_user.id,
+            'receiver_id': uid,
             'receiver_card': None
         }
 
@@ -168,7 +250,7 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         sender_name = escape(u_sender[2] if u_sender and u_sender[2] else f"Игрок {trade_sender_id}")
 
         has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
-                           (msg.from_user.id, trade_card_id), fetch=True)
+                           (uid, trade_card_id), fetch=True)
         warning = "\n<i>(⚠️ Осторожно: у вас уже есть копия этой карты)</i>" if has_card else ""
 
         caption = (
@@ -195,21 +277,23 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         else:
             await msg.answer(caption, reply_markup=bld.as_markup(), parse_mode="HTML")
 
-        # Уведомляем создателя ссылки
         try:
             receiver_name = escape(msg.from_user.first_name)
             await msg.bot.send_message(
                 trade_sender_id,
-                f"🔔 Игрок <a href='tg://user?id={msg.from_user.id}'>{receiver_name}</a> перешел по вашей трейд-ссылке и сейчас выбирает карту взамен <b>{c['name']}</b>!",
+                f"🔔 Игрок <a href='tg://user?id={uid}'>{receiver_name}</a> перешел по вашей трейд-ссылке и сейчас выбирает карту взамен <b>{c['name']}</b>!",
                 parse_mode="HTML"
             )
         except Exception:
             pass
 
-        return  # ВАЖНО: Прерываем функцию, чтобы бот не прислал обычное приветствие
+        return  # ВАЖНО: Прерываем, чтобы не пришло приветствие
 
-    # === ЕСЛИ ЭТО НЕ ТРЕЙД, ВЫВОДИМ ОБЫЧНОЕ ПРИВЕТСТВИЕ ===
+    # =========================================================
+    # 🌟 ЧАСТЬ 3: ДЕФОЛТНЫЙ СТАРТ (ЕСЛИ ССЫЛКА ПУСТАЯ ИЛИ РЕФ)
+    # =========================================================
     if msg.chat.type == "private":
+        from handlers import kb_main
         markup = kb_main()
     else:
         markup = ReplyKeyboardRemove()
@@ -223,103 +307,6 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         reply_markup=markup,
         parse_mode="Markdown"
     )
-
-
-# ==========================================
-# ♻️ ОБРАБОТКА СТАРТА ТРЕЙДА СКИНАМИ ♻️
-# ==========================================
-@router.message(F.text.startswith("/start sktrad_"))
-async def skin_trade_start_link(message: types.Message, bot: Bot):
-    # Разбираем параметры ссылки (например: /start sktrad_awa_123456)
-    try:
-        parts = message.text.split()[1].split("_")
-        if len(parts) != 3:
-            return
-    except (IndexError, ValueError):
-        return
-
-    skin_type = "awakened" if parts[1] == "awa" else "absolute"
-    sender_id = int(parts[2])
-    receiver_id = message.from_user.id
-
-    # Проверка: нельзя торговать с самим собой
-    if sender_id == receiver_id:
-        return await message.answer("❌ Вы не можете совершить обмен с самим собой!")
-
-    # Ленивый импорт из deck, чтобы избежать циклической зависимости файлов
-    from deck import (PENDING_SKIN_TRADES, kb_trade_accept,
-                      kb_trade_cancel, send_skin_selection_ui)
-    from database.db import get_user, get_all_user_skins_by_type
-    from handlers import kb_main
-    from html import escape
-
-    s_u = get_user(sender_id)
-    if not s_u:
-        return await message.answer("❌ Игрок, создавший ссылку, не найден в системе.")
-
-    # Получаем скины обоих игроков для проверки пула обмена
-    s_skins = get_all_user_skins_by_type(sender_id, skin_type)
-    r_skins = get_all_user_skins_by_type(receiver_id, skin_type)
-
-    type_lbl = "Пробужденная 💠" if skin_type == "awakened" else "Абсолютная 🔮"
-
-    # Проверка 1: Есть ли вообще хоть один скин нужной редкости у принимающего ссылку
-    if not r_skins:
-        return await message.answer(
-            f"❌ Нельзя совершить обмен, так как у вас нету подходящих скинов для обмена.\n"
-            f"<i>(У вас полностью отсутствуют облики редкости {type_lbl})</i>",
-            parse_mode="HTML"
-        )
-
-    # Проверка 2: Есть ли уникальные скины для обмена (если наборы скинов 1 в 1 совпадают, меняться нечем)
-    s_diff = set(s_skins) - set(r_skins)
-    r_diff = set(r_skins) - set(s_skins)
-
-    if not s_diff or not r_diff:
-        return await message.answer(
-            "❌ Нельзя совершить обмен, так как у вас нету подходящих скинов для обмена.\n"
-            "<i>(Все ваши доступные облики полностью совпадают с обликами партнера)</i>",
-            parse_mode="HTML"
-        )
-
-    # Формируем красивую ссылку на профиль инициатора
-    sender_name = escape(s_u[2] if s_u[2] else f"Игрок {sender_id}")
-    sender_profile_link = f"<a href='tg://user?id={sender_id}'>{sender_name}</a>"
-
-    txt = (
-        f"🎭 {sender_profile_link} хочет совершить с вами обмен скинами, "
-        f"если хотите начать трейд, то нажмите ниже <b>Принять ✅</b>\n\n"
-        f"Без действие обнулит заявку через 30 секунд"
-    )
-
-    # Меняем обычную клавиатуру на Принять/Отказать
-    await message.answer(txt, reply_markup=kb_trade_accept, parse_mode="HTML")
-
-    # Функция-таймаут для автоматического обнуления заявки через 30 секунд
-    async def timeout_trade_task():
-        await asyncio.sleep(30)
-        if receiver_id in PENDING_SKIN_TRADES and PENDING_SKIN_TRADES[receiver_id]['sender_id'] == sender_id:
-            del PENDING_SKIN_TRADES[receiver_id]
-            # Сбрасываем Reply-клавиатуру обратно на главную
-            await bot.send_message(
-                receiver_id,
-                "⏳ Время ожидания вышло. Заявка на обмен скинами автоматически обнулена.",
-                reply_markup=kb_main
-            )
-            await bot.send_message(
-                sender_id,
-                f"⏳ Игрок не принял вашу заявку на обмен в течение 30 секунд. Трейд аннулирован."
-            )
-
-    # Если у игрока уже висела какая-то заявка от кого-то, отменяем старый таймер
-    if receiver_id in PENDING_SKIN_TRADES:
-        PENDING_SKIN_TRADES[receiver_id]['task'].cancel()
-
-    # Запускаем асинхронный таймер на 30 секунд
-    task = asyncio.create_task(timeout_trade_task())
-
-    # Сохраняем в глобальный буфер ожидания
-    PENDING_SKIN_TRADES[receiver_id] = {'sender_id': sender_id, 'type': skin_type, 'task': task}
 
 @router.message(F.text == "⛩️ Банды")
 async def gangs(msg: types.Message):
