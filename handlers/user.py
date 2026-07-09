@@ -85,9 +85,8 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
                 if sender_id == receiver_id:
                     return await msg.answer("❌ Вы не можете совершить обмен с самим собой!")
 
-                # Ленивые импорты из deck, чтобы избежать циклической зависимости
-                # (Локальные дубликаты escape и get_user убраны для предотвращения UnboundLocalError)
-                from deck import PENDING_SKIN_TRADES, kb_trade_accept
+                # ИСПРАВЛЕНО: Правильный путь импорта через handlers.deck, так как проект ищет модули от корня
+                from handlers.deck import PENDING_SKIN_TRADES, kb_trade_accept
                 from database.db import get_all_user_skins_by_type
 
                 s_u = get_user(sender_id)
@@ -131,10 +130,11 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
                     if receiver_id in PENDING_SKIN_TRADES and PENDING_SKIN_TRADES[receiver_id][
                         'sender_id'] == sender_id:
                         del PENDING_SKIN_TRADES[receiver_id]
+                        # ИСПРАВЛЕНО: kb_main — это переменная-объект, скобки () убраны, чтобы не было TypeError
                         await msg.bot.send_message(
                             receiver_id,
                             "⏳ Время ожидания вышло. Заявка на обмен скинами автоматически обнулена.",
-                            reply_markup=kb_main()
+                            reply_markup=kb_main
                         )
                         await msg.bot.send_message(
                             sender_id,
@@ -147,13 +147,11 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
                 task = asyncio.create_task(timeout_trade_task())
                 PENDING_SKIN_TRADES[receiver_id] = {'sender_id': sender_id, 'type': skin_type, 'task': task}
 
-                # ВАЖНО: Выходим из функции, чтобы дефолтное приветствие не отправлялось
                 return
         except Exception as e:
             logging.error(f"Ошибка в перехвате старта трейда скинов: {e}")
-            # Выводим реальную ошибку на экран для легкой отладки
             return await msg.answer(f"❌ Ошибка инициализации трейда:\n<code>{escape(str(e))}</code>",
-                                        parse_mode="HTML")
+                                    parse_mode="HTML")
 
     # =========================================================
     # 🎴 ЧАСТЬ 2: ОБЫЧНЫЙ ТРЕЙД КАРТ (base64) И РЕФЕРАЛКИ
@@ -164,7 +162,6 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
     trade_card_id = None
 
     if payload:
-        # Проверяем, не классическая ли это трейд-ссылка (для карт)
         try:
             padding = 4 - (len(payload) % 4)
             padded_payload = payload + "=" * padding if padding != 4 else payload
@@ -176,15 +173,13 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
                 trade_sender_id = int(parts[1])
                 trade_card_id = parts[2]
         except Exception:
-            pass  # Не получилось расшифровать — значит не трейд карт
+            pass
 
-        # Если это не трейд, ищем рефералку
         if not is_trade:
             referrer = get_user_by_ref_code(payload)
             if referrer:
                 referred_by = referrer[0]
 
-    # ДОБАВЛЯЕМ ЮЗЕРА В БАЗУ
     reward_amount = add_user(uid, msg.from_user.username, msg.from_user.first_name, referred_by)
 
     if reward_amount and referred_by:
@@ -196,7 +191,6 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         except Exception:
             pass
 
-        # Рояль Пасс начисления
         from database.db import add_pass_xp, check_and_update_quests
         xp_res = add_pass_xp(referred_by, 200)
         q_res = check_and_update_quests(referred_by, "invites", 1)
@@ -216,7 +210,6 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
             except:
                 pass
 
-    # === ЛОГИКА ТРЕЙДА КАРТ ===
     if is_trade:
         if trade_sender_id == uid:
             return await msg.answer("❌ Вы не можете обмениваться сами с собой по своей же ссылке!")
@@ -249,11 +242,11 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         }
 
         u_sender = get_user(trade_sender_id)
-        if u_sender and u_sender[2]:  # Если юзер найден и у него есть никнейм
+        if u_sender and u_sender[2]:
             sender_name = escape(u_sender[2])
-        elif u_sender and u_sender[1]:  # Подстраховка: если ника нет, берем юзернейм
+        elif u_sender and u_sender[1]:
             sender_name = escape(u_sender[1])
-        else:  # Если ничего не нашли или игрока нет в базе
+        else:
             sender_name = f"Игрок {trade_sender_id}"
 
         has_card = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?",
@@ -294,14 +287,13 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         except Exception:
             pass
 
-        return  # ВАЖНО: Прерываем, чтобы не пришло приветствие
+        return
 
     # =========================================================
     # 🌟 ЧАСТЬ 3: ДЕФОЛТНЫЙ СТАРТ (ЕСЛИ ССЫЛКА ПУСТАЯ ИЛИ РЕФ)
     # =========================================================
     if msg.chat.type == "private":
-        from handlers import kb_main
-        markup = kb_main()
+        markup = kb_main
     else:
         markup = ReplyKeyboardRemove()
 
