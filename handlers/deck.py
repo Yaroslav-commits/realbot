@@ -1603,7 +1603,7 @@ async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
     link_abs = f"https://t.me/{me.username}?start=sktrad_abs_{uid}"
 
     # Твой сохраненный текст один в один
-    txt = "♻️ <b>Трейд Обликами</b>\n\nВыберите редкость скина для обмена и отправьте ссылку партнеру in чат:"
+    txt = "♻️ <b>Трейд Обликами</b>\n\nВыберите редкость скина для обмена и отправьте ссылку партнеру в чат:"
 
     bld = InlineKeyboardBuilder()
     bld.row(InlineKeyboardButton(text="Пробуждённый трейд 💠",
