@@ -1602,8 +1602,8 @@ async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
     txt = "♻️ <b>Трейд Обликами</b>\n\nВыберите редкость скина для обмена и отправьте ссылку партнеру в чат:"
 
     # Красивые заготовленные тексты для отправки в чат
-    text_awa = "Го трейд скинами!?\n\nРедкость - Пробужденный 💠\n\nТыкай по ссылке и го обмен🤫"
-    text_abs = "Го трейд скинами!?\n\nРедкость - Абсолютный 🔮\n\nТыкай по ссылке и го обмен🤫"
+    text_awa = "<b>Предлагаю совершить со мной трейд скинами!?</b>\n<b>Редкость</b> - Пробужденный 💠\n\nТыкай по ссылке и го обмен🤫"
+    text_abs = "<b>Предлагаю совершить со мной трейд скинами!?</b>\n<b>Редкость</b> - Абсолютный 🔮\n\nТыкай по ссылке и го обмен🤫"
 
     bld = InlineKeyboardBuilder()
     bld.row(InlineKeyboardButton(text="Пробуждённый трейд 💠",
@@ -1805,7 +1805,7 @@ async def skin_sel_action_cb(cq: CallbackQuery):
         tdata['p1_msg_ids'].append(msg_p1.message_id)
 
         # 2. Показываем Игроку 2 визуал того, что выбрал Игрок 1
-        txt_p2 = f"🎭 {name1_link} выбрал скин для карты <b>«{c['name']}»</b>!"
+        txt_p2 = f"🎭 {name1_link} выбрал скин для карты <b>{c['name']}</b>!"
         if is_v:
             msg_p2 = await send_cached_video(cq.bot, chat_id=p2_id, file_path=asset_path, caption=txt_p2,
                                              width=c.get("width", 960), height=c.get("height", 1280), parse_mode="HTML",
@@ -1822,7 +1822,7 @@ async def skin_sel_action_cb(cq: CallbackQuery):
         tdata['p2_skin'] = cid
         p2_id = tdata['p2']
 
-        txt_p2_self = f"✅ Вы выбрали скин для карты <b>«{c['name']}»</b>!"
+        txt_p2_self = f"✅ Вы выбрали скин для карты <b>{c['name']}</b>!"
         if is_v:
             msg_p2_self = await send_cached_video(cq.bot, chat_id=p2_id, file_path=asset_path, caption=txt_p2_self,
                                                   width=c.get("width", 960), height=c.get("height", 1280),
