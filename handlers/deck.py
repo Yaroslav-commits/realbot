@@ -1591,7 +1591,6 @@ kb_trade_cancel = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-
 @router.callback_query(F.data == "skin_trade_menu")
 async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
     me = await bot.get_me()
@@ -1602,11 +1601,15 @@ async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
 
     txt = "♻️ <b>Трейд Обликами</b>\n\nВыберите редкость скина для обмена и отправьте ссылку партнеру в чат:"
 
+    # Красивые заготовленные тексты для отправки в чат
+    text_awa = "Го трейд скинами!?\n\nРедкость - Пробужденный 💠\n\nТыкай по ссылке и го обмен🤫"
+    text_abs = "Го трейд скинами!?\n\nРедкость - Абсолютный 🔮\n\nТыкай по ссылке и го обмен🤫"
+
     bld = InlineKeyboardBuilder()
     bld.row(InlineKeyboardButton(text="Пробуждённый трейд 💠",
-                                 url=f"https://t.me/share/url?url={quote(link_awa)}&text={quote('Го трейд скинами!?/n/nРедкость - Пробужденный 💠/n/nТыкай по сыллке и го обмен🤫')}"))
+                                 url=f"https://t.me/share/url?url={quote(link_awa)}&text={quote(text_awa)}"))
     bld.row(InlineKeyboardButton(text="Абсолютный трейд 🔮",
-                                 url=f"https://t.me/share/url?url={quote(link_abs)}&text={quote('Го трейд скинами!?/n/nРедкость - Абсолютный 🔮/n/nТыкай по сыллке и го обмен🤫')}"))
+                                 url=f"https://t.me/share/url?url={quote(link_abs)}&text={quote(text_abs)}"))
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="my_skins_categories"))
 
     try:
@@ -1986,11 +1989,11 @@ async def skin_trade_finish_cb(cq: CallbackQuery, bot: Bot):
             path2 = f"images/cards/{pool[tdata['p2_skin']].get('skin_video_file') or pool[tdata['p2_skin']].get('skin_art_file')}"
 
             fin_txt1 = (
-                f"🎊 Вы совершили успешный трейд с {name2_link} и получили новый скин с трейда\n"
+                f"🎊 Вы совершили успешный трейд с {name2_link} и получили новый скин с трейда\n\n"
                 f"🎭 <b>{c2['name']}</b> ({type_lbl})"
             )
             fin_txt2 = (
-                f"🎊 Вы совершили успешный трейд с {name1_link} и получили новый скин с трейда\n"
+                f"🎊 Вы совершили успешный трейд с {name1_link} и получили новый скин с трейда\n\n"
                 f"🎭 <b>{c1['name']}</b> ({type_lbl})"
             )
 
