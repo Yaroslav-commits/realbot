@@ -293,7 +293,8 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
     # 🌟 ЧАСТЬ 3: ДЕФОЛТНЫЙ СТАРТ (ЕСЛИ ССЫЛКА ПУСТАЯ ИЛИ РЕФ)
     # =========================================================
     if msg.chat.type == "private":
-        markup = kb_main
+        from handlers import kb_main
+        markup = kb_main()
     else:
         markup = ReplyKeyboardRemove()
 
