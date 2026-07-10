@@ -1577,13 +1577,9 @@ async def my_skins_categories_menu(cq: CallbackQuery):
         await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
 
-
-# ==========================================
 # ♻️ СИСТЕМА ТРЕЙДА СКИНАМИ ♻️
-# ==========================================
-
-PENDING_SKIN_TRADES = {}  # Ожидающие заявки {receiver_id: {'sender_id': id, 'type': type, 'task': task}}
-ACTIVE_SKIN_TRADES = {}  # Активные трейды {trade_id: {'p1': id, 'p2': id, 'type': type, 'p1_skin': None, 'p2_skin': None, 'p1_ready': False, 'p2_ready': False, 'p1_msg_ids': [], 'p2_msg_ids': []}}
+PENDING_SKIN_TRADES = {}
+ACTIVE_SKIN_TRADES = {}
 
 kb_trade_accept = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="Принять ✅"), KeyboardButton(text="Отказать ❌")]],
@@ -1608,9 +1604,9 @@ async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
 
     bld = InlineKeyboardBuilder()
     bld.row(InlineKeyboardButton(text="Пробуждённый трейд 💠",
-                                 url=f"https://t.me/share/url?url={quote(link_awa)}&text={quote('Го трейд Пробужденными скинами!')}"))
+                                 url=f"https://t.me/share/url?url={quote(link_awa)}&text={quote('Го трейд скинами!?/n/nРедкость - Пробужденный 💠/n/nТыкай по сыллке и го обмен🤫')}"))
     bld.row(InlineKeyboardButton(text="Абсолютный трейд 🔮",
-                                 url=f"https://t.me/share/url?url={quote(link_abs)}&text={quote('Го трейд Абсолютными скинами!')}"))
+                                 url=f"https://t.me/share/url?url={quote(link_abs)}&text={quote('Го трейд скинами!?/n/nРедкость - Абсолютный 🔮/n/nТыкай по сыллке и го обмен🤫')}"))
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="my_skins_categories"))
 
     try:
@@ -1657,13 +1653,13 @@ async def accept_skin_trade(message: types.Message, bot: Bot):
     }
 
     r_u = get_user(uid)
-    receiver_name = escape(r_u[2] if r_u and r_u[2] else f"Игрок {uid}")
-    receiver_link = f"<a href='tg://user?id={uid}'>{receiver_name}</a>"
+    raw_name_r = r_u[2] if (r_u and r_u[2]) else f"Игрок {uid}"
+    receiver_link = f"<a href='tg://user?id={uid}'>{escape(raw_name_r)}</a>"
     type_lbl = "Пробужденный 💠" if skin_type == "awakened" else "Абсолютный 🔮"
 
     s_u = get_user(sender_id)
-    sender_name = escape(s_u[2] if s_u and s_u[2] else f"Игрок {sender_id}")
-    sender_link = f"<a href='tg://user?id={sender_id}'>{sender_name}</a>"
+    raw_name_s = s_u[2] if (s_u and s_u[2]) else f"Игрок {sender_id}"
+    sender_link = f"<a href='tg://user?id={sender_id}'>{escape(raw_name_s)}</a>"
 
     s_txt = (
         f"🎭 Заявка на обмен от {receiver_link} принята ✅\n\n"
@@ -1695,7 +1691,6 @@ async def cancel_active_skin_trade(message: types.Message, bot: Bot):
 
     if to_del:
         tdata = ACTIVE_SKIN_TRADES[to_del]
-        # Очищаем демонстрационные медиа-группы, если они уже были отправлены
         for mid in tdata.get('p1_msg_ids', []):
             try:
                 await bot.delete_message(tdata['p1'], mid)
@@ -1776,33 +1771,71 @@ async def skin_sel_action_cb(cq: CallbackQuery):
     if not tdata: return await cq.answer("Трейд не найден или отменен.", show_alert=True)
 
     c = CARDS[cid]
-    await cq.message.edit_text(f"✅ Вы выбрали скин: <b>{c['name']}</b>", parse_mode="HTML")
+    stype = tdata['type']
+    pool = ABSOLUTE_SKIN if stype == "absolute" else AWAKENED_SKIN
+    is_v = (stype == "absolute")
+    asset_path = f"images/cards/{pool[cid].get('skin_video_file') or pool[cid].get('skin_art_file')}"
+
+    try:
+        await cq.message.delete()
+    except:
+        pass
 
     if p_num == 1:
         tdata['p1_skin'] = cid
+        p1_id = tdata['p1']
         p2_id = tdata['p2']
-        type_lbl = "Пробужденный 💠" if tdata['type'] == "awakened" else "Абсолютный 🔮"
 
-        s_u = get_user(tdata['p1'])
-        name1 = f"<a href='tg://user?id={tdata['p1']}'>{escape(s_u[2])}</a>"
+        s_u = get_user(p1_id)
+        raw_name1 = s_u[2] if (s_u and s_u[2]) else f"Игрок {p1_id}"
+        name1_link = f"<a href='tg://user?id={p1_id}'>{escape(raw_name1)}</a>"
 
-        await cq.bot.send_message(
-            p2_id,
-            f"🎭 Игрок {name1} выбрал скин.\n\nРедкость скина - {type_lbl}\n\nВ данный момент выберите скин для обмена ниже:",
-            parse_mode="HTML"
-        )
+        # 1. Показываем Игроку 1 визуал того, что он выбрал
+        txt_p1 = f"✅ Вы выбрали скин для карты <b>«{c['name']}»</b>!\n\n<i>Ожидайте, пока партнер выберет свой скин...</i>"
+        if is_v:
+            msg_p1 = await send_cached_video(cq.bot, chat_id=p1_id, file_path=asset_path, caption=txt_p1,
+                                             width=c.get("width", 960), height=c.get("height", 1280), parse_mode="HTML",
+                                             supports_streaming=True)
+        else:
+            msg_p1 = await cq.bot.send_photo(chat_id=p1_id, photo=FSInputFile(asset_path), caption=txt_p1,
+                                             parse_mode="HTML")
+        tdata['p1_msg_ids'].append(msg_p1.message_id)
+
+        # 2. Показываем Игроку 2 визуал того, что выбрал Игрок 1
+        txt_p2 = f"🎭 {name1_link} выбрал скин для карты <b>«{c['name']}»</b>!"
+        if is_v:
+            msg_p2 = await send_cached_video(cq.bot, chat_id=p2_id, file_path=asset_path, caption=txt_p2,
+                                             width=c.get("width", 960), height=c.get("height", 1280), parse_mode="HTML",
+                                             supports_streaming=True)
+        else:
+            msg_p2 = await cq.bot.send_photo(chat_id=p2_id, photo=FSInputFile(asset_path), caption=txt_p2,
+                                             parse_mode="HTML")
+        tdata['p2_msg_ids'].append(msg_p2.message_id)
+
+        # 3. Присылаем меню выбора для Игрока 2
         await send_skin_selection_ui(cq.bot, p2_id, trade_id, 2, 0)
-        await cq.bot.send_message(cq.from_user.id, "Ожидайте, пока партнер выберет свой скин...", parse_mode="HTML")
 
     elif p_num == 2:
         tdata['p2_skin'] = cid
+        p2_id = tdata['p2']
+
+        txt_p2_self = f"✅ Вы выбрали скин для карты <b>«{c['name']}»</b>!"
+        if is_v:
+            msg_p2_self = await send_cached_video(cq.bot, chat_id=p2_id, file_path=asset_path, caption=txt_p2_self,
+                                                  width=c.get("width", 960), height=c.get("height", 1280),
+                                                  parse_mode="HTML", supports_streaming=True)
+        else:
+            msg_p2_self = await cq.bot.send_photo(chat_id=p2_id, photo=FSInputFile(asset_path), caption=txt_p2_self,
+                                                  parse_mode="HTML")
+        tdata['p2_msg_ids'].append(msg_p2_self.message_id)
+
         await send_trade_preview_screen(cq.bot, trade_id)
 
     await cq.answer()
 
 
 # ==========================================
-# 🖼 ЭТАП СРАВНЕНИЯ И ФИНИША (МЕДИАГРУППЫ КАК НА СКРИНШОТЕ)
+# 🖼 ЭТАП СРАВНЕНИЯ И ФИНИША (МЕДИАГРУППЫ)
 # ==========================================
 
 async def send_trade_preview_screen(bot: Bot, trade_id: str):
@@ -1815,8 +1848,12 @@ async def send_trade_preview_screen(bot: Bot, trade_id: str):
     pool = ABSOLUTE_SKIN if stype == "absolute" else AWAKENED_SKIN
 
     u1, u2 = get_user(p1), get_user(p2)
-    name1_link = f"<a href='tg://user?id={p1}'>{escape(u1[2] if u1 and u1[2] else f'Игрок {p1}')}</a>"
-    name2_link = f"<a href='tg://user?id={p2}'>{escape(u2[2] if u2 and u2[2] else f'Игрок {p2}')}</a>"
+
+    raw_name1 = u1[2] if (u1 and u1[2]) else f"Игрок {p1}"
+    raw_name2 = u2[2] if (u2 and u2[2]) else f"Игрок {p2}"
+
+    name1_link = f"<a href='tg://user?id={p1}'>{escape(raw_name1)}</a>"
+    name2_link = f"<a href='tg://user?id={p2}'>{escape(raw_name2)}</a>"
 
     path1 = f"images/cards/{pool[tdata['p1_skin']].get('skin_video_file') or pool[tdata['p1_skin']].get('skin_art_file')}"
     path2 = f"images/cards/{pool[tdata['p2_skin']].get('skin_video_file') or pool[tdata['p2_skin']].get('skin_art_file')}"
@@ -1827,20 +1864,19 @@ async def send_trade_preview_screen(bot: Bot, trade_id: str):
     txt_for_p1 = (
         f"⚖️ <b>Трейд</b>\n\n"
         f"Вы отдаете:\n"
-        f"🎭 <b>{c1['name']}</b> ({type_lbl})\n\n"
+        f"🎭 <b>{c1['name']}</b> {type_lbl}\n\n"
         f"Вы получаете от {name2_link}:\n"
-        f"🎭 <b>{c2['name']}</b> ({type_lbl})"
+        f"🎭 <b>{c2['name']}</b> {type_lbl}"
     )
 
     txt_for_p2 = (
         f"⚖️ <b>Трейд</b>\n\n"
         f"Вы отдаете:\n"
-        f"🎭 <b>{c2['name']}</b> ({type_lbl})\n\n"
+        f"🎭 <b>{c2['name']}</b> {type_lbl}\n\n"
         f"Вы получаете от {name1_link}:\n"
-        f"🎭 <b>{c1['name']}</b> ({type_lbl})"
+        f"🎭 <b>{c1['name']}</b> {type_lbl}"
     )
 
-    # Функция сборки двух медиа (картинки или видео) в одно сообщение
     def make_media_group(path_give, path_get, caption, card_give, card_get):
         media = []
         if is_v:
@@ -1857,7 +1893,6 @@ async def send_trade_preview_screen(bot: Bot, trade_id: str):
             media.append(types.InputMediaPhoto(media=FSInputFile(path_get), caption=caption, parse_mode="HTML"))
         return media
 
-    # Отправляем медиа-группы Игроку 1
     msgs1 = await bot.send_media_group(p1, media=make_media_group(path1, path2, txt_for_p1, c1, c2))
     bld1 = InlineKeyboardBuilder()
     bld1.row(InlineKeyboardButton(text="Подтвердить 🤝", callback_data=f"sktr_fin:confirm:1:{trade_id}"))
@@ -1865,7 +1900,6 @@ async def send_trade_preview_screen(bot: Bot, trade_id: str):
     kb_msg1 = await bot.send_message(p1, "<i>Ожидаем подтверждения... 👇</i>", reply_markup=bld1.as_markup(),
                                      parse_mode="HTML")
 
-    # Отправляем медиа-группы Игроку 2
     msgs2 = await bot.send_media_group(p2, media=make_media_group(path2, path1, txt_for_p2, c2, c1))
     bld2 = InlineKeyboardBuilder()
     bld2.row(InlineKeyboardButton(text="Подтвердить 🤝", callback_data=f"sktr_fin:confirm:2:{trade_id}"))
@@ -1873,9 +1907,8 @@ async def send_trade_preview_screen(bot: Bot, trade_id: str):
     kb_msg2 = await bot.send_message(p2, "<i>Ожидаем подтверждения... 👇</i>", reply_markup=bld2.as_markup(),
                                      parse_mode="HTML")
 
-    # Сохраняем ID сообщений, чтобы удалить их после обмена
-    tdata['p1_msg_ids'] = [m.message_id for m in msgs1] + [kb_msg1.message_id]
-    tdata['p2_msg_ids'] = [m.message_id for m in msgs2] + [kb_msg2.message_id]
+    tdata['p1_msg_ids'].extend([m.message_id for m in msgs1] + [kb_msg1.message_id])
+    tdata['p2_msg_ids'].extend([m.message_id for m in msgs2] + [kb_msg2.message_id])
 
 
 @router.callback_query(F.data.startswith("sktr_fin:"))
@@ -1908,7 +1941,6 @@ async def skin_trade_finish_cb(cq: CallbackQuery, bot: Bot):
         return await cq.answer()
 
     if action == "confirm":
-        # Убираем кнопки у того, кто нажал, и пишем статус ожидания
         new_text = "<b>✅ Вы подтвердили обмен! Ожидаем партнера...</b>"
         try:
             await cq.message.edit_text(text=new_text, reply_markup=None, parse_mode="HTML")
@@ -1922,10 +1954,7 @@ async def skin_trade_finish_cb(cq: CallbackQuery, bot: Bot):
 
         await cq.answer("✅ Подтверждено!", show_alert=False)
 
-        # Если оба нажали подтверждение — совершаем обмен!
         if tdata['p1_ready'] and tdata['p2_ready']:
-
-            # Удаляем медиагруппы превью, чтобы не засорять чат
             for mid in tdata.get('p1_msg_ids', []):
                 try:
                     await bot.delete_message(p1, mid)
@@ -1947,13 +1976,15 @@ async def skin_trade_finish_cb(cq: CallbackQuery, bot: Bot):
             is_v = (stype == "absolute")
 
             u1, u2 = get_user(p1), get_user(p2)
-            name1_link = f"<a href='tg://user?id={p1}'>{escape(u1[2] if u1 and u1[2] else f'Игрок {p1}')}</a>"
-            name2_link = f"<a href='tg://user?id={p2}'>{escape(u2[2] if u2 and u2[2] else f'Игрок {p2}')}</a>"
+            raw_n1 = u1[2] if (u1 and u1[2]) else f"Игрок {p1}"
+            raw_n2 = u2[2] if (u2 and u2[2]) else f"Игрок {p2}"
+
+            name1_link = f"<a href='tg://user?id={p1}'>{escape(raw_n1)}</a>"
+            name2_link = f"<a href='tg://user?id={p2}'>{escape(raw_n2)}</a>"
 
             path1 = f"images/cards/{pool[tdata['p1_skin']].get('skin_video_file') or pool[tdata['p1_skin']].get('skin_art_file')}"
             path2 = f"images/cards/{pool[tdata['p2_skin']].get('skin_video_file') or pool[tdata['p2_skin']].get('skin_art_file')}"
 
-            # Тот самый точный текст для финала, который ты просил
             fin_txt1 = (
                 f"🎊 Вы совершили успешный трейд с {name2_link} и получили новый скин с трейда\n"
                 f"🎭 <b>{c2['name']}</b> ({type_lbl})"
@@ -1963,7 +1994,6 @@ async def skin_trade_finish_cb(cq: CallbackQuery, bot: Bot):
                 f"🎭 <b>{c1['name']}</b> ({type_lbl})"
             )
 
-            # Отправляем Игроку 1 его новый скин
             if is_v:
                 await send_cached_video(bot, chat_id=p1, file_path=path2, caption=fin_txt1, width=c2.get("width", 960),
                                         height=c2.get("height", 1280), reply_markup=kb_main())
@@ -1971,7 +2001,6 @@ async def skin_trade_finish_cb(cq: CallbackQuery, bot: Bot):
                 await bot.send_photo(chat_id=p1, photo=FSInputFile(path2), caption=fin_txt1, parse_mode="HTML",
                                      reply_markup=kb_main())
 
-            # Отправляем Игроку 2 его новый скин
             if is_v:
                 await send_cached_video(bot, chat_id=p2, file_path=path1, caption=fin_txt2, width=c1.get("width", 960),
                                         height=c1.get("height", 1280), reply_markup=kb_main())
@@ -1995,7 +2024,7 @@ async def view_skins_slider(cq: CallbackQuery):
         type_name = "Пробужденный 💠" if skin_type == "awakened" else "Абсолютный 🔮"
         txt = (
             f"🔒 <b>Коллекция пуста</b>\n\n"
-            f"У вас пока нет обликов редкости <b>{type_name}</b>.\n"
+            f"У вас пока нет скинов редкости <b>{type_name}</b>.\n"
             f"Вы можете получить их в магазине! 🛒"
         )
         bld = InlineKeyboardBuilder()
@@ -2044,10 +2073,10 @@ async def slider_skin_action(cq: CallbackQuery):
 
     if action == "eq":
         equip_skin(uid, cid, skin_type)
-        await cq.answer("✨ Облик успешно надет!")
+        await cq.answer("✨ Скин успешно надет!")
     else:
         unequip_skin(uid, cid)
-        await cq.answer("❌ Облик снят!")
+        await cq.answer("❌ Скин снят!")
 
     # БЕСШОВНОЕ ОБНОВЛЕНИЕ: Пересобираем только текст и кнопки в ту же секунду!
     rows = db_exec("SELECT card_id FROM skins_inv WHERE user_id = ? AND skin_type = ?", (uid, skin_type), fetchall=True)
