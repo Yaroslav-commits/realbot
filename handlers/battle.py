@@ -315,7 +315,12 @@ async def view_deck(cq: CallbackQuery):
         txt_card = f"{i + 1}. {c['name']}{skin_label} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
 
         if is_video:
-            media.append(types.InputMediaVideo(media=FSInputFile(asset_path), caption=txt_card))
+            media.append(types.InputMediaVideo(
+                media=FSInputFile(asset_path),
+                caption=txt_card,
+                width=960, height=1280,
+                supports_streaming=True
+            ))
         else:
             media.append(types.InputMediaPhoto(media=FSInputFile(asset_path), caption=txt_card))
 
@@ -988,7 +993,7 @@ async def process_card_choice(gid, uid, card, bot):
         if is_video:
             msg = await send_cached_video(
                 bot, chat_id=uid, file_path=asset_path, caption=txt,
-                width=card_data.get("width", 960), height=card_data.get("height", 1280),
+                width=960, height=1280,
                 reply_markup=bld.as_markup(), supports_streaming=True
             )
         else:
@@ -1110,7 +1115,12 @@ async def send_card_choice(uid, deck_left, gid, bot):
         asset_path, is_video, skin_label = get_card_media_info(uid, cid, c)
         txt_card = f"{i + 1}. {c['name']}{skin_label} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
         if is_video:
-            media.append(types.InputMediaVideo(media=FSInputFile(asset_path), caption=txt_card))
+            media.append(types.InputMediaVideo(
+                media=FSInputFile(asset_path),
+                caption=txt_card,
+                width=960, height=1280,
+                supports_streaming=True
+            ))
         else:
             media.append(types.InputMediaPhoto(media=FSInputFile(asset_path), caption=txt_card))
 
@@ -1244,19 +1254,21 @@ async def resolve_round(gid, bot):
     c2_path, c2_is_video, c2_label = get_card_media_info(g['p2'], g['p2_c'], c2)
 
     # Локальная функция для динамической сборки медиа с учетом скинов
-    def create_media(path_main, is_video_main, path_secondary, is_video_secondary, card_main, card_secondary, caption_txt):
+    def create_media(path_main, is_video_main, path_secondary, is_video_secondary, card_main, card_secondary,
+                     caption_txt):
         m = []
         if is_video_main:
             m.append(types.InputMediaVideo(
                 media=FSInputFile(path_main), caption=caption_txt, parse_mode="HTML",
-                width=card_main.get("width", 960), height=card_main.get("height", 1280)
+                width=960, height=1280, supports_streaming=True
             ))
         else:
             m.append(types.InputMediaPhoto(media=FSInputFile(path_main), caption=caption_txt, parse_mode="HTML"))
 
         if is_video_secondary:
             m.append(types.InputMediaVideo(
-                media=FSInputFile(path_secondary), width=card_secondary.get("width", 960), height=card_secondary.get("height", 1280)
+                media=FSInputFile(path_secondary),
+                width=960, height=1280, supports_streaming=True
             ))
         else:
             m.append(types.InputMediaPhoto(media=FSInputFile(path_secondary)))

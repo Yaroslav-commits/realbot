@@ -768,8 +768,11 @@ AWAKENED_SKIN = {
 
 ABSOLUTE_SKIN = {
     # Абсолютный скин (Видео - 🔮)
-    "hong_jayeol": {"skin_video_file": "hong_jayeol_ab.mp4", "exclusive": False},
-    "lineman": {"skin_video_file": "lineman_ab.mp4", "exclusive": False},
+    "hong_jayeol": {"skin_video_file": "hong_jayeol_ab.mp4", "exclusive": False, "width": 960, "height": 1280},
+    "lineman": {"skin_video_file": "lineman_ab.mp4", "exclusive": False, "width": 960, "height": 1280},
+    "jangsu": {"skin_video_file": "jangsu_ab.mp4", "exclusive": False, "width": 960, "height": 1280},
+    "kang_dagyeom": {"skin_video_file": "kang_dagyeom_ab.mp4", "exclusive": False, "width": 960, "height": 1280},
+    "seong_tae_hun": {"skin_video_file": "seong_tae_hun_ab.mp4", "exclusive": False, "width": 960, "height": 1280},
 }
 
 # ===== Хелперы для скинов =====
