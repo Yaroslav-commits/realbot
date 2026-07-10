@@ -1602,8 +1602,8 @@ async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
     txt = "♻️ <b>Трейд Обликами</b>\n\nВыберите редкость скина для обмена и отправьте ссылку партнеру в чат:"
 
     # Используем ** вместо <b>, чтобы Telegram сам сделал текст жирным при отправке в чат!
-    text_awa = "♻️ **Предлагаю совершить со мной трейд скинами!?**\n**Редкость** - Пробужденный 💠\n\nТыкай по ссылке и го обмен🤫"
-    text_abs = "♻️ **Предлагаю совершить со мной трейд скинами!?**\n**Редкость** - Абсолютный 🔮\n\nТыкай по ссылке и го обмен🤫"
+    text_awa = "♻️ Предлагаю совершить со мной трейд скинами!?\nРедкость - Пробужденный 💠\n\nТыкай по ссылке и го обмен🤫"
+    text_abs = "♻️ Предлагаю совершить со мной трейд скинами!?\nРедкость - Абсолютный 🔮\n\nТыкай по ссылке и го обмен🤫"
 
     bld = InlineKeyboardBuilder()
     bld.row(InlineKeyboardButton(text="Пробуждённый трейд 💠",
@@ -1970,8 +1970,21 @@ async def skin_trade_finish_cb(cq: CallbackQuery, bot: Bot):
                     pass
 
             from database.db import swap_skins
-            swap_skins(p1, tdata['p1_skin'], p2, tdata['p2_skin'], tdata['type'])
+            # ВНИМАНИЕ: Ловим статус успешности обмена из базы
+            success = swap_skins(p1, tdata['p1_skin'], p2, tdata['p2_skin'], tdata['type'])
 
+            # 🛑 ЕСЛИ КТО-ТО ПЫТАЕТСЯ ДЮПАТЬ ИЛИ СКИНА УЖЕ НЕТ:
+            if not success:
+                del ACTIVE_SKIN_TRADES[trade_id]
+                await bot.send_message(p1,
+                                       "❌ Трейд отменен: Ошибка транзакции. (Возможно, скин уже был продан или у вас уже есть такой облик).",
+                                       reply_markup=kb_main())
+                await bot.send_message(p2,
+                                       "❌ Трейд отменен: Ошибка транзакции. (Возможно, скин уже был продан или у вас уже есть такой облик).",
+                                       reply_markup=kb_main())
+                return
+
+            # ✅ Если все чисто, продолжаем обычную выдачу наград:
             c1, c2 = CARDS[tdata['p1_skin']], CARDS[tdata['p2_skin']]
             stype = tdata['type']
             pool = ABSOLUTE_SKIN if stype == "absolute" else AWAKENED_SKIN
@@ -1989,11 +2002,11 @@ async def skin_trade_finish_cb(cq: CallbackQuery, bot: Bot):
             path2 = f"images/cards/{pool[tdata['p2_skin']].get('skin_video_file') or pool[tdata['p2_skin']].get('skin_art_file')}"
 
             fin_txt1 = (
-                f"🎊 Вы совершили успешный трейд с {name2_link} и получили новый скин с трейда\n\n"
+                f"🎊 Вы совершили успешный трейд с {name2_link} и получили новый скин с трейда\n"
                 f"🎭 <b>{c2['name']}</b> ({type_lbl})"
             )
             fin_txt2 = (
-                f"🎊 Вы совершили успешный трейд с {name1_link} и получили новый скин с трейда\n\n"
+                f"🎊 Вы совершили успешный трейд с {name1_link} и получили новый скин с трейда\n"
                 f"🎭 <b>{c1['name']}</b> ({type_lbl})"
             )
 

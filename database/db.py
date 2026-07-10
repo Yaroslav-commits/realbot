@@ -143,32 +143,63 @@ def init_db():
     # skinchik
     db_exec("CREATE TABLE IF NOT EXISTS skins_inv (user_id INTEGER, card_id TEXT, skin_type TEXT, is_active INTEGER DEFAULT 0)")
 
+    # 🔒 ЗАЩИТА ОТ ДЮПОВ (Чистим инвентари от уже надюпанных скинов)
+    db_exec("""
+            DELETE FROM skins_inv
+            WHERE rowid NOT IN (
+                SELECT MIN(rowid)
+                FROM skins_inv
+                GROUP BY user_id, card_id, skin_type
+            )
+        """)
+    # 🔒 Ставим жесткое ограничение базы: 1 уникальный скин в одни руки
+    db_exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_skins_inv_unique ON skins_inv(user_id, card_id, skin_type)")
+
+
 def give_skin_to_user(uid: int, card_id: str, skin_type: str) -> bool:
     """Выдает скин. skin_type должен быть 'awakened' или 'absolute'. Возвращает True, если скина не было."""
-    exists = db_exec("SELECT 1 FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?", (uid, card_id, skin_type), fetch=True)
+    exists = db_exec("SELECT 1 FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?",
+                     (uid, card_id, skin_type), fetch=True)
     if exists:
         return False
-    db_exec("INSERT INTO skins_inv (user_id, card_id, skin_type, is_active) VALUES (?, ?, ?, 0)", (uid, card_id, skin_type))
+    db_exec("INSERT INTO skins_inv (user_id, card_id, skin_type, is_active) VALUES (?, ?, ?, 0)",
+            (uid, card_id, skin_type))
     return True
+
 
 def get_user_skins_for_card(uid: int, card_id: str):
     """Возвращает список доступных скинов игрока для конкретной карты."""
-    rows = db_exec("SELECT skin_type, is_active FROM skins_inv WHERE user_id = ? AND card_id = ?", (uid, card_id), fetchall=True)
+    rows = db_exec("SELECT skin_type, is_active FROM skins_inv WHERE user_id = ? AND card_id = ?", (uid, card_id),
+                   fetchall=True)
     return rows if rows else []
+
 
 def get_active_skin(uid: int, card_id: str):
     """Возвращает активный скин ('awakened' или 'absolute') или None."""
-    res = db_exec("SELECT skin_type FROM skins_inv WHERE user_id = ? AND card_id = ? AND is_active = 1", (uid, card_id), fetch=True)
+    res = db_exec("SELECT skin_type FROM skins_inv WHERE user_id = ? AND card_id = ? AND is_active = 1", (uid, card_id),
+                  fetch=True)
     return res[0] if res else None
+
 
 def equip_skin(uid: int, card_id: str, skin_type: str):
     """Надевает скин (снимая остальные для этой карты)."""
     db_exec("UPDATE skins_inv SET is_active = 0 WHERE user_id = ? AND card_id = ?", (uid, card_id))
-    db_exec("UPDATE skins_inv SET is_active = 1 WHERE user_id = ? AND card_id = ? AND skin_type = ?", (uid, card_id, skin_type))
+    db_exec("UPDATE skins_inv SET is_active = 1 WHERE user_id = ? AND card_id = ? AND skin_type = ?",
+            (uid, card_id, skin_type))
+
 
 def unequip_skin(uid: int, card_id: str):
     """Снимает любой активный скин с карты."""
     db_exec("UPDATE skins_inv SET is_active = 0 WHERE user_id = ? AND card_id = ?", (uid, card_id))
+
+
+def get_all_user_skins_by_type(uid: int, skin_type: str) -> list:
+    """Возвращает список ID всех карт, на которые у игрока есть скин определенного типа."""
+    rows = db_exec(
+        "SELECT card_id FROM skins_inv WHERE user_id = ? AND skin_type = ?",
+        (uid, skin_type), fetchall=True
+    )
+    return [row[0] for row in rows] if rows else []
 
 def get_user(uid):
     return db_exec("SELECT * FROM users WHERE id = ?", (uid,), fetch=True)
@@ -853,19 +884,34 @@ def check_and_update_quests(uid: int, quest_action: str, amount: int = 1) -> dic
 
 # ================== ФУНКЦИИ ДЛЯ ТРЕЙДА СКИНАМИ ==================
 
-def get_all_user_skins_by_type(uid: int, skin_type: str) -> list:
-    """Возвращает список ID всех карт, на которые у игрока есть скин определенного типа."""
-    rows = db_exec(
-        "SELECT card_id FROM skins_inv WHERE user_id = ? AND skin_type = ?",
-        (uid, skin_type), fetchall=True
-    )
-    return [row[0] for row in rows] if rows else []
+def swap_skins(uid1: int, cid1: str, uid2: int, cid2: str, skin_type: str) -> bool:
+    """Меняет скины местами между двумя игроками с 100% защитой от дюпов."""
+    # 1. СТРОГАЯ ПРОВЕРКА: Проверяем, лежат ли эти скины у игроков ПРЯМО СЕЙЧАС (защита от двойного трейда)
+    has1 = db_exec("SELECT 1 FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?",
+                   (uid1, cid1, skin_type), fetch=True)
+    has2 = db_exec("SELECT 1 FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?",
+                   (uid2, cid2, skin_type), fetch=True)
 
-def swap_skins(uid1: int, cid1: str, uid2: int, cid2: str, skin_type: str):
-    """Меняет скины местами между двумя игроками."""
-    # Забираем скины
+    if not has1 or not has2:
+        return False  # Попытка дюпа или скин уже передан!
+
+    # 2. ПРОВЕРКА НА ДУБЛИКАТЫ: Проверяем, нет ли уже этих скинов у получателей
+    has_t1 = db_exec("SELECT 1 FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?",
+                     (uid1, cid2, skin_type), fetch=True)
+    has_t2 = db_exec("SELECT 1 FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?",
+                     (uid2, cid1, skin_type), fetch=True)
+
+    if has_t1 or has_t2:
+        return False  # Скин уже есть в инвентаре, меняться нельзя
+
+    # 3. БЕЗОПАСНЫЙ ОБМЕН
     db_exec("DELETE FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?", (uid1, cid1, skin_type))
     db_exec("DELETE FROM skins_inv WHERE user_id = ? AND card_id = ? AND skin_type = ?", (uid2, cid2, skin_type))
-    # Отдаем друг другу
-    db_exec("INSERT INTO skins_inv (user_id, card_id, skin_type) VALUES (?, ?, ?)", (uid1, cid2, skin_type))
-    db_exec("INSERT INTO skins_inv (user_id, card_id, skin_type) VALUES (?, ?, ?)", (uid2, cid1, skin_type))
+
+    # Отдаем друг другу (сбрасывая is_active в 0, чтобы ничего не баговало)
+    db_exec("INSERT INTO skins_inv (user_id, card_id, skin_type, is_active) VALUES (?, ?, ?, 0)",
+            (uid1, cid2, skin_type))
+    db_exec("INSERT INTO skins_inv (user_id, card_id, skin_type, is_active) VALUES (?, ?, ?, 0)",
+            (uid2, cid1, skin_type))
+
+    return True
