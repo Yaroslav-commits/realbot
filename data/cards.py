@@ -773,6 +773,8 @@ ABSOLUTE_SKIN = {
     "jangsu": {"skin_video_file": "jangsu_ab.mp4", "exclusive": False, "width": 960, "height": 1280},
     "kang_dagyeom": {"skin_video_file": "kang_dagyeom_ab.mp4", "exclusive": False, "width": 960, "height": 1280},
     "seong_tae_hun": {"skin_video_file": "seong_tae_hun_ab.mp4", "exclusive": False, "width": 960, "height": 1280},
+    "red_igris": {"skin_video_file": "red_igris_ab.mov", "exclusive": False, "width": 960, "height": 1280},
+    "ber": {"skin_video_file": "ber_ab.mp4", "exclusive": False, "width": 960, "height": 1280},
 }
 
 # ===== Хелперы для скинов =====
