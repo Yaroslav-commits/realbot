@@ -31,6 +31,13 @@ from handlers import (router, TradeState, SettingsState, PromoState,
 from media_cache import send_cached_video
 import handlers as _handlers
 
+# ================= БЕЗОПАСНАЯ МИГРАЦИЯ ДЛЯ СТРИКА =================
+try:
+    db_exec("ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0")
+except:
+    pass
+# ==================================================================
+
 # ============ БОЕВКА ============
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
@@ -1331,20 +1338,28 @@ async def finish_game(gid, bot):
             if is_win:
                 pts = 4 if premium else 3
                 bc = 14 if premium else 10
-                stat_update = "wins = wins + 1, season_wins = season_wins + 1"
+                # Плюс 1 к текущему стрику при победе
+                stat_update = "wins = wins + 1, season_wins = season_wins + 1, current_streak = current_streak + 1"
             elif is_draw:
                 pts = 2 if premium else 1
                 bc = 6 if premium else 4
-                stat_update = "draws = draws + 1"
+                # Сбрасываем стрик при ничьей
+                stat_update = "draws = draws + 1, current_streak = 0"
             else:
                 pts = -1 if premium else -2
                 bc = 3 if premium else 2
-                stat_update = "losses = losses + 1"
+                # Сбрасываем стрик при поражении
+                stat_update = "losses = losses + 1, current_streak = 0"
 
             # В обычных боях обновляем очки, коины и статистику
             db_exec(
                 f"UPDATE users SET rank_points = MAX(0, rank_points + {pts}), battlecoin = battlecoin + {bc}, {stat_update} WHERE id = ?",
                 (uid,))
+
+            # Если это победа, проверяем, не побит ли рекорд (max_streak)
+            if is_win:
+                db_exec("UPDATE users SET max_streak = current_streak WHERE id = ? AND current_streak > max_streak",
+                        (uid,))
 
         return pts, bc
 

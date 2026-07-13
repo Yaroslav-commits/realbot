@@ -875,18 +875,31 @@ def get_referral(user_id: int = Depends(authed_user_id)):
 
 
 # ============================================================
+#  БЕЗОПАСНАЯ МИГРАЦИЯ (Бусты, Подписки, Стрик)
+# ============================================================
+try:
+    db_exec_sync("ALTER TABLE users ADD COLUMN subscribe_done INTEGER DEFAULT 0")
+except:
+    pass
+try:
+    db_exec_sync("ALTER TABLE users ADD COLUMN last_boost_claim TEXT")
+except:
+    pass
+try:
+    db_exec_sync("ALTER TABLE users ADD COLUMN max_streak INTEGER DEFAULT 0")
+except:
+    pass
+
+
+# ============================================================
 #  ЗАДАНИЯ: общий статус
 # ============================================================
 @app.get("/api/tasks/{user_id}")
 def get_tasks(user_id: int = Depends(authed_user_id)):
-    sub = db_exec_sync(
-        "SELECT 1 FROM task_claims WHERE user_id = ? AND task_key = 'subscribe'",
-        (user_id,), fetch=True
-    )
-    subscribe_done = bool(sub)
+    user = db_exec_sync("SELECT subscribe_done, last_boost_claim FROM users WHERE id = ?", (user_id,), fetch=True)
+    subscribe_done = bool(user[0]) if user else False
+    boost_last = user[1] if user else None
 
-    bc = db_exec_sync("SELECT last_claim FROM boost_claims WHERE user_id = ?", (user_id,), fetch=True)
-    boost_last = bc[0] if bc and bc[0] else None
     boost_next = None
     boost_secs = 0
     boost_on_cd = False
@@ -908,6 +921,7 @@ def get_tasks(user_id: int = Depends(authed_user_id)):
         return r[0] if r else "none"
 
     return {
+        "ok": True,
         "subscribe_done": subscribe_done,
         "boost_last_claim": boost_last,
         "boost_next_claim": boost_next,
@@ -927,23 +941,24 @@ def get_tasks(user_id: int = Depends(authed_user_id)):
 async def check_subscription(user_id: int = Depends(authed_user_id)):
     if BOT_INSTANCE is None:
         return {"ok": False, "error": "Бот ещё не запущен, попробуйте позже"}
-    subscribed = await _is_subscribed(user_id)
-    if not subscribed:
+    try:
+        member = await BOT_INSTANCE.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
+        is_subbed = str(member.status) in ("member", "administrator", "creator", "ChatMemberStatus.MEMBER",
+                                           "ChatMemberStatus.ADMINISTRATOR", "ChatMemberStatus.CREATOR")
+    except Exception as e:
+        logging.error(f"Sub check error: {e}")
+        return {"ok": False, "error": "Бот не является админом канала или канал не найден."}
+
+    if not is_subbed:
         return {"ok": True, "subscribed": False, "rewarded": False}
 
-    already = db_exec_sync(
-        "SELECT 1 FROM task_claims WHERE user_id = ? AND task_key = 'subscribe'",
-        (user_id,), fetch=True
-    )
-    if already:
+    user = db_exec_sync("SELECT subscribe_done FROM users WHERE id = ?", (user_id,), fetch=True)
+    if user and user[0]:
         return {"ok": True, "subscribed": True, "rewarded": False}
 
-    r = REWARDS["subscribe"]
+    r = REWARDS.get("subscribe", {"krw": 1000, "dia": 5})
     _credit(user_id, krw=r.get("krw", 0), dia=r.get("dia", 0))
-    db_exec_sync(
-        "INSERT OR IGNORE INTO task_claims (user_id, task_key, claimed_at) VALUES (?, 'subscribe', ?)",
-        (user_id, _now_str())
-    )
+    db_exec_sync("UPDATE users SET subscribe_done = 1 WHERE id = ?", (user_id,))
     return {"ok": True, "subscribed": True, "rewarded": True, "reward": r}
 
 
@@ -960,8 +975,8 @@ async def check_boost(user_id: int = Depends(authed_user_id)):
         return {"ok": True, "boosting": False}
 
     now = datetime.now(MSK)
-    bc = db_exec_sync("SELECT last_claim FROM boost_claims WHERE user_id = ?", (user_id,), fetch=True)
-    last = bc[0] if bc and bc[0] else None
+    user = db_exec_sync("SELECT last_boost_claim FROM users WHERE id = ?", (user_id,), fetch=True)
+    last = user[0] if user else None
 
     if last:
         try:
@@ -974,14 +989,11 @@ async def check_boost(user_id: int = Depends(authed_user_id)):
         except Exception:
             pass
 
-    # Можно забирать награду
-    r = REWARDS["boost"]
+    r = REWARDS.get("boost", {"krw": 2000, "dia": 10})
     _credit(user_id, krw=r.get("krw", 0), dia=r.get("dia", 0))
     now_str = now.strftime("%Y-%m-%d %H:%M:%S")
-    if last:
-        db_exec_sync("UPDATE boost_claims SET last_claim = ? WHERE user_id = ?", (now_str, user_id))
-    else:
-        db_exec_sync("INSERT INTO boost_claims (user_id, last_claim) VALUES (?, ?)", (user_id, now_str))
+    db_exec_sync("UPDATE users SET last_boost_claim = ? WHERE id = ?", (now_str, user_id))
+
     nxt_str = (now + timedelta(days=BOOST_COOLDOWN_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
     return {"ok": True, "boosting": True, "claimed": True, "reward": r,
             "boost_next_claim": nxt_str, "boost_seconds_left": _secs_left(nxt_str)}
