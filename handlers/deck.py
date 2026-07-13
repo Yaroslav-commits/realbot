@@ -1554,7 +1554,7 @@ def _render_skin_slide_data(uid: int, skin_type: str, index: int, owned_cids: li
 @router.callback_query(F.data == "my_skins_categories")
 async def my_skins_categories_menu(cq: CallbackQuery):
     txt = (
-        "🏵️ <b>ГАЛЕРЕЯ ОБЛИКОВ</b> 🏵️\n\n"
+        "🏵️ <b>ГАЛЕРЕЯ СКИНОВ</b> 🏵️\n\n"
         "Добро пожаловать в ваш личный гардероб редких скинов на вашы карты!\n\n"
         "<i>Выберите интересующую вас редкость, чтобы открыть просмотр вашей коллекции:</i>"
     )
@@ -1567,14 +1567,12 @@ async def my_skins_categories_menu(cq: CallbackQuery):
     bld.add(InlineKeyboardButton(text="Назад 🔙", callback_data="inv_main"))
     bld.adjust(1)
 
+    # ИСПРАВЛЕНО: Сначала удаляем картинку/видео, затем отправляем чистое текстовое меню
     try:
-        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        await cq.message.delete()
     except Exception:
-        try:
-            await cq.message.delete()
-        except Exception:
-            pass
-        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        pass
+    await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
 
 # ♻️ СИСТЕМА ТРЕЙДА СКИНАМИ ♻️
@@ -1599,7 +1597,7 @@ async def skin_trade_menu(cq: CallbackQuery, bot: Bot):
     link_awa = f"https://t.me/{me.username}?start=sktrad_awa_{uid}"
     link_abs = f"https://t.me/{me.username}?start=sktrad_abs_{uid}"
 
-    txt = "♻️ <b>Трейд Обликами</b>\n\nВыберите редкость скина для обмена и отправьте ссылку партнеру в чат:"
+    txt = "♻️ <b>Трейд Скинами</b>\n\nВыберите редкость скина для обмена и отправьте ссылку партнеру в чат:"
 
     # Используем ** вместо <b>, чтобы Telegram сам сделал текст жирным при отправке в чат!
     text_awa = "♻️ Предлагаю совершить со мной трейд скинами!?\nРедкость - Пробужденный 💠\n\nТыкай по ссылке и го обмен🤫"
