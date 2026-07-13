@@ -34,9 +34,9 @@ from handlers import (router, TradeState, SettingsState, PromoState,
 SHOP_IMG = FSInputFile("images/shop/shop.png")
 
 # Картинки паков
-IMG_CAPSULE   = FSInputFile("images/shop/capsule.jpg")
-IMG_STASH     = FSInputFile("images/shop/stash.jpg")
-IMG_UNIVERSE  = FSInputFile("images/shop/universe.jpg")
+IMG_CAPSULE   = FSInputFile("images/shop/capsule.jpeg")
+IMG_STASH     = FSInputFile("images/shop/stash.jpeg")
+IMG_UNIVERSE  = FSInputFile("images/shop/universe.jpeg")
 IMG_LEG_PACK  = FSInputFile("images/shop/pack_leg.jpeg")
 IMG_EPIC_PACK = FSInputFile("images/shop/pack_epic.jpeg")
 
