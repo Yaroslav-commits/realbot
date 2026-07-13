@@ -108,7 +108,8 @@ def pull_universe_card(universes, weights_by_rarity):
     """Вытягивает карту из конкретных вселенных с учетом редкости"""
     pool = {r: [] for r in weights_by_rarity}
     for cid, c in CARDS.items():
-        if c.get('series') in universes:
+        # ИСПРАВЛЕНИЕ: Жестко исключаем карты с exclusive = True
+        if c.get('series') in universes and not c.get('exclusive', False):
             for r_key in pool:
                 if r_key in c['rarity']:
                     pool[r_key].append(cid)
@@ -611,187 +612,207 @@ async def shop_pack_preview(cq: CallbackQuery):
     await cq.answer()
 
 
+# --- ЗАЩИТА ОТ СПАМА И ДЮПА ПАКОВ ---
+_pack_locks = set()
+
+
 @router.callback_query(F.data.startswith("shop:pack_buy:"))
 async def shop_pack_buy(cq: CallbackQuery):
-    pack_type = cq.data.split(":")[2]
     uid = cq.from_user.id
-    u = get_user(uid)
-    dia, krw = u[3], u[4]
 
-    cost_dia, cost_krw = 0, 0
-    if pack_type == "capsule":
-        cost_dia = PRICE_CAPSULE
-    elif pack_type == "stash":
-        cost_dia = PRICE_STASH
-    elif pack_type == "universe":
-        cost_krw = PRICE_NEW_UNIV
-    elif pack_type == "leg":
-        cost_krw = PRICE_LEG
-    elif pack_type == "epic":
-        cost_krw = PRICE_EPIC
-
-    if cost_dia > 0 and dia < cost_dia:
-        return await cq.answer(f"❌ Недостаточно Алмазов! Нужно: {cost_dia} 💎", show_alert=True)
-    if cost_krw > 0 and krw < cost_krw:
-        return await cq.answer(f"❌ Недостаточно средств! Нужно: {cost_krw} 💴", show_alert=True)
-
-    if cost_dia > 0:
-        db_exec("UPDATE users SET diamond = diamond - ? WHERE id = ?", (cost_dia, uid))
-    if cost_krw > 0:
-        db_exec("UPDATE users SET krw = krw - ? WHERE id = ?", (cost_krw, uid))
-
-    result_type = "card"
-    card_key = None
-    skin_type = None
-
-    if pack_type == "capsule":
-        skin_type = random.choices(["absolute", "awakened"], weights=[40, 60], k=1)[0]
-        result_type = "skin"
-    elif pack_type == "stash":
-        choices = ["skin_abs", "skin_awa", "mythic", "legendary", "epic"]
-        weights = [4, 18, 8, 30, 40]
-        res = random.choices(choices, weights=weights, k=1)[0]
-        if res == "skin_abs":
-            skin_type, result_type = "absolute", "skin"
-        elif res == "skin_awa":
-            skin_type, result_type = "awakened", "skin"
-        elif res == "mythic":
-            card_key = pull_random_card(force_rarity="Мифическая 🔴")
-        elif res == "legendary":
-            card_key = pull_random_card(force_rarity="Легендарная 🔵")
-        else:
-            card_key = pull_random_card(force_rarity="Эпическая 🟢")
-    elif pack_type == "universe":
-        weights = {'Мифическая 🔴': 10, 'Легендарная 🔵': 40, 'Эпическая 🟢': 50}
-        card_key = pull_universe_card(LATEST_UNIVERSES, weights)
-    elif pack_type == "leg":
-        card_key = pull_random_card(force_rarity="Легендарная 🔵")
-    elif pack_type == "epic":
-        card_key = pull_random_card(force_rarity="Эпическая 🟢")
-
-    bld = InlineKeyboardBuilder()
-    bld.button(text="Открыть еще 🔄", callback_data=f"shop:pack_buy:{pack_type}")
-    bld.button(text="Назад к пакам 🔙", callback_data="shop:packs")
-    bld.adjust(1)
+    # АНТИСПАМ: Если игрок нажал второй раз, пока пак еще крутится - блокируем
+    if uid in _pack_locks:
+        return await cq.answer("⏳ Открываем пак... Не нажимайте так быстро!", show_alert=True)
+    _pack_locks.add(uid)
 
     try:
-        await cq.message.delete()
-    except Exception:
-        pass
+        pack_type = cq.data.split(":")[2]
+        u = get_user(uid)
+        dia, krw = u[3], u[4]
 
-    # ЕСЛИ ВЫПАЛ СКИН:
-    if result_type == "skin":
-        pool = ABSOLUTE_SKIN if skin_type == "absolute" else AWAKENED_SKIN
-        cid = random.choice(list(pool.keys()))
-        c = CARDS[cid]
+        cost_dia, cost_krw = 0, 0
+        if pack_type == "capsule":
+            cost_dia = PRICE_CAPSULE
+        elif pack_type == "stash":
+            cost_dia = PRICE_STASH
+        elif pack_type == "universe":
+            cost_krw = PRICE_NEW_UNIV
+        elif pack_type == "leg":
+            cost_krw = PRICE_LEG
+        elif pack_type == "epic":
+            cost_krw = PRICE_EPIC
 
-        is_new = give_skin_to_user(uid, cid, skin_type)
-        type_name = "Абсолютный 🔮" if skin_type == "absolute" else "Пробужденный 💠"
+        if cost_dia > 0 and dia < cost_dia:
+            return await cq.answer(f"❌ Недостаточно Алмазов! Нужно: {cost_dia} 💎", show_alert=True)
+        if cost_krw > 0 and krw < cost_krw:
+            return await cq.answer(f"❌ Недостаточно средств! Нужно: {cost_krw} 💴", show_alert=True)
 
-        if is_new:
-            txt = (
-                f"<b>Вам выпал новый скин!</b>\n\n"
-                f"🎭 <b>Тип:</b> {type_name}\n"
-                f"🃏 <b>Для карты:</b> {c['name']}\n\n"
-                f"<i>Облик добавлен в вашу Галерею 🏵️</i>"
-            )
-            await cq.answer("🎉 Получен редчайший скин!", show_alert=True)
-        else:
-            # Математический расчет: ровно 35% от стоимости конкретного пака
-            spent = PRICE_CAPSULE if pack_type == "capsule" else PRICE_STASH
-            cashback = int(spent * 0.35)
+        if cost_dia > 0:
+            db_exec("UPDATE users SET diamond = diamond - ? WHERE id = ?", (cost_dia, uid))
+        if cost_krw > 0:
+            db_exec("UPDATE users SET krw = krw - ? WHERE id = ?", (cost_krw, uid))
 
-            db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (cashback, uid))
-            txt = (
-                f"♻️ <b>ДУБЛИКАТ СКИНА!</b>\n\n"
-                f"Вам выпал <b>{type_name}</b> для <b>{c['name']}</b>, но он у вас уже есть!\n\n"
-                f"💎 <b>Утешительный бонус (35% от цены пака): +{cashback} Алмазов!</b>"
-            )
-            await cq.answer(f"♻️ Дубликат скина! Бонус: +{cashback} Алмазов", show_alert=True)
+        result_type = "card"
+        card_key = None
+        skin_type = None
 
-        is_video = (skin_type == "absolute")
-        asset_path = f"images/cards/{pool[cid].get('skin_video_file') or pool[cid].get('skin_art_file')}"
+        if pack_type == "capsule":
+            skin_type = random.choices(["absolute", "awakened"], weights=[40, 60], k=1)[0]
+            result_type = "skin"
+        elif pack_type == "stash":
+            choices = ["skin_abs", "skin_awa", "mythic", "legendary", "epic"]
+            weights = [4, 18, 8, 30, 40]
+            res = random.choices(choices, weights=weights, k=1)[0]
+            if res == "skin_abs":
+                skin_type, result_type = "absolute", "skin"
+            elif res == "skin_awa":
+                skin_type, result_type = "awakened", "skin"
+            elif res == "mythic":
+                card_key = pull_random_card(force_rarity="Мифическая 🔴")
+            elif res == "legendary":
+                card_key = pull_random_card(force_rarity="Легендарная 🔵")
+            else:
+                card_key = pull_random_card(force_rarity="Эпическая 🟢")
+        elif pack_type == "universe":
+            weights = {'Мифическая 🔴': 10, 'Легендарная 🔵': 40, 'Эпическая 🟢': 50}
+            card_key = pull_universe_card(LATEST_UNIVERSES, weights)
+        elif pack_type == "leg":
+            card_key = pull_random_card(force_rarity="Легендарная 🔵")
+        elif pack_type == "epic":
+            card_key = pull_random_card(force_rarity="Эпическая 🟢")
 
-        if is_video:
-            from media_cache import send_cached_video
-            await send_cached_video(
-                cq.bot, chat_id=uid, file_path=asset_path, caption=txt,
-                width=c.get("width", 960), height=c.get("height", 1280),
-                reply_markup=bld.as_markup(), parse_mode="HTML", supports_streaming=True
-            )
-        else:
-            await cq.message.answer_photo(
-                photo=FSInputFile(asset_path), caption=txt, parse_mode="HTML", reply_markup=bld.as_markup()
-            )
-
-    # ЕСЛИ ВЫПАЛА КАРТА:
-    else:
-        is_new, krw_earn, card_c = give_card_to_user(uid, card_key)
-
-        if is_new:
-            txt = (
-                f"🎉 <b>Поздравляем! Вам выпала новая карта!</b>\n\n"
-                f"🎴 <b>Персонаж:</b> {card_c['name']}\n"
-                f"🔮 <b>Редкость:</b> {card_c['rarity']}\n"
-                f"👊 <b>Стиль боя:</b> {card_c['style']}\n"
-                f"🪐 <b>Вселенная:</b> {card_c.get('series', 'Неизвестно')}\n\n"
-                f"⚡️ <b>Скорость:</b> {card_c['speed']}\n"
-                f"💪 <b>Сила:</b> {card_c['strength']}\n"
-                f"🧠 <b>Интеллект:</b> {card_c['intellect']}"
-            )
-            alert_text = "🎉 Получен новый персонаж!"
-        else:
-            txt = (
-                f"🛑 <b>Вам попалась повторная карта!</b>\n"
-                f"Вы получаете компенсацию: <b>{krw_earn} 💴</b>\n\n"
-                f"🎴 <b>Персонаж:</b> {card_c['name']}\n"
-                f"🔮 <b>Редкость:</b> {card_c['rarity']}\n"
-                f"🪐 <b>Вселенная:</b> {card_c.get('series', 'Неизвестно')}"
-            )
-            alert_text = f"✅ Персонаж уже был у вас и конвертирован в {krw_earn} KRW!"
+        bld = InlineKeyboardBuilder()
+        bld.button(text="Открыть еще 🔄", callback_data=f"shop:pack_buy:{pack_type}")
+        bld.button(text="Назад к пакам 🔙", callback_data="shop:packs")
+        bld.adjust(1)
 
         try:
-            if "Божественная" in card_c.get("rarity", "") and card_c.get("video"):
+            await cq.message.delete()
+        except Exception:
+            pass
+
+        # ЕСЛИ ВЫПАЛ СКИН:
+        if result_type == "skin":
+            pool = ABSOLUTE_SKIN if skin_type == "absolute" else AWAKENED_SKIN
+
+            # ИСПРАВЛЕНИЕ: Исключаем эксклюзивные скины
+            available_skins = [s_id for s_id, s_data in pool.items() if not s_data.get('exclusive', False)]
+            if not available_skins:
+                available_skins = list(pool.keys())  # Защита от пустой базы
+
+            cid = random.choice(available_skins)
+            c = CARDS[cid]
+
+            is_new = give_skin_to_user(uid, cid, skin_type)
+            type_name = "Абсолютный 🔮" if skin_type == "absolute" else "Пробужденный 💠"
+
+            if is_new:
+                txt = (
+                    f"<b>Вам выпал новый скин!</b>\n\n"
+                    f"🎭 <b>Тип:</b> {type_name}\n"
+                    f"🃏 <b>Для карты:</b> {c['name']}\n\n"
+                    f"<i>Облик добавлен в вашу Галерею 🏵️</i>"
+                )
+                await cq.answer("🎉 Получен редчайший скин!", show_alert=True)
+            else:
+                # Математический расчет: ровно 35% от стоимости конкретного пака
+                spent = PRICE_CAPSULE if pack_type == "capsule" else PRICE_STASH
+                cashback = int(spent * 0.35)
+
+                db_exec("UPDATE users SET diamond = diamond + ? WHERE id = ?", (cashback, uid))
+                txt = (
+                    f"♻️ <b>ДУБЛИКАТ СКИНА!</b>\n\n"
+                    f"Вам выпал <b>{type_name}</b> для <b>{c['name']}</b>, но он у вас уже есть!\n\n"
+                    f"💎 <b>Утешительный бонус (35% от цены пака): +{cashback} Алмазов!</b>"
+                )
+                await cq.answer(f"♻️ Дубликат скина! Бонус: +{cashback} Алмазов", show_alert=True)
+
+            is_video = (skin_type == "absolute")
+            asset_path = f"images/cards/{pool[cid].get('skin_video_file') or pool[cid].get('skin_art_file')}"
+
+            if is_video:
                 from media_cache import send_cached_video
                 await send_cached_video(
-                    cq.bot, chat_id=uid, file_path=f"images/cards/{card_c['video']}",
-                    caption=txt, width=card_c.get("width", 960), height=card_c.get("height", 1280),
-                    reply_markup=bld.as_markup(), has_spoiler=True, supports_streaming=True
+                    cq.bot, chat_id=uid, file_path=asset_path, caption=txt,
+                    width=c.get("width", 960), height=c.get("height", 1280),
+                    reply_markup=bld.as_markup(), parse_mode="HTML", supports_streaming=True
                 )
             else:
                 await cq.message.answer_photo(
-                    photo=FSInputFile(f"images/cards/{card_c['file']}"),
-                    caption=txt, parse_mode="HTML", reply_markup=bld.as_markup(), has_spoiler=True
+                    photo=FSInputFile(asset_path), caption=txt, parse_mode="HTML", reply_markup=bld.as_markup()
                 )
-        except Exception:
-            await cq.message.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
 
-        await cq.answer(alert_text, show_alert=True)
-        
-# === MANHWCARD PASS: ОПЫТ ЗА ПАКИ И КВЕСТЫ ===
-    earned_xp = 0
-    if pack_type == "epic":
-        earned_xp = 45
-        check_and_update_quests(uid, 'q_3_epic_packs', 1)
-    elif pack_type == "leg":
-        earned_xp = 95
-    elif pack_type == "universe":
-        earned_xp = 140
+        # ЕСЛИ ВЫПАЛА КАРТА:
+        else:
+            is_new, krw_earn, card_c = give_card_to_user(uid, card_key)
 
-    if earned_xp > 0:
-        xp_res = add_pass_xp(uid, earned_xp)
-        if xp_res and xp_res.get("leveled_up"):
+            if is_new:
+                txt = (
+                    f"🎉 <b>Поздравляем! Вам выпала новая карта!</b>\n\n"
+                    f"🎴 <b>Персонаж:</b> {card_c['name']}\n"
+                    f"🔮 <b>Редкость:</b> {card_c['rarity']}\n"
+                    f"👊 <b>Стиль боя:</b> {card_c['style']}\n"
+                    f"🪐 <b>Вселенная:</b> {card_c.get('series', 'Неизвестно')}\n\n"
+                    f"⚡️ <b>Скорость:</b> {card_c['speed']}\n"
+                    f"💪 <b>Сила:</b> {card_c['strength']}\n"
+                    f"🧠 <b>Интеллект:</b> {card_c['intellect']}"
+                )
+                alert_text = "🎉 Получен новый персонаж!"
+            else:
+                txt = (
+                    f"🛑 <b>Вам попалась повторная карта!</b>\n"
+                    f"Вы получаете компенсацию: <b>{krw_earn} 💴</b>\n\n"
+                    f"🎴 <b>Персонаж:</b> {card_c['name']}\n"
+                    f"🔮 <b>Редкость:</b> {card_c['rarity']}\n"
+                    f"🪐 <b>Вселенная:</b> {card_c.get('series', 'Неизвестно')}"
+                )
+                alert_text = f"✅ Персонаж уже был у вас и конвертирован в {krw_earn} KRW!"
+
             try:
-                await cq.bot.send_message(
-                    uid,
-                    f"⚡️ <b>[СИСТЕМА]</b>\n\n"
-                    f"Уровень ManhwCard Pass повышен!\n"
-                    f"Текущий уровень: <b>{xp_res['level']}</b>.\n\n"
-                    f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
-                    parse_mode="HTML"
-                )
+                if "Божественная" in card_c.get("rarity", "") and card_c.get("video"):
+                    from media_cache import send_cached_video
+                    await send_cached_video(
+                        cq.bot, chat_id=uid, file_path=f"images/cards/{card_c['video']}",
+                        caption=txt, width=card_c.get("width", 960), height=card_c.get("height", 1280),
+                        reply_markup=bld.as_markup(), has_spoiler=True, supports_streaming=True
+                    )
+                else:
+                    await cq.message.answer_photo(
+                        photo=FSInputFile(f"images/cards/{card_c['file']}"),
+                        caption=txt, parse_mode="HTML", reply_markup=bld.as_markup(), has_spoiler=True
+                    )
             except Exception:
-                pass
+                await cq.message.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
+
+            await cq.answer(alert_text, show_alert=True)
+
+        # === MANHWCARD PASS: ОПЫТ ЗА ПАКИ И КВЕСТЫ ===
+        earned_xp = 0
+        if pack_type == "epic":
+            earned_xp = 45
+            check_and_update_quests(uid, 'q_3_epic_packs', 1)
+        elif pack_type == "leg":
+            earned_xp = 95
+        elif pack_type == "universe":
+            earned_xp = 140
+
+        if earned_xp > 0:
+            xp_res = add_pass_xp(uid, earned_xp)
+            if xp_res and xp_res.get("leveled_up"):
+                try:
+                    await cq.bot.send_message(
+                        uid,
+                        f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                        f"Уровень ManhwCard Pass повышен!\n"
+                        f"Текущий уровень: <b>{xp_res['level']}</b>.\n\n"
+                        f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    pass
+    finally:
+        # ОБЯЗАТЕЛЬНО: Снимаем блокировку, чтобы игрок мог купить следующий пак
+        _pack_locks.discard(uid)
 
 # ===== Евент =====
 @router.callback_query(F.data == "shop:ignore")
