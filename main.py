@@ -615,41 +615,6 @@ def get_profile(user_id: int):
                 "wins": 0, "losses": 0, "winrate": 0, "max_streak": 0,
                 "active_title": None, "fav_cards": {}, "unlocked_titles": []}
 
-class MultiSummonRequest(BaseModel):
-    amount: int
-
-@app.post("/api/multi_summon/{user_id}")
-def multi_summon_api(user_id: int, req: MultiSummonRequest, _: int = Depends(authed_user_id)):
-    amount = req.amount
-    valid_amounts = [1, 2, 4, 8, 12, 16]
-
-    if amount not in valid_amounts:
-        return {"success": False, "error": "Неверное количество круток"}
-
-    # Проверяем, сколько попыток (attempts) у игрока
-    user = db_exec_sync("SELECT attempts FROM users WHERE id = ?", (user_id,), fetch=True)
-    if not user or user[0] < amount:
-        return {"success": False, "error": f"Недостаточно попыток! Нужно: {amount}, у вас: {user[0] if user else 0}"}
-
-    # Списываем ровно то количество попыток, которое открываем
-    db_exec_sync("UPDATE users SET attempts = attempts - ? WHERE id = ?", (amount, user_id))
-
-    results = []
-    for _ in range(amount):
-        # Твоя функция из db.py уже учитывает премиум-шансы и штраф х10 для карт с 100 статами!
-        card_id, is_dup, dup_reward = give_card_to_user(user_id)
-        card_data = CARDS.get(card_id, {})
-        results.append({
-            "id": card_id,
-            "name": card_data.get("name", "Unknown"),
-            "rarity": card_data.get("rarity", "Обычная ⚪️"),
-            "file": card_data.get("file", ""),
-            "is_dup": is_dup,
-            "dup_reward": dup_reward
-        })
-
-    return {"success": True, "cards": results, "new_attempts": user[0] - amount}
-
 # Модели для запросов
 class FavPayload(BaseModel):
     card_id: str
@@ -1357,6 +1322,44 @@ def pass_claim_level(user_id: int = Depends(authed_user_id)):
     except Exception as e:
         logging.error(f"Error in pass_claim_level: {e}")
         return {"success": False, "error": str(e)}
+
+# =====================================================================
+# НОВАЯ СИСТЕМА МУЛЬТИ-КРУТОК ПО ТЗ (БЕЗ СПИСЫВАНИЯ АЛМАЗОВ, ПОПЫТКИ)
+# =====================================================================
+class MultiSummonRequest(BaseModel):
+    amount: int
+
+@app.post("/api/multi_summon/{user_id}")
+def multi_summon_api(req: MultiSummonRequest, user_id: int = Depends(authed_user_id)):
+    amount = req.amount
+    valid_amounts = [1, 2, 4, 8, 12, 16]
+
+    if amount not in valid_amounts:
+        return {"success": False, "error": "Неверное количество круток"}
+
+    # Проверяем, сколько попыток (attempts) у игрока
+    user = db_exec_sync("SELECT attempts FROM users WHERE id = ?", (user_id,), fetch=True)
+    if not user or user[0] < amount:
+        return {"success": False, "error": f"Недостаточно попыток! Нужно: {amount}, у вас: {user[0] if user else 0}"}
+
+    # Списываем ровно то количество попыток, которое открываем
+    db_exec_sync("UPDATE users SET attempts = attempts - ? WHERE id = ?", (amount, user_id))
+
+    results = []
+    for _ in range(amount):
+        # Твоя функция из db.py уже учитывает премиум-шансы и штраф х10 для карт с 100 статами!
+        card_id, is_dup, dup_reward = give_card_to_user(user_id)
+        card_data = CARDS.get(card_id, {})
+        results.append({
+            "id": card_id,
+            "name": card_data.get("name", "Unknown"),
+            "rarity": card_data.get("rarity", "Обычная ⚪️"),
+            "file": card_data.get("file", ""),
+            "is_dup": is_dup,
+            "dup_reward": dup_reward
+        })
+
+    return {"success": True, "cards": results, "new_attempts": user[0] - amount}
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
