@@ -810,13 +810,14 @@ def add_pass_xp(user_id: int, amount: int):
         c.execute("SELECT pass_level, pass_xp FROM users WHERE id = ?", (user_id,))
         user = c.fetchone()
         if not user:
-            return
+            return {"leveled_up": False, "level": 1, "xp": 0}
 
         pass_level = user[0] if user[0] is not None else 1
         pass_xp = user[1] if user[1] is not None else 0
 
         # Добавляем полученный опыт
         pass_xp += amount
+        leveled_up = False
 
         # Цикл: пока опыта хватает на апп уровня, повышаем уровень!
         while True:
@@ -826,16 +827,20 @@ def add_pass_xp(user_id: int, amount: int):
             if pass_xp >= req_xp:
                 pass_xp -= req_xp  # Забираем опыт за уровень, остаток переносим!
                 pass_level += 1
+                leveled_up = True
             else:
                 break
 
         c.execute("UPDATE users SET pass_level = ?, pass_xp = ? WHERE id = ?", (pass_level, pass_xp, user_id))
         conn.commit()
+        return {"leveled_up": leveled_up, "level": pass_level, "xp": pass_xp}
     except Exception as e:
         import logging
         logging.error(f"Error adding pass xp: {e}")
+        return {"leveled_up": False, "level": 1, "xp": 0}
     finally:
-        conn.close()
+        if 'conn' in locals():
+            conn.close()
 
 
 def check_and_update_quests(uid: int, quest_action: str, amount: int = 1) -> dict:

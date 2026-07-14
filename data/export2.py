@@ -1,18 +1,15 @@
 import json
-from cards import TITLES
+from cards import BGS
 
-titles_list = []
+bgs_list = []
 
-# Перебираем словарь TITLES.
-# Так как здесь значение — это просто строка, мы сами собираем из него словарик
-for title_id, title_name in TITLES.items():
-    titles_list.append({
-        "id": title_id,
-        "name": title_name
-    })
+# Перебираем словарь BGS и добавляем id внутрь словаря фона
+for bg_id, bg_data in BGS.items():
+    bg_data["id"] = bg_id  # сохраняем системное имя (например, admin или lookism_1)
+    bgs_list.append(bg_data)
 
 # Создаем файл для сайта
-with open("title.json", "w", encoding="utf-8") as f:
-    json.dump(titles_list, f, ensure_ascii=False, indent=4)
+with open("bgs.json", "w", encoding="utf-8") as f:
+    json.dump(bgs_list, f, ensure_ascii=False, indent=4)
 
-print("Готово! Файл title.json успешно создан.")
+print("Готово! Файл bgs.json успешно создан.")

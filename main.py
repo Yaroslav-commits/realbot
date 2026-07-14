@@ -26,7 +26,7 @@ from aiogram.enums import ParseMode
 from pydantic import BaseModel
 
 from config import BOT_TOKEN, DB_PATH
-from database.db import init_db, is_premium, pull_random_card, give_card_to_user, add_pass_xp
+from database.db import init_db, is_premium, pull_random_card, give_card_to_user, add_pass_xp, check_and_update_quests
 from data.cards import TITLES
 from handlers import router
 
@@ -208,15 +208,26 @@ async def premium_expiration_scheduler(bot: Bot):
     while True:
         try:
             now = datetime.now()
-            # Берем всех юзеров, у которых установлена дата према
-            users = db_exec_sync("SELECT id, premium_until FROM users WHERE premium_until IS NOT NULL", fetchall=True)
+            # Отсекаем пустые строки и текст 'NULL'/'None' прямо в SQL-запросе
+            query = "SELECT id, premium_until FROM users WHERE premium_until IS NOT NULL AND premium_until != '' AND premium_until != 'NULL' AND premium_until != 'None'"
+            users = db_exec_sync(query, fetchall=True)
 
             if users:
                 for uid, until_str in users:
                     try:
-                        until_dt = datetime.strptime(until_str, "%Y-%m-%d %H:%M:%S")
+                        until_dt = datetime.strptime(until_str.strip(), "%Y-%m-%d %H:%M:%S")
+
+                        # Если дата из прошлого (до 2023 года) — это заглушка '2000-01-01'.
+                        # Игрок никогда не имел премиума. Просто молча сбрасываем и пропускаем.
+                        if until_dt.year < 2023:
+                            db_exec_sync("UPDATE users SET premium_until = NULL WHERE id = ?", (uid,))
+                            continue
+
                         if until_dt < now:
-                            # Срок действия истек!
+                            # ВАЖНО: СНАЧАЛА обнуляем дату в БД, чтобы при любых лагах Телеграма не было спама
+                            db_exec_sync("UPDATE users SET premium_until = NULL WHERE id = ?", (uid,))
+
+                            # Срок действия истек! Уведомляем игрока.
                             try:
                                 await bot.send_message(
                                     uid,
@@ -226,12 +237,10 @@ async def premium_expiration_scheduler(bot: Bot):
                                     parse_mode="HTML"
                                 )
                             except Exception:
-                                pass # Игрок мог заблокировать бота
+                                pass  # Игрок мог заблокировать бота
 
-                            # Обнуляем дату, чтобы уведа пришла только один раз
-                            db_exec_sync("UPDATE users SET premium_until = NULL WHERE id = ?", (uid,))
                     except Exception:
-                        # Если дата кривая (ошибка парсинга), тоже сбрасываем
+                        # Если дата кривая (ошибка парсинга), просто молча сбрасываем
                         db_exec_sync("UPDATE users SET premium_until = NULL WHERE id = ?", (uid,))
 
         except Exception as e:
@@ -1324,7 +1333,7 @@ def pass_claim_level(user_id: int = Depends(authed_user_id)):
         return {"success": False, "error": str(e)}
 
 # =====================================================================
-# НОВАЯ СИСТЕМА МУЛЬТИ-КРУТОК ПО ТЗ (С УЧЕТОМ ПРЕМИУМА И CARDS.PY)
+# НОВАЯ СИСТЕМА МУЛЬТИ-КРУТОК ПО ТЗ (С ПРЕМИУМОМ, ОПЫТОМ И КВЕСТАМИ)
 # =====================================================================
 class MultiSummonRequest(BaseModel):
     amount: int
@@ -1346,24 +1355,26 @@ def multi_summon_api(req: MultiSummonRequest, user_id: int = Depends(authed_user
     # Списываем ровно то количество попыток, которое открываем
     db_exec_sync("UPDATE users SET attempts = attempts - ? WHERE id = ?", (amount, user_id))
 
-    # 🔥 ПРОВЕРЯЕМ ПРЕМИУМ ИГРОКА!
     is_prem = is_premium(user_id)
+    mythic_count = 0  # Считаем мифические карты для квеста
 
     results = []
     for _ in range(amount):
-        # 1. Генерируем карту (ТЕПЕРЬ ПРЕМИУМ ШАНС ИЗ CARDS.PY РАБОТАЕТ ИДЕАЛЬНО)
         card_id = pull_random_card(uid=user_id, premium=is_prem)
         card_data = CARDS.get(card_id, {})
+
+        # Проверяем на мифическую для квеста
+        if 'Мифич' in card_data.get('rarity', ''):
+            mythic_count += 1
 
         is_dup = False
         dup_reward = 0
 
-        # 2. Проверяем, есть ли уже такая карта в инвентаре
+        # Проверяем на дубликат
         existing = db_exec_sync("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (user_id, card_id),
                                 fetch=True)
 
         if existing:
-            # Дубликат: даем KRW в зависимости от редкости
             is_dup = True
             r_name = card_data.get('rarity', 'Обычная ⚪️')
             dup_range = RARITIES.get(r_name, {}).get("dup", (10, 20))
@@ -1371,10 +1382,8 @@ def multi_summon_api(req: MultiSummonRequest, user_id: int = Depends(authed_user
 
             db_exec_sync("UPDATE users SET krw = krw + ? WHERE id = ?", (dup_reward, user_id))
         else:
-            # Выдаем новую карту игроку
             give_card_to_user(user_id, card_id)
 
-        # 4. Сохраняем результат для 3D анимации во фронтенде
         results.append({
             "id": card_id,
             "name": card_data.get("name", "Unknown"),
@@ -1383,6 +1392,17 @@ def multi_summon_api(req: MultiSummonRequest, user_id: int = Depends(authed_user
             "is_dup": is_dup,
             "dup_reward": dup_reward
         })
+
+    # 🔥 НАЧИСЛЕНИЕ ОПЫТА И КВЕСТОВ 🔥
+    # 1. Даем по 10 опыта за каждую открытую карту
+    add_pass_xp(user_id, amount * 10)
+
+    # 2. Засчитываем количество круток в квесты (q_15_pulls)
+    check_and_update_quests(user_id, 'q_15_pulls', amount)
+
+    # 3. Если выпали мифические, засчитываем квест (q_1_mythic)
+    if mythic_count > 0:
+        check_and_update_quests(user_id, 'q_1_mythic', mythic_count)
 
     return {"success": True, "cards": results, "new_attempts": user[0] - amount}
 
