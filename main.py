@@ -1252,25 +1252,68 @@ def pass_claim_level(user_id: int = Depends(authed_user_id)):
         if claimed_level >= real_level:
             return {"success": False, "error": "Нет доступных наград за уровни!"}
 
+        target_level = claimed_level + 1
+
         # Отмечаем, что забрали один уровень
         db_exec_sync("UPDATE users SET claimed_pass_levels = claimed_pass_levels + 1 WHERE id = ?", (user_id,))
 
-        # Логика шансов: 70% KRW, 25% BattleCoin, 5% Алмазы
+        # Логика шансов остается прежней: 70% KRW, 25% BattleCoin, 5% Алмазы
         reward_type = random.choices(['krw', 'bc', 'dia'], weights=[70, 25, 5], k=1)[0]
+
+        # Таблица наград по уровням (до 30 уровня)
+        rewards_map = {
+            2: {'krw': (30, 35), 'dia': (2, 3), 'bc': (10, 25)},
+            3: {'krw': (30, 35), 'dia': (2, 3), 'bc': (20, 25)},
+            4: {'krw': (35, 35), 'dia': (2, 3), 'bc': (25, 25)},
+            5: {'krw': (35, 50), 'dia': (2, 3), 'bc': (25, 30)},
+            6: {'krw': (35, 50), 'dia': (2, 3), 'bc': (25, 30)},
+            7: {'krw': (50, 50), 'dia': (2, 3), 'bc': (35, 35)},
+            8: {'krw': (50, 65), 'dia': (2, 3), 'bc': (25, 30)},
+            9: {'krw': (50, 65), 'dia': (2, 3), 'bc': (25, 30)},
+            10: {'krw': (65, 65), 'dia': (2, 3), 'bc': (50, 50)},
+            11: {'krw': (65, 70), 'dia': (2, 3), 'bc': (30, 30)},
+            12: {'krw': (65, 75), 'dia': (2, 3), 'bc': (25, 35)},
+            13: {'krw': (65, 75), 'dia': (2, 3), 'bc': (25, 35)},
+            14: {'krw': (75, 75), 'dia': (2, 3), 'bc': (50, 50)},
+            15: {'krw': (75, 80), 'dia': (2, 3), 'bc': (25, 35)},
+            16: {'krw': (80, 80), 'dia': (2, 3), 'bc': (35, 35)},
+            17: {'krw': (80, 85), 'dia': (2, 3), 'bc': (30, 35)},
+            18: {'krw': (85, 85), 'dia': (2, 3), 'bc': (40, 40)},
+            19: {'krw': (85, 90), 'dia': (2, 3), 'bc': (30, 35)},
+            20: {'krw': (90, 90), 'dia': (2, 3), 'bc': (50, 50)},
+            21: {'krw': (90, 95), 'dia': (2, 3), 'bc': (35, 40)},
+            22: {'krw': (95, 95), 'dia': (2, 3), 'bc': (40, 40)},
+            23: {'krw': (95, 100), 'dia': (2, 3), 'bc': (35, 40)},
+            24: {'krw': (100, 100), 'dia': (2, 3), 'bc': (45, 45)},
+            25: {'krw': (100, 110), 'dia': (2, 3), 'bc': (35, 45)},
+            26: {'krw': (110, 110), 'dia': (2, 3), 'bc': (45, 45)},
+            27: {'krw': (110, 120), 'dia': (2, 3), 'bc': (40, 45)},
+            28: {'krw': (120, 130), 'dia': (2, 3), 'bc': (45, 45)},
+            29: {'krw': (130, 140), 'dia': (2, 3), 'bc': (45, 50)},
+            30: {'krw': (150, 150), 'dia': (2, 3), 'bc': (50, 50)}
+        }
+
+        # После 30-го уровня награды стабильно высокие
+        if target_level > 30:
+            r_krw, r_dia, r_bc = (200, 300), (2, 8), (75, 175)
+        else:
+            r_krw = rewards_map[target_level]['krw']
+            r_dia = rewards_map[target_level]['dia']
+            r_bc = rewards_map[target_level]['bc']
 
         amount = 0
         reward_text = ""
 
         if reward_type == 'krw':
-            amount = random.randint(150, 250)
+            amount = random.randint(r_krw[0], r_krw[1])
             db_exec_sync("UPDATE users SET krw = krw + ? WHERE id = ?", (amount, user_id))
             reward_text = f"{amount} 💴 KRW"
         elif reward_type == 'bc':
-            amount = random.randint(50, 100)
+            amount = random.randint(r_bc[0], r_bc[1])
             db_exec_sync("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (amount, user_id))
             reward_text = f"{amount} 🪙 BattleCoin"
         else:
-            amount = random.randint(2, 6)
+            amount = random.randint(r_dia[0], r_dia[1])
             db_exec_sync("UPDATE users SET diamond = diamond + ? WHERE id = ?", (amount, user_id))
             reward_text = f"{amount} 💎 Алмазов"
 

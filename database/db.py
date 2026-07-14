@@ -803,35 +803,39 @@ def generate_new_quests(uid: int):
     return user_quests
 
 
-def add_pass_xp(uid: int, amount: int) -> dict:
-    """
-    Добавляет XP пользователю. Если XP >= 3000, повышает уровень.
-    """
-    user = db_exec("SELECT pass_xp, pass_level FROM users WHERE id = ?", (uid,), fetch=True)
-    if not user:
-        return {"leveled_up": False, "xp": 0, "level": 1}
+def add_pass_xp(user_id: int, amount: int):
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=5.0)
+        c = conn.cursor()
+        c.execute("SELECT pass_level, pass_xp FROM users WHERE id = ?", (user_id,))
+        user = c.fetchone()
+        if not user:
+            return
 
-    current_xp = user[0] or 0
-    current_level = user[1] or 1
+        pass_level = user[0] if user[0] is not None else 1
+        pass_xp = user[1] if user[1] is not None else 0
 
-    new_xp = current_xp + amount
-    leveled_up = False
-    levels_gained = 0
+        # Добавляем полученный опыт
+        pass_xp += amount
 
-    while new_xp >= 3000:
-        new_xp -= 3000
-        current_level += 1
-        levels_gained += 1
-        leveled_up = True
+        # Цикл: пока опыта хватает на апп уровня, повышаем уровень!
+        while True:
+            # Требование опыта зависит от уровня
+            req_xp = (pass_level + 1) * 100 if pass_level < 30 else 3000
 
-    db_exec("UPDATE users SET pass_xp = ?, pass_level = ? WHERE id = ?", (new_xp, current_level, uid))
+            if pass_xp >= req_xp:
+                pass_xp -= req_xp  # Забираем опыт за уровень, остаток переносим!
+                pass_level += 1
+            else:
+                break
 
-    return {
-        "leveled_up": leveled_up,
-        "levels_gained": levels_gained,
-        "xp": new_xp,
-        "level": current_level
-    }
+        c.execute("UPDATE users SET pass_level = ?, pass_xp = ? WHERE id = ?", (pass_level, pass_xp, user_id))
+        conn.commit()
+    except Exception as e:
+        import logging
+        logging.error(f"Error adding pass xp: {e}")
+    finally:
+        conn.close()
 
 
 def check_and_update_quests(uid: int, quest_action: str, amount: int = 1) -> dict:
