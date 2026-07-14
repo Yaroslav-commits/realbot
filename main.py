@@ -504,7 +504,7 @@ def get_profile(user_id: int):
 
         # Извлекаем все необходимые данные пользователя одним запросом (включая Пасс и Квесты)
         user = db_exec_sync(
-            "SELECT diamond, krw, battlecoin, wins, losses, max_streak, active_title, active_bg, pass_level, pass_xp, claimed_pass_levels, pass_quests FROM users WHERE id = ?",
+            "SELECT diamond, krw, battlecoin, wins, losses, max_streak, active_title, active_bg, pass_level, pass_xp, claimed_pass_levels, pass_quests, attempts FROM users WHERE id = ?",
             (user_id,), fetch=True
         )
         if not user:
@@ -587,6 +587,7 @@ def get_profile(user_id: int):
             "diamond": user[0],
             "krw": user[1],
             "battlecoin": user[2],
+            "attempts": user[12] if len(user) > 12 else 0,
             "is_premium": is_prem,
             "owned_cards": owned_cards,
             "daily_day": daily_day,
@@ -613,6 +614,41 @@ def get_profile(user_id: int):
                 "owned_cards": [], "daily_day": 0, "can_claim_daily": False,
                 "wins": 0, "losses": 0, "winrate": 0, "max_streak": 0,
                 "active_title": None, "fav_cards": {}, "unlocked_titles": []}
+
+class MultiSummonRequest(BaseModel):
+    amount: int
+
+@app.post("/api/multi_summon/{user_id}")
+def multi_summon_api(user_id: int, req: MultiSummonRequest, _: int = Depends(authed_user_id)):
+    amount = req.amount
+    valid_amounts = [1, 2, 4, 8, 12, 16]
+
+    if amount not in valid_amounts:
+        return {"success": False, "error": "Неверное количество круток"}
+
+    # Проверяем, сколько попыток (attempts) у игрока
+    user = db_exec_sync("SELECT attempts FROM users WHERE id = ?", (user_id,), fetch=True)
+    if not user or user[0] < amount:
+        return {"success": False, "error": f"Недостаточно попыток! Нужно: {amount}, у вас: {user[0] if user else 0}"}
+
+    # Списываем ровно то количество попыток, которое открываем
+    db_exec_sync("UPDATE users SET attempts = attempts - ? WHERE id = ?", (amount, user_id))
+
+    results = []
+    for _ in range(amount):
+        # Твоя функция из db.py уже учитывает премиум-шансы и штраф х10 для карт с 100 статами!
+        card_id, is_dup, dup_reward = give_card_to_user(user_id)
+        card_data = CARDS.get(card_id, {})
+        results.append({
+            "id": card_id,
+            "name": card_data.get("name", "Unknown"),
+            "rarity": card_data.get("rarity", "Обычная ⚪️"),
+            "file": card_data.get("file", ""),
+            "is_dup": is_dup,
+            "dup_reward": dup_reward
+        })
+
+    return {"success": True, "cards": results, "new_attempts": user[0] - amount}
 
 # Модели для запросов
 class FavPayload(BaseModel):

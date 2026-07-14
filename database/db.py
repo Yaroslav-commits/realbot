@@ -518,7 +518,7 @@ def _card_pull_weight(card: dict) -> float:
     elif any(s == 99 for s in stats):
         weight *= 0.15
     elif any(s == 90 for s in stats):
-        weight *= 0.20
+        weight *= 0.25
 
     if total >= 285:
         weight *= 0.40
