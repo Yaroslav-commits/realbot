@@ -1422,19 +1422,6 @@ async def finish_game(gid, bot):
         n2_raw = get_user(p2)[2]
         n2_link = f"<a href='tg://user?id={p2}'>{n2_raw}</a>"
 
-    # === ИВЕНТ: НАГРАДА ЗА БОЙ ===
-    from database.db import add_event_item
-    cocktail_p1 = random.randint(5, 9)
-    add_event_item(p1, "cocktail", cocktail_p1)
-    ev_txt1 = f"\n🍹 Коктейль: +{cocktail_p1}"
-
-    ev_txt2 = ""
-    if p2 != -1:
-        cocktail_p2 = random.randint(5, 9)
-        add_event_item(p2, "cocktail", cocktail_p2)
-        ev_txt2 = f"\n🍹 Коктейль: +{cocktail_p2}"
-    # =============================
-
     # --- КРАСИВЫЕ СООБЩЕНИЯ О ЗАВЕРШЕНИИ ---
     score_text = f"📊 Финальный счет: <b>{s1} - {s2}</b>"
 
@@ -1456,8 +1443,8 @@ async def finish_game(gid, bot):
             title1 = f"🤝 <b>НИЧЬЯ.</b>\nДостойная битва двух равных соперников против {n2_link}."
             title2 = f"🤝 <b>НИЧЬЯ.</b>\nДостойная битва двух равных соперников против {n1_link}."
 
-    msg1 = f"{title1}\n\n{score_text}\n<b>🎁 Награда:</b> {r1[0]} 🏅, {r1[1]} 🪙{ev_txt1}"
-    msg2 = f"{title2}\n\n{score_text}\n<b>🎁 Награда:</b> {r2[0]} 🏅, {r2[1]} 🪙{ev_txt2}"
+    msg1 = f"{title1}\n\n{score_text}\n<b>🎁 Награда:</b> {r1[0]} 🏅, {r1[1]} 🪙"
+    msg2 = f"{title2}\n\n{score_text}\n<b>🎁 Награда:</b> {r2[0]} 🏅, {r2[1]} 🪙"
 
     try:
         await bot.send_message(p1, msg1, parse_mode="HTML")
