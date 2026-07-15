@@ -1371,6 +1371,11 @@ async def process_gift_answer(cq: CallbackQuery, bot: Bot):
 
         await cq.answer("Фон успешно получен!")
 
+
+# =========================================================
+# 🃏 КОМАНДА /card И ДЕМОНСТРАЦИЯ ОБЛИКОВ С СТАТИСТИКОЙ
+# =========================================================
+
 @router.message(Command("card"))
 async def cmd_card_info(msg: types.Message):
     # Разбиваем сообщение, чтобы получить название или ID карты
@@ -1445,6 +1450,15 @@ async def cmd_card_info(msg: types.Message):
         f"🧬 {is_exclusive}\n"
         f"♻️ Количество карт в боте: {count}</blockquote>"
     )
+
+    # Строим кнопки переключения обликов
+    builder_skins = InlineKeyboardBuilder()
+    if card_id in AWAKENED_SKIN:
+        builder_skins.button(text="Чекнуть Скин 💠", callback_data=f"chk_skin:aw:{card_id}")
+    if card_id in ABSOLUTE_SKIN:
+        builder_skins.button(text="Чекнуть Скин 🔮", callback_data=f"chk_skin:ab:{card_id}")
+    builder_skins.adjust(1)
+
     try:
         if "video" in card_data:
             from media_cache import send_cached_video
@@ -1455,17 +1469,23 @@ async def cmd_card_info(msg: types.Message):
                 caption=text,
                 width=card_data.get("width", 960),
                 height=card_data.get("height", 960),
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=builder_skins.as_markup() if (
+                            card_id in AWAKENED_SKIN or card_id in ABSOLUTE_SKIN) else None
             )
         else:
             from aiogram.types import FSInputFile
             await msg.answer_photo(
                 photo=FSInputFile(f"images/cards/{card_data.get('file', 'default.png')}"),
                 caption=text,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=builder_skins.as_markup() if (
+                            card_id in AWAKENED_SKIN or card_id in ABSOLUTE_SKIN) else None
             )
     except Exception:
-        await msg.answer(text, parse_mode="HTML")
+        await msg.answer(text, parse_mode="HTML", reply_markup=builder_skins.as_markup() if (
+                    card_id in AWAKENED_SKIN or card_id in ABSOLUTE_SKIN) else None)
+
 
 @router.callback_query(F.data.startswith("c_inf:"))
 async def cb_card_info(call: types.CallbackQuery):
@@ -1506,6 +1526,14 @@ async def cb_card_info(call: types.CallbackQuery):
         f"♻️ Количество карт в боте: {count}</blockquote>"
     )
 
+    # Строим кнопки переключения обликов
+    builder_skins = InlineKeyboardBuilder()
+    if card_id in AWAKENED_SKIN:
+        builder_skins.button(text="Чекнуть Скин 💠", callback_data=f"chk_skin:aw:{card_id}")
+    if card_id in ABSOLUTE_SKIN:
+        builder_skins.button(text="Чекнуть Скин 🔮", callback_data=f"chk_skin:ab:{card_id}")
+    builder_skins.adjust(1)
+
     try:
         if "video" in card_data:
             from media_cache import send_cached_video
@@ -1516,19 +1544,176 @@ async def cb_card_info(call: types.CallbackQuery):
                 caption=text,
                 width=card_data.get("width", 960),
                 height=card_data.get("height", 960),
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=builder_skins.as_markup() if (
+                            card_id in AWAKENED_SKIN or card_id in ABSOLUTE_SKIN) else None
             )
         else:
             from aiogram.types import FSInputFile
             await call.message.answer_photo(
                 photo=FSInputFile(f"images/cards/{card_data.get('file', 'default.png')}"),
                 caption=text,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=builder_skins.as_markup() if (
+                            card_id in AWAKENED_SKIN or card_id in ABSOLUTE_SKIN) else None
             )
     except Exception:
-        await call.message.answer(text, parse_mode="HTML")
+        await call.message.answer(text, parse_mode="HTML", reply_markup=builder_skins.as_markup() if (
+                    card_id in AWAKENED_SKIN or card_id in ABSOLUTE_SKIN) else None)
 
     await call.answer()
+
+
+@router.callback_query(F.data.startswith("chk_skin:"))
+async def chk_skin_callback(cq: CallbackQuery):
+    parts = cq.data.split(":")
+    stype = parts[1]
+    cid = parts[2]
+
+    c = CARDS.get(cid)
+    if not c:
+        return await cq.answer("Карта не найдена.", show_alert=True)
+
+    bld = InlineKeyboardBuilder()
+
+    # Смена медиа обратно на базовую боевую карту
+    if stype == "base":
+        count_res = db_exec("""
+            SELECT 
+                (SELECT COUNT(*) FROM cards_inv WHERE card_id = ?) + 
+                (SELECT COUNT(*) FROM cards_stash WHERE card_id = ?)
+        """, (cid, cid), fetch=True)
+        count = count_res[0] if count_res and count_res[0] is not None else 0
+
+        from data.cards import EVENT_CARDS_LIST
+
+        if cid in EVENT_CARDS_LIST:
+            is_exclusive = "Ивентовая 🪎"
+        elif c.get("exclusive"):
+            is_exclusive = "Лимитированная ✨"
+        else:
+            is_exclusive = "Стандартная 🧿"
+
+        txt = (
+            f"🃏 Боевая карта: {c.get('name', 'Неизвестно')}\n"
+            f"<blockquote>🔮 Редкость: {c.get('rarity', 'Неизвестно')}\n"
+            f"👊 Стиль боя: {c.get('style', 'Неизвестно')}\n"
+            f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n"
+            f"⚡️ Скорость: {c.get('speed', 0)}\n"
+            f"💪 Сила: {c.get('strength', 0)}\n"
+            f"🧠 Интеллект: {c.get('intellect', 0)}\n"
+            f"🧬 {is_exclusive}\n"
+            f"♻️ Количество карт в боте: {count}</blockquote>"
+        )
+        if cid in AWAKENED_SKIN:
+            bld.button(text="Чекнуть Скин 💠", callback_data=f"chk_skin:aw:{cid}")
+        if cid in ABSOLUTE_SKIN:
+            bld.button(text="Чекнуть Скин 🔮", callback_data=f"chk_skin:ab:{cid}")
+        bld.adjust(1)
+
+        is_video = "video" in c
+        asset_path = f"images/cards/{c['video']}" if is_video else f"images/cards/{c.get('file', 'default.png')}"
+
+        try:
+            if is_video:
+                await cq.message.edit_media(
+                    media=types.InputMediaVideo(
+                        media=FSInputFile(asset_path), caption=txt, parse_mode="HTML",
+                        width=c.get("width", 960), height=c.get("height", 960), supports_streaming=True
+                    ),
+                    reply_markup=bld.as_markup()
+                )
+            else:
+                await cq.message.edit_media(
+                    media=types.InputMediaPhoto(
+                        media=FSInputFile(asset_path), caption=txt, parse_mode="HTML"
+                    ),
+                    reply_markup=bld.as_markup()
+                )
+        except Exception:
+            pass
+
+    # Переключение на Пробужденный облик (Фото)
+    elif stype == "aw":
+        count_skin_res = db_exec("SELECT COUNT(*) FROM skins_inv WHERE card_id = ? AND skin_type = 'awakened'", (cid,),
+                                 fetch=True)
+        count_skin = count_skin_res[0] if count_skin_res else 0
+
+        asset_path = f"images/cards/{AWAKENED_SKIN[cid]['skin_art_file']}"
+        txt = (
+            f"💠 <b>Пробужденный скин · {c.get('name', 'Неизвестно')}</b>\n"
+            f"━━━━━━━━━━━━━━━━━\n"
+            f"<blockquote>🔮 Редкость базовой карты: {c.get('rarity', 'Неизвестно')}\n"
+            f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n"
+            f"♻️ Количество скина в боте: {count_skin}</blockquote>"
+        )
+        bld.button(text="Вернуть Карту 🃏", callback_data=f"chk_skin:base:{cid}")
+        if cid in ABSOLUTE_SKIN:
+            bld.button(text="Чекнуть Скин 🔮", callback_data=f"chk_skin:ab:{cid}")
+        bld.adjust(1)
+
+        try:
+            await cq.message.edit_media(
+                media=types.InputMediaPhoto(
+                    media=FSInputFile(asset_path), caption=txt, parse_mode="HTML"
+                ),
+                reply_markup=bld.as_markup()
+            )
+        except Exception:
+            pass
+
+    # Переключение на Абсолютный облик (Видео)
+    elif stype == "ab":
+        count_skin_res = db_exec("SELECT COUNT(*) FROM skins_inv WHERE card_id = ? AND skin_type = 'absolute'", (cid,),
+                                 fetch=True)
+        count_skin = count_skin_res[0] if count_skin_res else 0
+
+        video_file = ABSOLUTE_SKIN[cid].get('skin_video_file', '')
+        asset_path = f"images/cards/{video_file}"
+
+        # Проверяем, загружен ли медиа-файл как file_id с серверов или как локальный файл
+        is_video = ("." in video_file and video_file.split(".")[-1].lower() in ["mp4", "mov", "avi", "webm",
+                                                                                "mkv"]) or len(video_file) > 20
+
+        txt = (
+            f"🔮 <b>Абсолютный скин · {c.get('name', 'Неизвестно')}</b>\n"
+            f"━━━━━━━━━━━━━━━━━\n"
+            f"<blockquote>🔮 Редкость базовой карты: {c.get('rarity', 'Неизвестно')}\n"
+            f"🪐 Вселенная: {c.get('series', 'Неизвестно')}\n"
+            f"♻️ Количество скина в боте: {count_skin}</blockquote>"
+        )
+        bld.button(text="Вернуть Карту 🃏", callback_data=f"chk_skin:base:{cid}")
+        if cid in AWAKENED_SKIN:
+            bld.button(text="Чекнуть Скин 💠", callback_data=f"chk_skin:aw:{cid}")
+        bld.adjust(1)
+
+        # Хелпер для динамической подгрузки file_id или FSInputFile
+        def get_media_src(path: str):
+            filename = path.split("/")[-1]
+            if "." not in filename and len(filename) > 20:
+                return filename
+            return FSInputFile(path)
+
+        try:
+            if is_video:
+                await cq.message.edit_media(
+                    media=types.InputMediaVideo(
+                        media=get_media_src(asset_path), caption=txt, parse_mode="HTML",
+                        width=c.get("width", 960), height=c.get("height", 1280), supports_streaming=True
+                    ),
+                    reply_markup=bld.as_markup()
+                )
+            else:
+                await cq.message.edit_media(
+                    media=types.InputMediaPhoto(
+                        media=get_media_src(asset_path), caption=txt, parse_mode="HTML"
+                    ),
+                    reply_markup=bld.as_markup()
+                )
+        except Exception:
+            pass
+
+    await cq.answer()
 
 
 # ============ ФОНЫ (/fon) ============

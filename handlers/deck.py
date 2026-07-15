@@ -595,8 +595,8 @@ async def card_skins_menu(cq: CallbackQuery):
     owned_skins = {st: bool(ia) for st, ia in user_skins}
 
     txt = (
-        f"🎭 <b>ГАРДЕРОБ ОБЛИКОВ</b> 🎭\n"
-        f"🃏 Карта: <code>{c['name']}</code>\n"
+        f"🎭 <b>Гардероб Скинов</b> 🎭\n"
+        f"🃏 <b>Карта:</b> {c['name']}\n"
         f"<i>Выбранный облик моментально применяется везде, где отображается ваша карта.</i>\n\n"
     )
     bld = InlineKeyboardBuilder()
@@ -698,8 +698,8 @@ async def skin_action(cq: CallbackQuery):
             bld.adjust(1)
 
             txt = (
-                f"🎭 <b>ПРОСМОТР ОБЛИКА</b>\n\n"
-                f"🃏 Карта: <b>{c['name']}</b>\n"
+                f"🎭 <b>ПРОСМОТР СКИНА</b>\n\n"
+                f"🃏 <b>Карта:</b> {c['name']}\n"
                 f"Тип: {'💠 Пробужденный' if skin_type == 'awakened' else '🔮 Абсолютный'}\n\n"
                 f"Статус: {'🟢 <b>Надет</b>' if is_active else '🟡 <b>Доступен</b>'}"
             )
@@ -729,8 +729,8 @@ async def skin_action(cq: CallbackQuery):
         bld.adjust(1)
 
         txt = (
-            f"🎭 <b>ПРОСМОТР ОБЛИКА</b>\n\n"
-            f"🃏 Карта: <b>{c['name']}</b>\n"
+            f"🎭 <b>ПРОСМОТР СКИНА</b>\n\n"
+            f"🃏 <b>Карта:</b> {c['name']}\n"
             f"Тип: {'💠 Пробужденный' if skin_type == 'awakened' else '🔮 Абсолютный'}\n\n"
             f"Статус: {'🟢 <b>Надет</b>' if is_active else '🟡 <b>Доступен</b>'}"
         )
