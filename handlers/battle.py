@@ -2468,6 +2468,23 @@ async def b_bet_play_cb(cq: CallbackQuery):
             streak += 1
             _save_bet(uid, streak, bet)
 
+            # 🔥 НОВАЯ ЛОГИКА: Выполняем квест, если игрок сделал стрик из 3 побед
+            if streak == 3:
+                q_res = check_and_update_quests(uid, 'q_3_bet_wins', 1)
+                if q_res and q_res.get("leveled_up"):
+                    try:
+                        await cq.bot.send_message(
+                            uid,
+                            f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                            f"Требования выполнены.\n"
+                            f"Ваш уровень ManhwCard Pass повышен!\n"
+                            f"Текущий уровень: <b>{q_res['level']}</b>.\n\n"
+                            f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                            parse_mode="HTML"
+                        )
+                    except:
+                        pass
+
             jackpot_bonus = 0
             if random.random() < 0.01:
                 jackpot_bonus = 100

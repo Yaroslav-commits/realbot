@@ -757,7 +757,7 @@ ALL_QUESTS_POOL = {
     "q_4_packs": {"name": "Купить 4 Боевых Паков в BattleShop", "target": 4, "xp": 450},
     "q_1_exchange": {"name": "Совершить обмен Алмазов на BattleCoin 1 раз", "target": 1, "xp": 250},
     "q_20_bets": {"name": "Сделай 20 ставок в мини-играх", "target": 20, "xp": 350},
-    "q_3_bet_wins": {"name": "Сделать серию из 3-х побед подряд в Ставках", "target": 3, "xp": 300},
+    "q_3_bet_wins": {"name": "Сделать серию из 3-х побед подряд в Ставках", "target": 1, "xp": 300},
     "q_3_trades": {"name": "Успешно завершить 3 обмена картами с другими игроками", "target": 3, "xp": 100},
     "q_2_invites": {"name": "Пригласи двух друзей по рефералу", "target": 2, "xp": 350},
     "q_3_epic_packs": {"name": "Откройте 3 эпических пака", "target": 3, "xp": 150}
@@ -904,3 +904,30 @@ def swap_skins(uid1: int, cid1: str, uid2: int, cid2: str, skin_type: str) -> bo
             (uid2, cid1, skin_type))
 
     return True
+
+
+async def notify_pass_levelup(uid: int, bot, *results):
+    """
+    Универсальная функция: проверяет результаты выдачи XP/квестов
+    и если игрок апнул уровень — отправляет ему красивое уведомление.
+    """
+    leveled_up = False
+    new_level = 1
+
+    for res in results:
+        if res and res.get("leveled_up"):
+            leveled_up = True
+            new_level = max(new_level, res.get("level", 1))
+
+    if leveled_up:
+        try:
+            await bot.send_message(
+                uid,
+                f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                f"Уровень ManhwCard Pass повышен!\n"
+                f"Текущий уровень: <b>{new_level}</b>.\n\n"
+                f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass

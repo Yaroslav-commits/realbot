@@ -27,7 +27,8 @@ from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         AWAKENED_SKIN, ABSOLUTE_SKIN)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user,
-                         get_active_skin, get_user_skins_for_card, equip_skin, get_all_user_skins_by_type, swap_skins, unequip_skin)
+                         get_active_skin, get_user_skins_for_card, equip_skin, get_all_user_skins_by_type, swap_skins, unequip_skin,
+                         check_and_update_quests, notify_pass_levelup)
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 from media_cache import send_cached_video
@@ -1422,28 +1423,20 @@ async def trade_p1_final(cq: CallbackQuery):
         # === MANHWCARD PASS: ТИХОЕ ОБНОВЛЕНИЕ ЗАДАНИЯ НА ТРЕЙДЫ ===
         from database.db import check_and_update_quests
 
+        # Если ты добавил notify_pass_levelup в db.py, не забудь её импортировать!
+        # from database.db import notify_pass_levelup
+
         # Получатель — это тот, кто нажал кнопку согласия (cq.from_user.id)
         # Отправитель — это sender_id, который инициировал трейд
         receiver_id = cq.from_user.id
 
-        # Обновляем прогресс квеста "q_3_trades" для обоих игроков
-        for uid in (sender_id, receiver_id):
-            q_res = check_and_update_quests(uid, "trades", 1)
+        # Обновляем прогресс квеста "q_3_trades" (или "trades") для обоих игроков
+        q_res1 = check_and_update_quests(sender_id, "trades", 1)
+        q_res2 = check_and_update_quests(receiver_id, "trades", 1)
 
-            # Если выполнение квеста привело к повышению уровня в ManhwCard Pass
-            if q_res["leveled_up"]:
-                try:
-                    await cq.bot.send_message(
-                        uid,
-                        f"⚡️ <b>[СИСТЕМА]</b>\n\n"
-                        f"Требования выполнены.\n"
-                        f"Ваш уровень ManhwCard Pass повышен!\n"
-                        f"Текущий уровень: <b>{q_res['level']}</b>.\n\n"
-                        f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
-                        parse_mode="HTML"
-                    )
-                except:
-                    pass
+        # Наша универсальная функция сама проверит, апнулся ли уровень, и отправит красивое уведомление!
+        await notify_pass_levelup(sender_id, cq.bot, q_res1)
+        await notify_pass_levelup(receiver_id, cq.bot, q_res2)
                 
 @router.callback_query(F.data.startswith("trade_decline:"))
 async def trade_decline(cq: CallbackQuery):

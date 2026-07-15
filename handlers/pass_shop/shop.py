@@ -41,7 +41,7 @@ IMG_LEG_PACK  = FSInputFile("images/shop/pack_leg.jpeg")
 IMG_EPIC_PACK = FSInputFile("images/shop/pack_epic.jpeg")
 
 # Картинка Евента
-EVENT_IMG = FSInputFile("images/shop/event.jpg")
+EVENT_IMG = FSInputFile("images/shop/event.jpeg")
 
 # Карты из них будут падать в паке "Свежие Вселенные"
 LATEST_UNIVERSES = [
