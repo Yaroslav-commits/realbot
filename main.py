@@ -63,7 +63,7 @@ ADMIN_IDS = {MODERATION_CHAT_ID}
 REWARDS = {
     "subscribe": {"krw": 1000, "dia": 5},    # подписка на канал (Партнёры)
     "boost":     {"krw": 2000, "dia": 10},   # буст канала (раз в 7 дней)
-    "tiktok":    {"krw": 3000, "dia": 10},   # TikTok-видео (после модерации)
+    "tiktok":    {"krw": 4000, "dia": 10},   # TikTok-видео (после модерации)
     "story":     {"krw": 3000, "dia": 5},    # Сторис (после модерации)
 }
 BOOST_COOLDOWN_DAYS = 7
@@ -1089,7 +1089,7 @@ async def moderate_submission(cq: CallbackQuery):
             await BOT_INSTANCE.send_message(
                 uid,
                 f"✅ <b>Твоя заявка одобрена!</b>\n\nНачислено: "
-                f"{r.get('krw', 0)} ₩ + {r.get('dia', 0)} 💎"
+                f"{r.get('krw', 0)} KRW 💴 + {r.get('dia', 0)} 💎"
             )
         except Exception:
             pass
