@@ -2899,6 +2899,7 @@ async def update_refs_cmd(msg: types.Message):
 
     await msg.answer(f"✅ Успешно обновлено {count} кодов! Теперь у всех уникальные ссылки из букв.")
 
+
 # ================== ПЛАНИРОВЩИК УВЕДОМЛЕНИЙ ==================
 
 async def cooldown_notification_scheduler(bot: Bot):
@@ -2932,16 +2933,24 @@ async def cooldown_notification_scheduler(bot: Bot):
                 if (now - last_get).total_seconds() < cd_hours * 3600:
                     continue
 
+                # 🔥 ИСПРАВЛЕНИЕ: Сначала отмечаем в БД. Если БД висит/сломалась во время краша сервера — отменяем отправку.
+                try:
+                    mark_cooldown_notified(uid)
+                except Exception as db_err:
+                    logging.error(f"БД заблокирована или ошибка при отметке кулдауна крутки {uid}: {db_err}")
+                    continue  # Переходим к следующему юзеру, сообщение НЕ отправляем
+
                 try:
                     await bot.send_message(
                         uid,
                         "🎴 Крутка восстановлена! Ты можешь получить новую карту."
                     )
-                    mark_cooldown_notified(uid)
                 except Exception:
-                    pass
+                    pass  # Игрок заблокировал бота или другая ошибка Telegram API
+
         except Exception as e:
             logging.error(f"Cooldown scheduler error: {e}")
+
         await asyncio.sleep(60)
 
 
@@ -2974,17 +2983,26 @@ async def battle_cooldown_notification_scheduler(bot: Bot):
                 # Кулдаун для Premium — 30 минут (0.5 часа)
                 if (now - last_battle).total_seconds() < 0.5 * 3600:
                     continue
+
+                # 🔥 ИСПРАВЛЕНИЕ: Аналогичный предохранитель от спама для боев
+                try:
+                    mark_battle_cooldown_notified(uid)
+                except Exception as db_err:
+                    logging.error(f"БД заблокирована или ошибка при отметке кулдауна боя {uid}: {db_err}")
+                    continue
+
                 try:
                     await bot.send_message(
                         uid,
                         "⚔️ Вы снова можете сражаться на Поле Битвы!\n"
                         "Отправляйтесь в бой и покажите свою силу."
                     )
-                    mark_battle_cooldown_notified(uid)
                 except Exception:
                     pass
+
         except Exception as e:
             logging.error(f"Battle cooldown scheduler error: {e}")
+
         await asyncio.sleep(60)
 
 
