@@ -1835,7 +1835,7 @@ async def b_shop_main_cb(cq: CallbackQuery):
 # === ВСТАВИТЬ В НАЧАЛО battle.py ПОСЛЕ ИМПОРТОВ ===
 PACK_CARD = "lim_sae_jun"
 PACK_DEFOLT_CARD = "nabirose"
-PACK_BG1 = "sanny"
+PACK_BG1 = "golden_hours"
 PACK_BG2 = "lookism_summer"
 PACK_TITLE = "title_pack3"
 # Переключатель выдачи карты за ТОП-20 (True - выдавать, False - временно отключено)
@@ -1932,7 +1932,7 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         # Логика шансов с учетом тумблера
         if ENABLE_SECOND_PACK_CARD:
             rewards = ["card_main", "card_second", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
-            weights = [0.1, 2.0, 2.5, 5.0, 3.0, 6.5, 80.9] # Веса под новый текст
+            weights = [0.1, 2.0, 5.0, 3.5, 3.7, 6.5, 80.9] # Веса под новый текст
         else:
             rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
             weights = [1.5, 5.0, 3.6, 3.4, 6.5, 80.0] # Старые веса

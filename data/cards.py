@@ -735,6 +735,7 @@ VIDEO_BGS = {
     "yamzaki_clan": {"name": "Клан Ямадзаки", "file": "yamzaki_clan.mp4", 'width': 1280, 'height': 720, "price": 8500},
     "king_grey": {"name": "Король Грей", "file": "king_grey.mp4", 'width': 1280, 'height': 720, "price": 12999},
     "shadow_slave": {"name": "Теневой раб", "file": "shadow_slave.mp4", 'width': 1280, 'height': 720, "price": 99999},
+    "lookism_summer": {"name": "Lookism Summer", "file": "lookism_summer.mp4", 'width': 1280, 'height': 720, "price": 99999},
 }
 TITLES = {
     "title_pass_hero": "Герой Месяца 🏆",
