@@ -11,6 +11,8 @@ EVENT_CARDS_LIST = [
 ]
 # ================== БАЗА ДАННЫХ ==================
 CARDS = {
+"lim_sae_jun": {"name": "Лим Се Джун", "rarity": "Легендарная 🔵", "style": "BJJ", "series": "Проход защиты", "speed": 90, "strength": 88, "intellect": 87, "file": "lim_sae_jun.jpeg", "exclusive": True},
+"nabirose": {"name": "Набироза", "rarity": "Легендарная 🔵", "style": "Фехтование семьи Игниса", "series": "Гениальный мечник академии", "speed": 89, "strength": 89, "intellect": 89, "file": "nabirose.jpeg", "exclusive": True},
 "ronan": {"name": "Ронан", "rarity": "Эпическая 🟢", "style": "Магический мечник", "series": "Гениальный мечник академии", "speed": 80, "strength": 80, "intellect": 80, "file": "ronan.jpeg", "exclusive": True},
 "premium_card_2": {"name": "Лу Гуан и Чэн Сяоши", "rarity": "Эпическая 🟢", "style": "Хроно-саботаж", "series": "Агенты времени", "speed": 80, "strength": 80, "intellect": 80, "file": "premium_card2.jpeg", "exclusive": True},
 # ============== Summer Drop ========
@@ -724,6 +726,8 @@ BGS = {
     "king_grey": {"name": "Король Грей", "file": "king_grey.mp4", 'width': 1280, 'height': 720, "price": 12999},
     "shadow_slave": {"name": "Теневой раб", "file": "shadow_slave.mp4", 'width': 1280, 'height': 720, "price": 99999},
     "sanny": {"name": "Санни", "file": "sanny.jpeg", "price": 99999},
+    "golden_hours": {"name": "Golden Hours", "file": "golden_hours.jpeg", "price": 99999},
+    "lookism_summer": {"name": "Lookism Summer", "file": "lookism_summer.mp4", 'width': 1280, 'height': 720, "price": 99999},
 }
 VIDEO_BGS = {
     "jaehwan": {"name": "Дже Хван", "file": "jae_hwan.mp4", 'width': 1280, 'height': 720, "price": 99999},
@@ -740,6 +744,7 @@ TITLES = {
     "title_pass_streem": "Стример 🎧",
     "title_pack2": "Лишенный света 🕯️",
     "title_pass_sword": "Гениальный мечник 🗡",
+    "title_pack3": "Железная стена 🧱",
 }
 
 NORMAL_PASS = {1:('krw',150), 2:('atm',5), 3:('bc',120), 4:('atm',6), 5:('pack','epic'), 6:('dia',5), 7:('krw',190), 8:('atm',3), 9:('krw',100), 10:('bc',100), 11:('atm',4), 12:('pack','epic'), 13:('krw',175), 14:('dia',3), 15:('krw',60), 16:('atm',5), 17:('bc',100), 18:('krw',70), 19:('pack','epic'), 20:('atm',3), 21:('krw',300), 22:('dia',3), 23:('krw',90), 24:('bc',50), 25:('pack','leg'), 26:('krw',100), 27:('atm',5), 28:('krw',250), 29:('dia',4), 30:('krw',50), 31:('atm',10)}

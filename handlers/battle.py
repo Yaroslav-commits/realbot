@@ -1739,9 +1739,9 @@ async def b_top_wins_cb(cq: CallbackQuery):
         "🏅 26-75 места: 400 🪙 BattleCoin\n"
         "🏅 76-150 места: 250 🪙 BattleCoin</blockquote>\n\n"
         "Награда выдается автоматически каждого 17-го числа🎖\n\n"
-        #"🎁 Приз за 1-20 места лимитированная карта:\n"
-        #"<blockquote>🃏 Дже Хван</blockquote>\n\n"
-        "📅 Дата окончания: 17-го июля\n"
+        "🎁 Приз за 1-15 места лимитированная карта:\n"
+        "<blockquote>🃏 Лим Се Джун</blockquote>\n\n"
+        "📅 Дата окончания: 17-го Августа\n"
         f"🏆 Ваше место в ТОП-е: {my_place}\n"
         "🚸 ТОП обновляется в режиме реального времени."
     )
@@ -1788,8 +1788,8 @@ async def b_top_rankpts_cb(cq: CallbackQuery):
     except:
         pass
 
-    if os.path.exists("images/shop/top_ranks.jpeg"):
-        await cq.message.answer_photo(photo=FSInputFile("images/shop/top_ranks.jpeg"), caption=txt,
+    if os.path.exists("images/shop/top_wins.jpeg"):
+        await cq.message.answer_photo(photo=FSInputFile("images/shop/top_wins.jpeg"), caption=txt,
                                       reply_markup=bld.as_markup())
     else:
         await cq.message.answer(txt, reply_markup=bld.as_markup())
@@ -1832,13 +1832,16 @@ async def b_shop_main_cb(cq: CallbackQuery):
     await cq.answer()
 
 
-# === ВСТАВИТЬ В НАЧАЛО battle.py ПОСЛЕ ИМПОРТОВ (примерно строка 30) ===
-PACK_CARD = "sanless"
+# === ВСТАВИТЬ В НАЧАЛО battle.py ПОСЛЕ ИМПОРТОВ ===
+PACK_CARD = "lim_sae_jun"
+PACK_DEFOLT_CARD = "nabirose"
 PACK_BG1 = "sanny"
-PACK_BG2 = "shadow_slave"
-PACK_TITLE = "title_pack2"
+PACK_BG2 = "lookism_summer"
+PACK_TITLE = "title_pack3"
 # Переключатель выдачи карты за ТОП-20 (True - выдавать, False - временно отключено)
-GIVE_TOP_20_CARD = False
+GIVE_TOP_20_CARD = True
+# Переключатель второй карты в паке (True - включена, False - выключена)
+ENABLE_SECOND_PACK_CARD = True
 
 # === ЗАМЕНИТЬ ФУНКЦИИ b_shop_pack_cb И b_shop_pack_buy_cb (строки 1459-1533) ===
 
@@ -1855,20 +1858,21 @@ async def b_shop_pack_cb(cq: CallbackQuery):
     bought = res[0] if res else 0
 
     txt = (
-        "<b>Боевой Пак 🦇️</b>\n"
+        "<b>Летний Боевой Пак ☀️</b>\n"
         f"💵 Можно купить: <b>{5 - bought}</b>\n"
         f"💸 Куплено: <b>{bought}</b>\n\n"
-        "<blockquote>Стоимость: 400 🪙</blockquote>\n\n"
-        "🔥 Главный приз: <b>Санлесс</b>\n"
+        "<blockquote>Стоимость: 350 🪙</blockquote>\n\n"
+        "🔥 Главный приз: <b>Лим Се Джун</b>\n"
         "🧪 Содержимое:\n"
-        "<blockquote>🃏 Санлесс 2%\n"
-        "🌄 Теневой раб 2.5%\n"
-        "🔱 Лишенный света 🕯 3%\n"
-        "🌄 Санни (арт) 5%\n"
+        "<blockquote>🃏 Лим Се Джун 0.1%\n"
+        "🃏 Набироза 2%\n"
+        "🌄 Lookism Summer 2.5%\n"
+        "🔱 Железная стена 🧱 3%\n"
+        "🌄 Golden Hours (арт) 5%\n"
         "🔴 Мифическая карта 6.5%\n"
-        "🔵 Легендарная карта 79%</blockquote>\n\n"
-        #"🏆 Главный приз выдается автоматически за ТОП 20 по победам!\n\n"
-        "📅 Дата окончания пака: 17-го Июля 📆"
+        "🔵 Легендарная карта 78.9%</blockquote>\n\n"
+        "🏆 Главный приз выдается автоматически за ТОП 15 по победам!\n\n"
+        "📅 Дата окончания пака: 17-го Августа 📆"
     )
 
     bld = InlineKeyboardBuilder()
@@ -1912,11 +1916,11 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
             return await cq.answer("На этой неделе вы уже скупили все паки!", show_alert=True)
 
         u = get_user(uid)
-        if u[5] < 400:
-            return await cq.answer("❌ Недостаточно BattleCoin! Нужно: 400 🪙", show_alert=True)
+        if u[5] < 350:
+            return await cq.answer("❌ Недостаточно BattleCoin! Нужно: 350 🪙", show_alert=True)
 
         # Списание валюты и обновление счетчика
-        db_exec("UPDATE users SET battlecoin = battlecoin - 400 WHERE id = ?", (uid,))
+        db_exec("UPDATE users SET battlecoin = battlecoin - 350 WHERE id = ?", (uid,))
         bought += 1
         # === MANHWCARD PASS ===
         check_and_update_quests(uid, 'q_4_packs', 1)
@@ -1925,9 +1929,14 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         else:
             db_exec("INSERT INTO battle_shop_packs (user_id, week_number, bought_count) VALUES (?, ?, ?)", (uid, week_num, bought))
 
-        # Логика шансов
-        rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
-        weights = [1.5, 5, 3.6, 3.4, 6.5, 79]
+        # Логика шансов с учетом тумблера
+        if ENABLE_SECOND_PACK_CARD:
+            rewards = ["card_main", "card_second", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
+            weights = [0.1, 2.0, 2.5, 5.0, 3.0, 6.5, 80.9] # Веса под новый текст
+        else:
+            rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
+            weights = [1.5, 5.0, 3.6, 3.4, 6.5, 80.0] # Старые веса
+
         result = random.choices(rewards, weights=weights, k=1)[0]
 
         reward_text = ""
@@ -1941,6 +1950,13 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
             else:
                 reward_text = "🎁 <b>Главная карта временно недоступна!</b>\nВам начислена компенсация: 10000 💴"
                 db_exec("UPDATE users SET krw = krw + 10000 WHERE id = ?", (uid,))
+        elif result == "card_second":
+            is_new, krw, card_c = give_card_to_user(uid, PACK_DEFOLT_CARD)
+            if card_c:
+                reward_text = format_card_msg(card_c, is_new, krw)
+            else:
+                reward_text = "🎁 <b>Дополнительная карта временно недоступна!</b>\nВам начислена компенсация: 5000 💴"
+                db_exec("UPDATE users SET krw = krw + 5000 WHERE id = ?", (uid,))
         elif result == "bg_yamazaki":
             db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG1))
             bg_key = PACK_BG1
@@ -3053,16 +3069,18 @@ async def distribute_top_20_rewards(bot: Bot):
     if not GIVE_TOP_20_CARD: # Если выдача отключена - просто выходим из функции
         return 0
 
-    top_20 = db_exec("SELECT id FROM users ORDER BY season_wins DESC LIMIT 20", fetchall=True)
+    # Заменили LIMIT 20 на LIMIT 15
+    top_15 = db_exec("SELECT id FROM users ORDER BY season_wins DESC LIMIT 15", fetchall=True)
     count = 0
-    for (uid,) in top_20:
+    for (uid,) in top_15:
         exists = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, PACK_CARD), fetch=True)
         if not exists:
             give_card_to_user(uid, PACK_CARD)
             count += 1
             try:
                 c = CARDS[PACK_CARD]
-                txt = f"🏆 <b>Поздравляем!</b>\nВы вошли в ТОП-20 по победам и получаете эксклюзивную награду!\n\n" + format_card_msg(c)
+                # Изменили текст для игрока на ТОП-15
+                txt = f"🏆 <b>Поздравляем!</b>\nВы вошли в ТОП-15 по победам и получаете эксклюзивную награду!\n\n" + format_card_msg(c)
                 await bot.send_photo(uid, photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, parse_mode="HTML")
             except:
                 pass
@@ -3073,7 +3091,8 @@ async def distribute_top_20_rewards(bot: Bot):
 async def cmd_distribute_top(msg: Message, bot: Bot):
     if msg.from_user.id not in ADMIN_IDS: return
     count = await distribute_top_20_rewards(bot)
-    await msg.answer(f"✅ Награды выданы {count} игрокам из ТОП-20!")
+    # Изменили текст для админа
+    await msg.answer(f"✅ Награды выданы {count} игрокам из ТОП-15!")
 
 
 async def distribute_all_top_rewards(bot: Bot):
@@ -3111,14 +3130,16 @@ async def distribute_all_top_rewards(bot: Bot):
             except:
                 pass
 
-        if GIVE_TOP_20_CARD and place <= 20:
+        # Изменили условие с 20 на 15
+        if GIVE_TOP_20_CARD and place <= 15:
             exists = db_exec("SELECT 1 FROM cards_inv WHERE user_id = ? AND card_id = ?", (uid, PACK_CARD), fetch=True)
             if not exists:
                 give_card_to_user(uid, PACK_CARD)
                 count_cards += 1
                 try:
                     c = CARDS[PACK_CARD]
-                    txt = f"🏆 <b>Поздравляем!</b>\nВы вошли в ТОП-20 по победам и получаете лимитированную карту!\n\n" + format_card_msg(
+                    # Изменили текст уведомления на ТОП-15
+                    txt = f"🏆 <b>Поздравляем!</b>\nВы вошли в ТОП-15 по победам и получаете лимитированную карту!\n\n" + format_card_msg(
                         c)
                     await bot.send_photo(uid, photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt,
                                          parse_mode="HTML")

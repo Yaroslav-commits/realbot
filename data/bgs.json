@@ -62,5 +62,19 @@
         "file": "sanny.jpeg",
         "price": 99999,
         "id": "sanny"
+    },
+    {
+        "name": "Golden Hours",
+        "file": "golden_hours.jpeg",
+        "price": 99999,
+        "id": "golden_hours"
+    },
+    {
+        "name": "Lookism Summer",
+        "file": "lookism_summer.mp4",
+        "width": 1280,
+        "height": 720,
+        "price": 99999,
+        "id": "lookism_summer"
     }
 ]

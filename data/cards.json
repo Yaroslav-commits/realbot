@@ -1,5 +1,29 @@
 [
     {
+        "name": "Лим Се Джун",
+        "rarity": "Легендарная 🔵",
+        "style": "BJJ",
+        "series": "Проход защиты",
+        "speed": 90,
+        "strength": 88,
+        "intellect": 87,
+        "file": "lim_sae_jun.webp",
+        "exclusive": true,
+        "id": "lim_sae_jun"
+    },
+    {
+        "name": "Набироза",
+        "rarity": "Легендарная 🔵",
+        "style": "Фехтование семьи Игниса",
+        "series": "Гениальный мечник академии",
+        "speed": 89,
+        "strength": 89,
+        "intellect": 89,
+        "file": "nabirose.webp",
+        "exclusive": true,
+        "id": "nabirose"
+    },
+    {
         "name": "Ронан",
         "rarity": "Эпическая 🟢",
         "style": "Магический мечник",
@@ -44,7 +68,7 @@
         "strength": 77,
         "intellect": 78,
         "file": "letnyaya_cha_he_in.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "letnyaya_cha_he_in"
     },
     {
@@ -56,7 +80,7 @@
         "strength": 79,
         "intellect": 78,
         "file": "letniy_gu_kim.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "letniy_gu_kim"
     },
     {
@@ -68,7 +92,7 @@
         "strength": 78,
         "intellect": 77,
         "file": "letnyaya_endorsi_zahard.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "letnyaya_endorsi_zahard"
     },
     {
@@ -80,7 +104,7 @@
         "strength": 77,
         "intellect": 80,
         "file": "letnyaya_yu_hva_yeon.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "letnyaya_yu_hva_yeon"
     },
     {
@@ -92,7 +116,7 @@
         "strength": 76,
         "intellect": 79,
         "file": "letnyaya_rahil.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "letnyaya_rahil"
     },
     {
@@ -104,7 +128,7 @@
         "strength": 76,
         "intellect": 78,
         "file": "letniy_sedzhin.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "letniy_sedzhin"
     },
     {
@@ -116,7 +140,7 @@
         "strength": 60,
         "intellect": 60,
         "file": "letnyaya_hanyl.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "letnyaya_hanyl"
     },
     {
@@ -128,7 +152,7 @@
         "strength": 60,
         "intellect": 60,
         "file": "letnyaya_son_hi.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "letnyaya_son_hi"
     },
     {
@@ -140,7 +164,7 @@
         "strength": 78,
         "intellect": 74,
         "file": "tszinlyu.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "tszinlyu"
     },
     {
@@ -152,7 +176,7 @@
         "strength": 79,
         "intellect": 75,
         "file": "svetlyachok.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "svetlyachok"
     },
     {
@@ -164,7 +188,7 @@
         "strength": 74,
         "intellect": 78,
         "file": "yao_guan.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "yao_guan"
     },
     {
@@ -176,7 +200,7 @@
         "strength": 68,
         "intellect": 80,
         "file": "chornyy_lebed.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "chornyy_lebed"
     },
     {
@@ -188,7 +212,7 @@
         "strength": 80,
         "intellect": 73,
         "file": "mortenaks_bleyd.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "mortenaks_bleyd"
     },
     {
@@ -200,7 +224,7 @@
         "strength": 70,
         "intellect": 80,
         "file": "voskresenye.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "voskresenye"
     },
     {
@@ -212,7 +236,7 @@
         "strength": 77,
         "intellect": 79,
         "file": "tszin_yuan.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "tszin_yuan"
     },
     {
@@ -224,7 +248,7 @@
         "strength": 72,
         "intellect": 78,
         "file": "kirena.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "kirena"
     },
     {
@@ -236,7 +260,7 @@
         "strength": 68,
         "intellect": 79,
         "file": "linsha.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "linsha"
     },
     {
@@ -248,7 +272,7 @@
         "strength": 70,
         "intellect": 80,
         "file": "bronya.webp",
-        "exclusive": false,
+        "exclusive": true,
         "id": "bronya"
     },
     {
