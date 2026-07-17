@@ -1420,23 +1420,25 @@ async def trade_p1_final(cq: CallbackQuery):
     except:
         pass
 
-        # === MANHWCARD PASS: ТИХОЕ ОБНОВЛЕНИЕ ЗАДАНИЯ НА ТРЕЙДЫ ===
-        from database.db import check_and_update_quests
+        # === MANHWCARD PASS: ЗАДАНИЯ ЗА ТРЕЙД ===
+        # ВАЖНО: Этот блок теперь на правильном уровне отступа (не внутри except!)
+    for uid in (sender_id, p2_id):
+        q_res = check_and_update_quests(uid, 'q_3_trades', 1)
 
-        # Если ты добавил notify_pass_levelup в db.py, не забудь её импортировать!
-        # from database.db import notify_pass_levelup
+        if q_res and q_res.get("leveled_up"):
+            try:
+                asyncio.create_task(cq.bot.send_message(
+                    uid,
+                    f"⚡️ <b>[СИСТЕМА]</b>\n\n"
+                    f"Ваш уровень ManhwCard Pass повышен!\n"
+                    f"Текущий уровень: <b>{q_res['level']}</b>.\n\n"
+                    f"<i>Зайдите в Web App, чтобы забрать награду.</i>",
+                    parse_mode="HTML"
+                ))
+            except:
+                pass
 
-        # Получатель — это тот, кто нажал кнопку согласия (cq.from_user.id)
-        # Отправитель — это sender_id, который инициировал трейд
-        receiver_id = cq.from_user.id
-
-        # Обновляем прогресс квеста "q_3_trades" (или "trades") для обоих игроков
-        q_res1 = check_and_update_quests(sender_id, "trades", 1)
-        q_res2 = check_and_update_quests(receiver_id, "trades", 1)
-
-        # Наша универсальная функция сама проверит, апнулся ли уровень, и отправит красивое уведомление!
-        await notify_pass_levelup(sender_id, cq.bot, q_res1)
-        await notify_pass_levelup(receiver_id, cq.bot, q_res2)
+    await cq.answer()
                 
 @router.callback_query(F.data.startswith("trade_decline:"))
 async def trade_decline(cq: CallbackQuery):

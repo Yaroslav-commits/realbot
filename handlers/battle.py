@@ -2152,7 +2152,7 @@ _CRAFT_GIF_FILE_ID: str | None = None   # кеш file_id анимации кра
 CRAFT_REQUIRED  = 5          # легендарок нужно
 CRAFT_COIN_COST = 200        # монет нужно
 DIAMOND_RATE    = 6          # 1 💎 = ? 🪙
-DIAMOND_MIN     = 25         # минимум к обмену
+DIAMOND_MIN     = 10         # минимум к обмену
 
 def _get_craft_slots(uid: int) -> list:
     """Возвращает список из 5 card_id (или None) для пользователя."""
@@ -2221,8 +2221,8 @@ def _craft_slots_text(slots: list) -> str:
 # СТАВКИ 🎰
 # ═══════════════════════════════════════════════════════════════
 
-BET_DEFAULT = 10
-BET_MIN = 5
+BET_DEFAULT = 30
+BET_MIN = 30
 COINFLIP_STICKERS = {
     "eagle": "CAACAgIAAxkBAAFKh1lqEzS9mRtqZYN_N7KbMzOXPiG6BgACqIMAAvaUyErsbrJIlVH9hzsE",
     "tails": "CAACAgIAAxkBAAFKh1hqEzS9gTamhA9QzEioKB4D82T1KQACl4cAAmkJ0UoCXcTupNR67DsE",
@@ -2249,6 +2249,7 @@ def _get_bet_lock(uid: int) -> asyncio.Lock:
         BET_PLAY_LOCKS[uid] = lock
     return lock
 
+
 def _get_bet_data(uid: int) -> tuple:
     """Возвращает (streak, bet) для игрока."""
     row = db_exec(
@@ -2258,7 +2259,13 @@ def _get_bet_data(uid: int) -> tuple:
     if not row:
         db_exec("INSERT INTO bets_streak (user_id, streak, bet) VALUES (?, 0, ?)", (uid, BET_DEFAULT))
         return 0, BET_DEFAULT
-    return row[0], row[1]
+
+    # Если у игрока сохранилась старая ставка (например, 10), принудительно поднимаем её до 35
+    bet = row[1]
+    if bet < BET_MIN:
+        bet = BET_MIN
+
+    return row[0], bet
 
 def _save_bet(uid: int, streak: int, bet: int):
     db_exec(
@@ -2475,7 +2482,7 @@ async def b_bet_play_cb(cq: CallbackQuery):
             db_exec("UPDATE users SET battlecoin = battlecoin + ? WHERE id = ?", (bet, uid))
             return await cq.message.answer("❌ Ошибка игры. Ставка возвращена.")
 
-        multiplier = 1.5 if game == "ball" and win else 2.0
+        multiplier = 1.5 if game == "ball" and choice == "goal" else 2.0
 
         if win:
             prize = int(bet * multiplier)
