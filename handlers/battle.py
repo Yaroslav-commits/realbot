@@ -1922,27 +1922,34 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         # Списание валюты и обновление счетчика
         db_exec("UPDATE users SET battlecoin = battlecoin - 350 WHERE id = ?", (uid,))
         bought += 1
+
         # === MANHWCARD PASS ===
         check_and_update_quests(uid, 'q_4_packs', 1)
+
         if res:
-            db_exec("UPDATE battle_shop_packs SET bought_count = ? WHERE user_id = ? AND week_number = ?", (bought, uid, week_num))
+            db_exec("UPDATE battle_shop_packs SET bought_count = ? WHERE user_id = ? AND week_number = ?",
+                    (bought, uid, week_num))
         else:
-            db_exec("INSERT INTO battle_shop_packs (user_id, week_number, bought_count) VALUES (?, ?, ?)", (uid, week_num, bought))
+            db_exec("INSERT INTO battle_shop_packs (user_id, week_number, bought_count) VALUES (?, ?, ?)",
+                    (uid, week_num, bought))
 
         # Логика шансов с учетом тумблера
         if ENABLE_SECOND_PACK_CARD:
             rewards = ["card_main", "card_second", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
-            weights = [0.1, 2.0, 5.0, 3.5, 3.7, 6.5, 80.9] # Веса под новый текст
+            weights = [0.1, 2.0, 5.0, 3.5, 3.7, 6.5, 80.9]  # Веса под новый текст
         else:
             rewards = ["card_main", "bg_yamazaki", "bg_jaehwan", "title", "mythic", "legendary"]
-            weights = [1.5, 5.0, 3.6, 3.4, 6.5, 80.0] # Старые веса
+            weights = [1.5, 5.0, 3.6, 3.4, 6.5, 80.0]  # Старые веса
 
         result = random.choices(rewards, weights=weights, k=1)[0]
 
         reward_text = ""
         card_c = None
 
-        # БЕЗОПАСНАЯ ОБРАБОТКА (защита от NoneType)
+        exists_bg1 = False
+        exists_bg2 = False
+
+        # БЕЗОПАСНАЯ ОБРАБОТКА (защита от NoneType и IntegrityError)
         if result == "card_main":
             is_new, krw, card_c = give_card_to_user(uid, PACK_CARD)
             if card_c:
@@ -1958,30 +1965,35 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
                 reward_text = "🎁 <b>Дополнительная карта временно недоступна!</b>\nВам начислена компенсация: 5000 💴"
                 db_exec("UPDATE users SET krw = krw + 5000 WHERE id = ?", (uid,))
         elif result == "bg_yamazaki":
-            db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG1))
+            exists_bg1 = db_exec("SELECT 1 FROM bgs_inv WHERE user_id = ? AND bg_id = ?", (uid, PACK_BG1), fetch=True)
             bg_key = PACK_BG1
             bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
-            if bg_data:
-                bg_name = bg_data.get('name', 'Новый фон')
-                reward_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
+            bg_name = bg_data.get('name', 'Lookism Summer') if bg_data else 'Lookism Summer'
+
+            if exists_bg1:
+                reward_text = f"🌄 Вам выпал фон: <b>{bg_name}</b>, но он у вас уже есть!"
             else:
-                reward_text = f"🌄 Получен новый фон: <b>Санни</b>!"
+                db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG1))
+                reward_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
         elif result == "bg_jaehwan":
-            db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG2))
+            exists_bg2 = db_exec("SELECT 1 FROM bgs_inv WHERE user_id = ? AND bg_id = ?", (uid, PACK_BG2), fetch=True)
             bg_key = PACK_BG2
             bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
-            if bg_data:
-                bg_name = bg_data.get('name', 'Новый фон')
-                reward_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
+            bg_name = bg_data.get('name', 'Golden Hours') if bg_data else 'Golden Hours'
+
+            if exists_bg2:
+                reward_text = f"🌄 Вам выпал фон: <b>{bg_name}</b>, но он у вас уже есть!"
             else:
-                reward_text = f"🌄 Получен новый фон: <b>Теневой раб</b>!"
+                db_exec("INSERT INTO bgs_inv (user_id, bg_id) VALUES (?, ?)", (uid, PACK_BG2))
+                reward_text = f"✨ <b>Поздравляем!</b>\n\nТебе выпал новый фон: <b>{bg_name}</b>"
         elif result == "title":
-            exists = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?", (uid, PACK_TITLE), fetch=True)
+            exists = db_exec("SELECT 1 FROM titles_inv WHERE user_id = ? AND title_id = ?", (uid, PACK_TITLE),
+                             fetch=True)
             if exists:
-                reward_text = f"🔱 Вам выпал титул: <b>Лишенный света 🕯️</b>, но, к сожалению, он у вас уже есть!"
+                reward_text = f"🔱 Вам выпал титул: <b>Железная стена 🧱</b>, но, к сожалению, он у вас уже есть!"
             else:
                 db_exec("INSERT INTO titles_inv (user_id, title_id) VALUES (?, ?)", (uid, PACK_TITLE))
-                reward_text = f"🔱 Получен новый титул: <b>Лишенный света 🕯️</b>!"
+                reward_text = f"🔱 Получен новый титул: <b>Железная стена 🧱</b>!"
         elif result == "mythic":
             card_key = pull_random_card(force_rarity="Мифическая 🔴")
             is_new, krw, card_c = give_card_to_user(uid, card_key)
@@ -2007,8 +2019,10 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         bld.adjust(1)
 
         try:
-            await cq.message.delete()
-        except:
+            # Вместо удаления старого сообщения — просто убираем кнопки!
+            # Так игрок будет видеть всю историю своих дропов.
+            await cq.message.edit_reply_markup(reply_markup=None)
+        except Exception:
             pass
 
         # ОТПРАВКА НАГРАДЫ
@@ -2031,7 +2045,9 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
         elif result in ["bg_yamazaki", "bg_jaehwan"]:
             bg_key = PACK_BG1 if result == "bg_yamazaki" else PACK_BG2
             bg_data = VIDEO_BGS.get(bg_key) or BGS.get(bg_key)
-            if bg_data:
+
+            # Если фон выпал впервые — отправляем его картинкой/видео. Если дубль — просто текстом.
+            if bg_data and not (exists_bg1 if result == "bg_yamazaki" else exists_bg2):
                 file_path = f"images/backgrounds/{bg_data.get('file')}"
                 try:
                     if bg_key in VIDEO_BGS:
@@ -2041,7 +2057,8 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
                             width=bg_data.get('width'), height=bg_data.get('height'), reply_markup=bld.as_markup()
                         )
                     else:
-                        await cq.bot.send_photo(uid, photo=FSInputFile(file_path), caption=reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
+                        await cq.bot.send_photo(uid, photo=FSInputFile(file_path), caption=reward_text,
+                                                parse_mode="HTML", reply_markup=bld.as_markup())
                 except Exception:
                     await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
             else:
@@ -2050,7 +2067,6 @@ async def b_shop_pack_buy_cb(cq: CallbackQuery):
             await cq.bot.send_message(uid, reward_text, parse_mode="HTML", reply_markup=bld.as_markup())
 
     await cq.answer()
-    # Заметь: мы БОЛЬШЕ НЕ вызываем b_shop_pack_cb(cq) в конце, поэтому меню не будет дублироваться!
 
 
 def format_card_msg(c, is_new=True, krw=0):

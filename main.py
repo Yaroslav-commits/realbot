@@ -564,8 +564,13 @@ def get_profile(user_id: int):
         needs_recovery = (days_passed > 1 and 0 < daily_day < 30)
 
         is_prem = is_premium(user_id)
+        # Собираем карты и из инвентаря, и из сундука
         cards_rows = db_exec_sync(
-            "SELECT card_id FROM cards_inv WHERE user_id = ?", (user_id,), fetchall=True
+            """
+            SELECT card_id FROM cards_inv WHERE user_id = ?
+            UNION ALL
+            SELECT card_id FROM cards_stash WHERE user_id = ?
+            """, (user_id, user_id), fetchall=True
         )
         owned_cards = [row[0] for row in cards_rows] if cards_rows else []
 
@@ -840,8 +845,12 @@ def claim_daily(payload: DailyPayload, user_id: int = Depends(authed_user_id)):
 # поэтому авторизация тут не нужна.
 @app.get("/api/card_count/{card_id}")
 def get_card_count(card_id: str):
-    res = db_exec_sync("SELECT COUNT(*) FROM cards_inv WHERE card_id = ?", (card_id,), fetch=True)
-    count = res[0] if res else 0
+    res = db_exec_sync("""
+        SELECT 
+            (SELECT COUNT(*) FROM cards_inv WHERE card_id = ?) + 
+            (SELECT COUNT(*) FROM cards_stash WHERE card_id = ?)
+    """, (card_id, card_id), fetch=True)
+    count = res[0] if res and res[0] is not None else 0
     return {"card_id": card_id, "count": count}
 
 
@@ -1158,33 +1167,23 @@ def get_leaderboard(category: str):
             rows = db_exec_sync(query, fetchall=True)
             leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} 💎", "level": r[4] or 1} for r in rows]
 
+        elif category == "bc":
+            # 🔥 НОВАЯ КАТЕГОРИЯ: ТОП ПО BATTLECOIN 🔥
+            query = "SELECT id, nickname, username, battlecoin, pass_level FROM users ORDER BY battlecoin DESC LIMIT 25"
+            rows = db_exec_sync(query, fetchall=True)
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]:,} 🪙", "level": r[4] or 1} for r in rows]
 
         elif category == "pvp":
-
             # ТОП PvP (ЗА ВСЁ ВРЕМЯ)
-
             query = "SELECT id, nickname, username, wins, pass_level FROM users ORDER BY wins DESC LIMIT 25"
-
             rows = db_exec_sync(query, fetchall=True)
-
-            # Добавили "or 0", чтобы вместо "None побед" писало "0 побед"
-
-            leaderboard = [
-                {"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3] or 0} побед", "level": r[4] or 1}
-                for r in rows]
-
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3] or 0} побед", "level": r[4] or 1} for r in rows]
 
         elif category == "pvp_season":
-
             # ТОП PvP (ТЕКУЩИЙ СЕЗОН)
-
             query = "SELECT id, nickname, username, season_wins, pass_level FROM users ORDER BY season_wins DESC LIMIT 25"
-
             rows = db_exec_sync(query, fetchall=True)
-
-            leaderboard = [
-                {"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3] or 0} побед", "level": r[4] or 1}
-                for r in rows]
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3] or 0} побед", "level": r[4] or 1} for r in rows]
 
         elif category == "cards":
             query = """
@@ -1199,7 +1198,7 @@ def get_leaderboard(category: str):
             leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} шт.", "level": r[4] or 1} for r in rows]
 
         elif category == "level":
-            # НОВАЯ КАТЕГОРИЯ: ТОП ПО УРОВНЯМ
+            # ТОП ПО УРОВНЯМ
             query = "SELECT id, nickname, username, pass_level FROM users ORDER BY pass_level DESC, pass_xp DESC LIMIT 25"
             rows = db_exec_sync(query, fetchall=True)
             leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"Ур. {r[3]}", "level": r[3] or 1} for r in rows]
