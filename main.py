@@ -368,12 +368,13 @@ def migrate_profile_stats():
     columns = [
         ("wins", "INTEGER DEFAULT 0"),
         ("losses", "INTEGER DEFAULT 0"),
+        ("season_wins", "INTEGER DEFAULT 0"),  # <-- ДОБАВИЛИ ЭТУ СТРОКУ
         ("max_streak", "INTEGER DEFAULT 0"),
         ("active_bg", "TEXT DEFAULT 'default'"),
         ("active_title", "TEXT"),
-        ("pass_level", "INTEGER DEFAULT 1"),          # <-- Добавили для Пасса
-        ("pass_xp", "INTEGER DEFAULT 0"),             # <-- Добавили для Пасса
-        ("claimed_pass_levels", "INTEGER DEFAULT 1")  # <-- Счетчик забранных наград
+        ("pass_level", "INTEGER DEFAULT 1"),
+        ("pass_xp", "INTEGER DEFAULT 0"),
+        ("claimed_pass_levels", "INTEGER DEFAULT 1")
     ]
     for col, col_def in columns:
         try:
@@ -1157,10 +1158,33 @@ def get_leaderboard(category: str):
             rows = db_exec_sync(query, fetchall=True)
             leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} 💎", "level": r[4] or 1} for r in rows]
 
+
         elif category == "pvp":
+
+            # ТОП PvP (ЗА ВСЁ ВРЕМЯ)
+
             query = "SELECT id, nickname, username, wins, pass_level FROM users ORDER BY wins DESC LIMIT 25"
+
             rows = db_exec_sync(query, fetchall=True)
-            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} побед", "level": r[4] or 1} for r in rows]
+
+            # Добавили "or 0", чтобы вместо "None побед" писало "0 побед"
+
+            leaderboard = [
+                {"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3] or 0} побед", "level": r[4] or 1}
+                for r in rows]
+
+
+        elif category == "pvp_season":
+
+            # ТОП PvP (ТЕКУЩИЙ СЕЗОН)
+
+            query = "SELECT id, nickname, username, season_wins, pass_level FROM users ORDER BY season_wins DESC LIMIT 25"
+
+            rows = db_exec_sync(query, fetchall=True)
+
+            leaderboard = [
+                {"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3] or 0} побед", "level": r[4] or 1}
+                for r in rows]
 
         elif category == "cards":
             query = """
