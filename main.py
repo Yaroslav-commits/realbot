@@ -1140,37 +1140,31 @@ def get_season_time_left():
 
 @app.get("/api/tops/{category}")
 def get_leaderboard(category: str):
-    """Возвращает ТОП-25 игроков по выбранной категории."""
+    """Возвращает ТОП-25 игроков по выбранной категории (С УРОВНЯМИ)."""
     try:
         if category == "krw":
-            # Топ по деньгам (KRW)
-            query = "SELECT id, nickname, username, krw FROM users ORDER BY krw DESC LIMIT 25"
+            query = "SELECT id, nickname, username, krw, pass_level FROM users ORDER BY krw DESC LIMIT 25"
             rows = db_exec_sync(query, fetchall=True)
-            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]:,} ₩"} for r in rows]
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]:,} ₩", "level": r[4] or 1} for r in rows]
 
         elif category == "rank":
-            # Топ по рангам (Rank Points)
-            query = "SELECT id, nickname, username, rank_points FROM users ORDER BY rank_points DESC LIMIT 25"
+            query = "SELECT id, nickname, username, rank_points, pass_level FROM users ORDER BY rank_points DESC LIMIT 25"
             rows = db_exec_sync(query, fetchall=True)
-            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} RP"} for r in rows]
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} RP", "level": r[4] or 1} for r in rows]
 
         elif category == "diamond":
-            # Топ по алмазам (Diamonds)
-            query = "SELECT id, nickname, username, diamond FROM users ORDER BY diamond DESC LIMIT 25"
+            query = "SELECT id, nickname, username, diamond, pass_level FROM users ORDER BY diamond DESC LIMIT 25"
             rows = db_exec_sync(query, fetchall=True)
-            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} 💎"} for r in rows]
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} 💎", "level": r[4] or 1} for r in rows]
 
         elif category == "pvp":
-            # Топ PvP (Сезонный по количеству побед)
-            query = "SELECT id, nickname, username, wins FROM users ORDER BY wins DESC LIMIT 25"
+            query = "SELECT id, nickname, username, wins, pass_level FROM users ORDER BY wins DESC LIMIT 25"
             rows = db_exec_sync(query, fetchall=True)
-            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} побед"} for r in
-                           rows]
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} побед", "level": r[4] or 1} for r in rows]
 
         elif category == "cards":
-            # Топ по количеству собранных карт в инвентаре
             query = """
-                SELECT u.id, u.nickname, u.username, COUNT(c.card_id) as cards_count 
+                SELECT u.id, u.nickname, u.username, COUNT(c.card_id) as cards_count, u.pass_level 
                 FROM users u
                 LEFT JOIN cards_inv c ON u.id = c.user_id
                 GROUP BY u.id
@@ -1178,7 +1172,13 @@ def get_leaderboard(category: str):
                 LIMIT 25
             """
             rows = db_exec_sync(query, fetchall=True)
-            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} шт."} for r in rows]
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"{r[3]} шт.", "level": r[4] or 1} for r in rows]
+
+        elif category == "level":
+            # НОВАЯ КАТЕГОРИЯ: ТОП ПО УРОВНЯМ
+            query = "SELECT id, nickname, username, pass_level FROM users ORDER BY pass_level DESC, pass_xp DESC LIMIT 25"
+            rows = db_exec_sync(query, fetchall=True)
+            leaderboard = [{"id": r[0], "name": r[1] or r[2] or f"Игрок {r[0]}", "score": f"Ур. {r[3]}", "level": r[3] or 1} for r in rows]
 
         else:
             return {"success": False, "error": "Неизвестная категория рейтинга"}

@@ -2221,8 +2221,8 @@ def _craft_slots_text(slots: list) -> str:
 # СТАВКИ 🎰
 # ═══════════════════════════════════════════════════════════════
 
-BET_DEFAULT = 30
-BET_MIN = 30
+BET_DEFAULT = 35
+BET_MIN = 25
 COINFLIP_STICKERS = {
     "eagle": "CAACAgIAAxkBAAFKh1lqEzS9mRtqZYN_N7KbMzOXPiG6BgACqIMAAvaUyErsbrJIlVH9hzsE",
     "tails": "CAACAgIAAxkBAAFKh1hqEzS9gTamhA9QzEioKB4D82T1KQACl4cAAmkJ0UoCXcTupNR67DsE",
