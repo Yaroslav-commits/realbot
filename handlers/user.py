@@ -2899,7 +2899,32 @@ async def update_refs_cmd(msg: types.Message):
 
     await msg.answer(f"✅ Успешно обновлено {count} кодов! Теперь у всех уникальные ссылки из букв.")
 
+@router.message(Command("reset_packs"))
+async def admin_reset_packs(msg: Message):
+    # Проверка на админа
+    if msg.from_user.id not in ADMIN_IDS:
+        return
 
+    args = msg.text.split()
+    if len(args) != 2:
+        return await msg.answer("❌ Использование: /reset_packs <id_игрока>")
+
+    try:
+        target_id = int(args[1])
+    except ValueError:
+        return await msg.answer("❌ ID игрока должен быть числом!")
+
+    # Вычисляем текущую неделю по МСК ровно так же, как это делает магазин
+    msk_tz = timezone(timedelta(hours=3))
+    now_msk = datetime.now(msk_tz)
+    adjusted_time = now_msk - timedelta(hours=1)
+    week_num = adjusted_time.isocalendar()[1]
+
+    # Обнуляем счетчик покупок ТОЛЬКО для текущей недели
+    db_exec("UPDATE battle_shop_packs SET bought_count = 0 WHERE user_id = ? AND week_number = ?",
+            (target_id, week_num))
+
+    await msg.answer(f"✅ <b>Успешно!</b>\nЛимит на покупку Летнего Боевого Пака для игрока <code>{target_id}</code> на этой неделе полностью сброшен. Теперь он снова может купить 5 паков.", parse_mode="HTML")
 # ================== ПЛАНИРОВЩИК УВЕДОМЛЕНИЙ ==================
 
 async def cooldown_notification_scheduler(bot: Bot):
