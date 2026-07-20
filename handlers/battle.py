@@ -3573,7 +3573,15 @@ async def stash_put_cb(cq: CallbackQuery, state: FSMContext):
     rows = db_exec("SELECT card_id, COUNT(*) FROM cards_inv WHERE user_id = ? GROUP BY card_id",
                    (uid,), fetchall=True)
     if not rows:
-        return await cq.answer("В инвентаре нет карт.", show_alert=True)
+        # Если инвентарь пуст, обновляем сообщение, чтобы убрать лишние кнопки
+        bld = InlineKeyboardBuilder()
+        bld.button(text="Назад 🔙", callback_data=f"stash_menu:0:{source}")
+        txt = "📥 <b>Инвентарь пуст.</b>\nУ вас нет карт для перемещения в Сундук."
+        try:
+            await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        except Exception:
+            pass
+        return await cq.answer("В инвентаре нет карт.", show_alert=False)
 
     items = []
     for cid, cnt in rows:
@@ -3665,7 +3673,15 @@ async def stash_take_cb(cq: CallbackQuery, state: FSMContext):
 
     stash = get_stash(uid)
     if not stash:
-        return await cq.answer("Сундук пуст.", show_alert=True)
+        # Если сундук опустел, обновляем сообщение, чтобы кнопка последней карты пропала
+        bld = InlineKeyboardBuilder()
+        bld.button(text="Назад 🔙", callback_data=f"stash_menu:0:{source}")
+        txt = "📤 <b>Ваш Сундук пуст.</b>\nЗдесь больше нет карт."
+        try:
+            await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        except Exception:
+            pass
+        return await cq.answer("Сундук пуст.", show_alert=False)
 
     counts = {}
     for cid in stash:
@@ -3679,7 +3695,6 @@ async def stash_take_cb(cq: CallbackQuery, state: FSMContext):
     filtered_items = apply_stash_filters_and_sort(items, sort_mode, filt_mode, search_q)
 
     if not filtered_items and search_q:
-        # Если ничего не найдено
         total_pages = 1
         page = 0
         chunk = []
