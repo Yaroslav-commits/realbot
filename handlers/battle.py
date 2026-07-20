@@ -281,36 +281,26 @@ async def accept_f(cq: CallbackQuery):
     await start_battle(sender_id, target_id, cq.bot, friendly=True)
 
 
+# ============ СИСТЕМА УПРАВЛЕНИЯ КОЛОДАМИ (ОБНОВЛЕННАЯ) ============
+
 @router.callback_query(F.data == "my_deck")
 async def my_deck_menu(cq: CallbackQuery):
+    """Главный вход в меню колод с проверкой на минимальное количество карт"""
     cards = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
     if len(cards) < 10:
         return await cq.answer("❌ Нужно получить минимум 10 боевых карт, чтобы открыть этот раздел!", show_alert=True)
 
-    bld = InlineKeyboardBuilder()
-    bld.button(text="Посмотреть колоду 🃏", callback_data="view_deck")
-    bld.button(text="Автосбор 🔁", callback_data="auto_deck")
-    bld.button(text="Собрать колоду 🆕", callback_data="manual_deck_start")
-    bld.button(text="📦 Сундук", callback_data="stash_menu:0:deck")
-    bld.adjust(1)
-
-    text = "🗂 Меню колоды:\nВыберите действие:"
-    try:
-        await cq.message.edit_text(text, reply_markup=bld.as_markup())
-    except Exception:
-        try:
-            await cq.message.delete()
-        except Exception:
-            pass
-        await cq.message.answer(text, reply_markup=bld.as_markup())
+    await show_multi_deck_main(cq, cq.from_user.id)
     await cq.answer()
 
 
 @router.callback_query(F.data == "view_deck")
 async def view_deck(cq: CallbackQuery):
+    """Показ карт текущей активной колоды"""
     deck = db_exec("SELECT card_id FROM decks WHERE user_id = ? ORDER BY slot_index", (cq.from_user.id,), fetchall=True)
     if len(deck) != 6:
         return await cq.answer("Колода не собрана полностью!", show_alert=True)
+
     rarity_order = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2,
                     "Обычная ⚪️": 1}
     c_objs = [(cid, CARDS[cid]) for (cid,) in deck]
@@ -318,26 +308,28 @@ async def view_deck(cq: CallbackQuery):
 
     media = []
     for i, (cid, c) in enumerate(c_objs):
-        asset_path, is_video, skin_label = get_card_media_info(cq.from_user.id, cid, c)
-        txt_card = f"{i + 1}. {c['name']}{skin_label} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
-
-        if is_video:
-            media.append(types.InputMediaVideo(
-                media=FSInputFile(asset_path),
-                caption=txt_card,
-                width=960, height=1280,
-                supports_streaming=True
-            ))
-        else:
-            media.append(types.InputMediaPhoto(media=FSInputFile(asset_path), caption=txt_card))
+        txt_card = f"{i + 1}. {c['name']} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
+        media.append(types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c['file']}"), caption=txt_card))
 
     await cq.message.answer_media_group(media=media)
+    await cq.answer()
+
 
 @router.callback_query(F.data == "auto_deck")
 async def auto_deck(cq: CallbackQuery):
-    cards = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (cq.from_user.id,), fetchall=True)
+    """Автосбор лучших карт строго для ВЫБРАННОЙ (активной) колоды"""
+    uid = cq.from_user.id
+
+    active_deck = db_exec("SELECT deck_id FROM multi_decks WHERE user_id = ? AND is_active = 1", (uid,), fetch=True)
+    if not active_deck:
+        return await cq.answer("❌ Сначала создайте колоду ниже и нажмите «✅ Выбрать», чтобы применить к ней автосбор!",
+                               show_alert=True)
+
+    deck_id = active_deck[0]
+
+    cards = db_exec("SELECT card_id FROM cards_inv WHERE user_id = ?", (uid,), fetchall=True)
     if len(cards) < 6:
-        return await cq.answer("Для колоды нужно минимум 6 карт!", show_alert=True)
+        return await cq.answer("Для колоды нужно минимум 6 карт в инвентаре!", show_alert=True)
 
     c_objs = []
     for (cid,) in cards:
@@ -350,25 +342,30 @@ async def auto_deck(cq: CallbackQuery):
     new_deck = []
     mythic_divine, leg = 0, 0
     for c in c_objs:
-        if len(new_deck) == 6: break
+        if len(new_deck) == 6:
+            break
         if "Мифическая" in c['r'] or "Божественная" in c['r']:
-            if mythic_divine >= 1: continue
+            if mythic_divine >= 1:
+                continue
             mythic_divine += 1
         elif "Легендарная" in c['r']:
-            if leg >= 2: continue
+            if leg >= 2:
+                continue
             leg += 1
         new_deck.append(c['id'])
 
     if len(new_deck) < 6:
-        return await cq.answer("Не удалось собрать 6 карт из-за ограничений редкости.", show_alert=True)
+        return await cq.answer("Не удалось собрать 6 карт из-за ограничений редкости предметов.", show_alert=True)
 
-    db_exec("DELETE FROM decks WHERE user_id = ?", (cq.from_user.id,))
+    db_exec("DELETE FROM multi_deck_slots WHERE deck_id = ?", (deck_id,))
     for i, cid in enumerate(new_deck):
-        db_exec("INSERT INTO decks (user_id, card_id, slot_index) VALUES (?, ?, ?)", (cq.from_user.id, cid, i))
-    await cq.answer("✅ Колода автоматически собрана лучшими картами!", show_alert=True)
+        db_exec("INSERT INTO multi_deck_slots (deck_id, slot_index, card_id) VALUES (?, ?, ?)", (deck_id, i + 1, cid))
 
+    sync_active_deck(uid, deck_id)
 
-# ============ СИСТЕМА КОЛОД (НОВАЯ) ============
+    await cq.answer("✅ Выбранная колода автоматически заполнена лучшими картами!", show_alert=True)
+    await show_multi_deck_main(cq, uid)
+
 
 class MultiDeckState(StatesGroup):
     waiting_for_deck_name = State()
@@ -382,61 +379,91 @@ def ensure_multi_deck_tables():
         name TEXT,
         is_active INTEGER DEFAULT 0
     )''')
-    # Добавляем колонку is_active если её нет (для старых БД)
     try:
         db_exec("ALTER TABLE multi_decks ADD COLUMN is_active INTEGER DEFAULT 0")
     except Exception:
-        pass  # колонка уже есть — ок
+        pass
     db_exec('''CREATE TABLE IF NOT EXISTS multi_deck_slots (
         deck_id INTEGER,
         slot_index INTEGER,
         card_id TEXT
     )''')
 
+
 def sync_active_deck(user_id, deck_id):
-    # Синхронизируем собранную колоду с основной таблицей decks для совместимости с боями
     db_exec("DELETE FROM decks WHERE user_id = ?", (user_id,))
     slots = db_exec("SELECT slot_index, card_id FROM multi_deck_slots WHERE deck_id = ?", (deck_id,), fetchall=True)
     for slot_index, card_id in slots:
         db_exec("INSERT INTO decks (user_id, card_id, slot_index) VALUES (?, ?, ?)", (user_id, card_id, slot_index - 1))
 
 
-async def show_multi_deck_main(message, user_id):
+def _get_multi_deck_main_ui(user_id: int):
+    """Генерирует текст и кнопки для главного меню колод"""
     ensure_multi_deck_tables()
     decks = db_exec("SELECT deck_id, name, is_active FROM multi_decks WHERE user_id = ?", (user_id,), fetchall=True)
 
     bld = InlineKeyboardBuilder()
-    if len(decks) == 0:
-        bld.button(text="Добавить колоду 🆕", callback_data="mdeck_add")
-        bld.button(text="Назад 🔙", callback_data="view_deck")
-        bld.adjust(1)
-    else:
-        for d in decks:
-            did, dname, is_active = d
-            active_mark = " ✅" if is_active else ""
+
+    for d in decks:
+        did, dname, is_active = d
+        if is_active:
+            # Если колода активна, показываем галочку и заглушку "Активна"
             bld.row(
-                InlineKeyboardButton(text=f"{dname}{active_mark}", callback_data=f"mdeck_view:{did}"),
+                InlineKeyboardButton(text=f"{dname} ✅", callback_data=f"mdeck_view:{did}"),
+                InlineKeyboardButton(text="🟢 Активна", callback_data="ignore")
+            )
+        else:
+            bld.row(
+                InlineKeyboardButton(text=f"{dname}", callback_data=f"mdeck_view:{did}"),
                 InlineKeyboardButton(text="✅ Выбрать", callback_data=f"mdeck_select:{did}")
             )
-        if len(decks) < 2:
-            bld.row(InlineKeyboardButton(text="Добавить колоду 🆕", callback_data="mdeck_add"))
-        bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data="view_deck"))
+
+    if len(decks) < 2:
+        bld.row(InlineKeyboardButton(text="Добавить колоду 🆕", callback_data="mdeck_add"))
+
+    bld.row(
+        InlineKeyboardButton(text="Посмотреть колоду 🃏", callback_data="view_deck"),
+        InlineKeyboardButton(text="Автосбор 🔁", callback_data="auto_deck")
+    )
+    bld.row(
+        InlineKeyboardButton(text="📦 Сундук", callback_data="stash_menu:0:deck"),
+        InlineKeyboardButton(text="Назад 🔙", callback_data="b_menu_back")
+    )
 
     text = (
-        "Здесь место для вашых колод 🎴\n\n"
-        "Можно иметь лишь две колоды. Выберите колоду и нажмите «✅ Выбрать» "
-        "чтобы сделать её активной для боёв.\n\n"
+        "🎴 <b>Здесь место для ваших колод</b>\n\n"
+        "Можно иметь лишь две колоды. Выберите колоду и нажмите «✅ Выбрать», чтобы сделать её <b>активной</b> для боёв.\n\n"
         "Нажмите на название колоды, чтобы редактировать её."
     )
-    if isinstance(message, types.Message):
-        await message.answer(text, reply_markup=bld.as_markup())
-    else:
-        await message.edit_text(text, reply_markup=bld.as_markup())
+    return text, bld.as_markup()
+
+
+async def show_multi_deck_main(target, user_id):
+    """Главный экран хаба колод с умным редактированием (без спама)"""
+    text, markup = _get_multi_deck_main_ui(user_id)
+
+    if isinstance(target, CallbackQuery):
+        try:
+            # Пытаемся просто изменить текст (сработает, если мы уже в текстовом меню)
+            await target.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+        except Exception:
+            try:
+                # Если прошлое сообщение было с картинкой, edit_text не сработает.
+                # Поэтому удаляем старое сообщение с картинкой и отправляем новое текстовое.
+                await target.message.delete()
+            except Exception:
+                pass
+            await target.message.answer(text, reply_markup=markup, parse_mode="HTML")
+
+    elif isinstance(target, types.Message):
+        await target.answer(text, reply_markup=markup, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "manual_deck_start")
 async def manual_deck_start(cq: CallbackQuery):
-    await show_multi_deck_main(cq.message, cq.from_user.id)
+    await show_multi_deck_main(cq, cq.from_user.id)
+    await cq.answer()
+
 
 @router.callback_query(F.data.startswith("mdeck_select:"))
 async def mdeck_select_cb(cq: CallbackQuery):
@@ -447,15 +474,13 @@ async def mdeck_select_cb(cq: CallbackQuery):
     if not deck:
         return await cq.answer("Колода не найдена!", show_alert=True)
 
-    # Сбрасываем активность у всех колод пользователя
     db_exec("UPDATE multi_decks SET is_active = 0 WHERE user_id = ?", (uid,))
-    # Устанавливаем выбранную
     db_exec("UPDATE multi_decks SET is_active = 1 WHERE deck_id = ?", (deck_id,))
-    # Синхронизируем с таблицей decks для боёв
     sync_active_deck(uid, deck_id)
 
     await cq.answer("✅ Колода выбрана как активная!", show_alert=True)
-    await show_multi_deck_main(cq.message, uid)
+    await show_multi_deck_main(cq, uid)
+
 
 @router.callback_query(F.data == "mdeck_add")
 async def mdeck_add_cb(cq: CallbackQuery, state: FSMContext):
@@ -464,33 +489,71 @@ async def mdeck_add_cb(cq: CallbackQuery, state: FSMContext):
         return await cq.answer("Максимум 2 колоды!", show_alert=True)
 
     bld = InlineKeyboardBuilder()
-    bld.button(text="Отменить", callback_data="mdeck_cancel_add")
-    await cq.message.edit_text("🗞️ Введите название для колоды, максимум 10 букв..", reply_markup=bld.as_markup())
+    bld.button(text="Отменить ❌", callback_data="mdeck_cancel_add")
+
+    await cq.message.edit_text("🗞️ <b>Введите название для колоды</b> (максимум 10 символов):",
+                               reply_markup=bld.as_markup(), parse_mode="HTML")
+
     await state.set_state(MultiDeckState.waiting_for_deck_name)
+    # Запоминаем ID сообщения, чтобы отредактировать его после ввода текста
+    await state.update_data(prompt_msg_id=cq.message.message_id)
+
 
 @router.callback_query(F.data == "mdeck_cancel_add")
 async def mdeck_cancel_add_cb(cq: CallbackQuery, state: FSMContext):
     await state.clear()
-    await show_multi_deck_main(cq.message, cq.from_user.id)
+    await show_multi_deck_main(cq, cq.from_user.id)
     await cq.answer()
+
 
 @router.message(MultiDeckState.waiting_for_deck_name)
 async def mdeck_name_entered(msg: types.Message, state: FSMContext):
     name = msg.text.strip()
+
+    # Удаляем сообщение пользователя, чтобы не засорять чат
+    try:
+        await msg.delete()
+    except Exception:
+        pass
+
     if len(name) > 10:
-        return await msg.answer("Максимум 10 букв! Попробуйте еще раз.")
+        sent = await msg.answer("⚠️ Название должно быть не более 10 символов! Попробуйте еще раз.")
+        await asyncio.sleep(3)
+        try:
+            await sent.delete()
+        except:
+            pass
+        return
 
     db_exec("INSERT INTO multi_decks (user_id, name) VALUES (?, ?)", (msg.from_user.id, name))
+
+    data = await state.get_data()
+    prompt_msg_id = data.get("prompt_msg_id")
     await state.clear()
+
+    # Если мы сохранили ID меню бота, редактируем его
+    if prompt_msg_id:
+        text, markup = _get_multi_deck_main_ui(msg.from_user.id)
+        try:
+            await msg.bot.edit_message_text(text, chat_id=msg.chat.id, message_id=prompt_msg_id, reply_markup=markup,
+                                            parse_mode="HTML")
+            return
+        except Exception:
+            pass
+
+    # Фолбек, если отредактировать не вышло
     await show_multi_deck_main(msg, msg.from_user.id)
 
 
 @router.callback_query(F.data.startswith("mdeck_view:"))
-async def mdeck_view_cb(cq: CallbackQuery):
+async def mdeck_view_cb(cq: CallbackQuery, state: FSMContext):
+    await state.clear()  # На случай, если игрок отменил переименование
+
     deck_id = int(cq.data.split(":")[1])
     deck = db_exec("SELECT name FROM multi_decks WHERE deck_id = ? AND user_id = ?", (deck_id, cq.from_user.id),
                    fetch=True)
-    if not deck: return await cq.answer("Колода не найдена!", show_alert=True)
+    if not deck:
+        return await cq.answer("Колода не найдена!", show_alert=True)
     deck_name = deck[0]
 
     slots = db_exec("SELECT slot_index, card_id FROM multi_deck_slots WHERE deck_id = ?", (deck_id,), fetchall=True)
@@ -519,29 +582,56 @@ async def mdeck_view_cb(cq: CallbackQuery):
     bld.button(text="Назад 🔙", callback_data="manual_deck_start")
     bld.adjust(1)
 
-    await cq.message.edit_text(text, reply_markup=bld.as_markup())
+    try:
+        await cq.message.edit_text(text, reply_markup=bld.as_markup())
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("mdeck_rename:"))
 async def mdeck_rename_cb(cq: CallbackQuery, state: FSMContext):
     deck_id = int(cq.data.split(":")[1])
-    await state.update_data(rename_deck_id=deck_id)
+    await state.update_data(rename_deck_id=deck_id, prompt_msg_id=cq.message.message_id)
     bld = InlineKeyboardBuilder()
-    bld.button(text="Отменить", callback_data=f"mdeck_view:{deck_id}")
-    await cq.message.edit_text("🗞️ Введите новое название для колоды, максимум 10 букв..", reply_markup=bld.as_markup())
+    bld.button(text="Отменить ❌", callback_data=f"mdeck_view:{deck_id}")
+    await cq.message.edit_text("🗞️ <b>Введите новое название для колоды</b> (максимум 10 символов):",
+                               reply_markup=bld.as_markup(), parse_mode="HTML")
     await state.set_state(MultiDeckState.waiting_for_deck_rename)
 
 
 @router.message(MultiDeckState.waiting_for_deck_rename)
 async def mdeck_renamed(msg: types.Message, state: FSMContext):
     name = msg.text.strip()
+
+    try:
+        await msg.delete()
+    except Exception:
+        pass
+
     if len(name) > 10:
-        return await msg.answer("Максимум 10 букв! Попробуйте еще раз.")
+        sent = await msg.answer("⚠️ Максимум 10 символов! Попробуйте еще раз.")
+        await asyncio.sleep(3)
+        try:
+            await sent.delete()
+        except:
+            pass
+        return
 
     data = await state.get_data()
     deck_id = data.get('rename_deck_id')
+    prompt_msg_id = data.get('prompt_msg_id')
+
     db_exec("UPDATE multi_decks SET name = ? WHERE deck_id = ? AND user_id = ?", (name, deck_id, msg.from_user.id))
     await state.clear()
+
+    if prompt_msg_id:
+        text, markup = _get_multi_deck_main_ui(msg.from_user.id)
+        try:
+            await msg.bot.edit_message_text(text, chat_id=msg.chat.id, message_id=prompt_msg_id, reply_markup=markup,
+                                            parse_mode="HTML")
+            return
+        except Exception:
+            pass
 
     await show_multi_deck_main(msg, msg.from_user.id)
 
@@ -552,7 +642,9 @@ async def mdeck_del_cb(cq: CallbackQuery):
     db_exec("DELETE FROM multi_decks WHERE deck_id = ? AND user_id = ?", (deck_id, cq.from_user.id))
     db_exec("DELETE FROM multi_deck_slots WHERE deck_id = ?", (deck_id,))
     await cq.answer("Колода удалена!")
-    await show_multi_deck_main(cq.message, cq.from_user.id)
+    await show_multi_deck_main(cq, cq.from_user.id)
+
+
 @router.callback_query(F.data.startswith("mdeck_edit:"))
 async def mdeck_edit_cb(cq: CallbackQuery):
     deck_id = int(cq.data.split(":")[1])
@@ -565,14 +657,12 @@ async def show_mdeck_slots(cq: CallbackQuery, deck_id: int):
     if not deck: return
     deck_name = deck[0]
 
-    # Делаем эту колоду активной
     sync_active_deck(cq.from_user.id, deck_id)
 
     slots = db_exec("SELECT slot_index, card_id FROM multi_deck_slots WHERE deck_id = ?", (deck_id,), fetchall=True)
     slot_dict = {s[0]: s[1] for s in slots}
 
     text_lines = [f"🃏 Колода: «{deck_name}»", "Нажимайте на ячейки снизу, чтобы выбрать карту:\n"]
-
     bld = InlineKeyboardBuilder()
     row_btns = []
 
@@ -585,7 +675,7 @@ async def show_mdeck_slots(cq: CallbackQuery, deck_id: int):
             btn_text = f"✅"
         else:
             cname = "Пусто"
-            spd, str_, int_ = 0, 0, 0
+            spd = str_ = int_ = 0
             btn_text = f"❌"
 
         prefix = "┌" if i == 1 else ("└" if i == 6 else "├")
@@ -602,10 +692,11 @@ async def show_mdeck_slots(cq: CallbackQuery, deck_id: int):
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"mdeck_view:{deck_id}"))
 
     text = "\n".join(text_lines)
-    if isinstance(cq, types.Message):
-        await cq.answer(text, reply_markup=bld.as_markup())
-    else:
+
+    try:
         await cq.message.edit_text(text, reply_markup=bld.as_markup())
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("mdeck_slot:"))
@@ -642,7 +733,11 @@ async def mdeck_slot_cb(cq: CallbackQuery):
 
     bld.button(text="Назад 🔙", callback_data=f"mdeck_edit:{deck_id}")
     bld.adjust(1)
-    await cq.message.edit_text(text, reply_markup=bld.as_markup())
+
+    try:
+        await cq.message.edit_text(text, reply_markup=bld.as_markup())
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("mdeck_rarity:"))
@@ -667,7 +762,7 @@ async def mdeck_rarity_cb(cq: CallbackQuery):
     current_deck_cids = [s[0] for s in slots]
 
     mythic_divine_cnt = sum(1 for cid in current_deck_cids if cid in CARDS and (
-                "Мифическая" in CARDS[cid]['rarity'] or "Божественная" in CARDS[cid]['rarity']))
+            "Мифическая" in CARDS[cid]['rarity'] or "Божественная" in CARDS[cid]['rarity']))
     leg_cnt = sum(1 for cid in current_deck_cids if cid in CARDS and "Легендарная" in CARDS[cid]['rarity'])
 
     if r_key in ["divine", "mythic"] and mythic_divine_cnt >= 1:
@@ -683,14 +778,13 @@ async def mdeck_rarity_cb(cq: CallbackQuery):
 
     if not avail:
         return await cq.answer("Нет доступных карт этой редкости для добавления!", show_alert=True)
-    # Сортируем от сильнейшего к слабейшему (по сумме статов)
-    avail.sort(key=lambda cid: (
-        CARDS[cid]['speed'] + CARDS[cid]['strength'] + CARDS[cid]['intellect']
-    ), reverse=True)
+
+    avail.sort(key=lambda cid: (CARDS[cid]['speed'] + CARDS[cid]['strength'] + CARDS[cid]['intellect']), reverse=True)
 
     items_per_page = 10
     total_pages = (len(avail) + items_per_page - 1) // items_per_page
-    if page >= total_pages: page = max(0, total_pages - 1)
+    if page >= total_pages:
+        page = max(0, total_pages - 1)
 
     start_idx = page * items_per_page
     page_cids = avail[start_idx:start_idx + items_per_page]
@@ -700,7 +794,6 @@ async def mdeck_rarity_cb(cq: CallbackQuery):
         c = CARDS[cid]
         btn_text = f"«{c['name']}» {c['speed']} | {c['strength']} | {c['intellect']}"
         bld.button(text=btn_text, callback_data=f"mdeck_set:{deck_id}:{slot_index}:{cid}")
-
     bld.adjust(1)
 
     nav_row = []
@@ -721,7 +814,10 @@ async def mdeck_rarity_cb(cq: CallbackQuery):
     bld.row(*nav_row)
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"mdeck_slot:{deck_id}:{slot_index}"))
 
-    await cq.message.edit_text(f"Выберите карту ({rarity}):", reply_markup=bld.as_markup())
+    try:
+        await cq.message.edit_text(f"Выберите карту ({rarity}):", reply_markup=bld.as_markup())
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("mdeck_set:"))
@@ -3172,6 +3268,33 @@ async def distribute_all_top_rewards(bot: Bot):
     return count_curr, count_cards
 
 
+@router.message(Command("fix_hwang"))
+async def admin_fix_hwang_card(msg: types.Message, bot: Bot):
+    """Временная админ-команда для починки старого ID карты в базе данных"""
+    # Проверка на админа (замени ADMIN_IDS на свою переменную, если она импортируется иначе)
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    old_id = "hwang_jae_won"
+    new_id = "hwang_jae_won1"
+
+    try:
+        # Обновляем все связанные таблицы
+        db_exec("UPDATE cards_inv SET card_id = ? WHERE card_id = ?", (new_id, old_id))
+        db_exec("UPDATE decks SET card_id = ? WHERE card_id = ?", (new_id, old_id))
+        db_exec("UPDATE multi_deck_slots SET card_id = ? WHERE card_id = ?", (new_id, old_id))
+        db_exec("UPDATE cards_stash SET card_id = ? WHERE card_id = ?", (new_id, old_id))
+        try:
+            db_exec("UPDATE favorite_cards SET card_id = ? WHERE card_id = ?", (new_id, old_id))
+        except:
+            pass  # Если вдруг такой таблицы нет, пропускаем
+
+        await msg.answer(
+            f"✅ <b>Успешно!</b>\nВсе старые карты <code>{old_id}</code> в базе данных были заменены на <code>{new_id}</code>.\nОшибок в боях больше быть не должно!",
+            parse_mode="HTML")
+    except Exception as e:
+        await msg.answer(f"❌ Произошла ошибка при обновлении БД: {e}")
+
 @router.message(Command("reset_top"))
 async def cmd_reset_top(msg: Message, bot: Bot):
     """Команда для ручного сброса сезонного ТОПа"""
@@ -3223,17 +3346,21 @@ async def auto_top_distributor(bot: Bot):
 
 
 # =========================================================================
-# СУНДУК — обновленная система с возвратом в меню
+# СУНДУК — ПРОДВИНУТАЯ СИСТЕМА (ПОИСК, ФИЛЬТРЫ, СОРТИРОВКА)
 # =========================================================================
 
-STASH_PAGE_SIZE = 9
+STASH_PAGE_SIZE = 7  # Чуть уменьшили, чтобы влезли кнопки фильтров
+
+
+class StashState(StatesGroup):
+    waiting_for_search = State()
 
 
 def _stash_menu_kb(uid: int, page: int = 0, source: str = "deck"):
     """Меню сундука: показывает что лежит, плюс кнопки."""
     bld = InlineKeyboardBuilder()
     bld.button(text="➕ Положить карту", callback_data=f"stash_put:0:{source}")
-    bld.button(text="📤 Забрать карту", callback_data=f"stash_take:{page}:{source}")
+    bld.button(text="📤 Забрать карту", callback_data=f"stash_take:0:{source}")
     bld.button(text="Гайд 📖", callback_data=f"stash_guide:{source}")
     back_cb = "inv_main" if source == "inv" else "my_deck"
     bld.button(text="Назад 🔙", callback_data=back_cb)
@@ -3250,7 +3377,7 @@ async def stash_guide_cb(cq: CallbackQuery):
         "Сундук это ваше личное хранилище. Вот как его можно использовать:\n\n"
         "📦 <b>Скрытие карт:</b> Отложенные сюда карты не будут участвовать в битвах и автосборке колоды.\n"
         "💎 <b>Хранилище редких карт:</b> Прячьте самые ценные карточки, чтобы случайно их не использовать или не потерять.\n"
-        "🛡️ <b>Одинаковые карты:</b> Если у вы вдруг хотите иметь дубликаты, сундук отлично подойдет для их хранения.\n\n"
+        "🛡️ <b>Одинаковые карты:</b> В сундуке можно хранить максимум 2 дубликата одной карты.\n\n"
         "<i>⚠️ Важно: из сундука нельзя забрать карту, если точно такая же уже лежит в вашем активном инвентаре.</i>"
     )
     bld = InlineKeyboardBuilder()
@@ -3267,7 +3394,10 @@ async def stash_guide_cb(cq: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("stash_menu:"))
-async def stash_menu_cb(cq: CallbackQuery):
+async def stash_menu_cb(cq: CallbackQuery, state: FSMContext):
+    # Очищаем фильтры при возврате в главное меню сундука
+    await state.update_data(stash_sort="rdesc", stash_filt="all", stash_search="")
+
     parts = cq.data.split(":")
     page = int(parts[1]) if len(parts) > 1 else 0
     source = parts[2] if len(parts) > 2 else "deck"
@@ -3305,7 +3435,7 @@ async def stash_menu_cb(cq: CallbackQuery):
     else:
         lines.append("<i>Сундук пуст.</i>")
 
-    lines.append("\n<blockquote>Карты в Сундуке НЕ участвуют в боях и автосборе колоды.</blockquote>")
+    lines.append("\n<blockquote>Карты в Сундуке НЕ участвуют в боях и автосборе.</blockquote>")
 
     text = "\n".join(lines)
     try:
@@ -3319,40 +3449,153 @@ async def stash_menu_cb(cq: CallbackQuery):
     await cq.answer()
 
 
+# --- ОБЩИЕ КОНТРОЛЛЕРЫ ФИЛЬТРОВ И СОРТИРОВКИ ---
+
+@router.callback_query(F.data.startswith("stash_sort:"))
+async def stash_sort_cb(cq: CallbackQuery, state: FSMContext):
+    _, action, next_sort, source = cq.data.split(":")
+    await state.update_data(stash_sort=next_sort)
+    await handle_stash_redirect(cq, state, action, source)
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("stash_filt:"))
+async def stash_filt_cb(cq: CallbackQuery, state: FSMContext):
+    _, action, next_filt, source = cq.data.split(":")
+    await state.update_data(stash_filt=next_filt)
+    await handle_stash_redirect(cq, state, action, source)
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("stash_search:"))
+async def stash_search_cb(cq: CallbackQuery, state: FSMContext):
+    _, action, source = cq.data.split(":")
+    await state.update_data(stash_active_source=source, stash_active_action=action)
+    await state.set_state(StashState.waiting_for_search)
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Отмена", callback_data=f"stash_{action}:0:{source}")
+    await cq.message.edit_text("🔍 Введите название карты (или часть имени) для поиска:", reply_markup=bld.as_markup())
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("stash_clear_search:"))
+async def stash_clear_search_cb(cq: CallbackQuery, state: FSMContext):
+    _, action, source = cq.data.split(":")
+    await state.update_data(stash_search="")
+    await handle_stash_redirect(cq, state, action, source)
+    await cq.answer()
+
+
+@router.message(StashState.waiting_for_search)
+async def stash_search_msg(msg: types.Message, state: FSMContext):
+    data = await state.get_data()
+    source = data.get("stash_active_source", "deck")
+    action = data.get("stash_active_action", "put")
+    await state.update_data(stash_search=msg.text.strip())
+    await state.set_state(None)
+    bld = InlineKeyboardBuilder()
+    bld.button(text="Показать результаты 🔍", callback_data=f"stash_{action}:0:{source}")
+    await msg.answer(f"✅ Поиск по запросу «{msg.text.strip()}» применен!", reply_markup=bld.as_markup())
+
+
+async def handle_stash_redirect(cq: CallbackQuery, state: FSMContext, action: str, source: str):
+    new_cq = cq.model_copy(update={"data": f"stash_{action}:0:{source}"})
+    if action == "put":
+        await stash_put_cb(new_cq, state)
+    else:
+        await stash_take_cb(new_cq, state)
+
+
+def apply_stash_filters_and_sort(items, sort_mode, filt_mode, search_q):
+    filtered = []
+    r_map = {"div": "Божественная", "myth": "Мифическая", "leg": "Легендарная",
+             "epic": "Эпическая", "rare": "Редкая", "com": "Обычная"}
+
+    for cid, c, cnt in items:
+        # Фильтр редкости
+        if filt_mode != "all" and r_map[filt_mode] not in c.get("rarity", ""):
+            continue
+        # Поиск по имени
+        if search_q and search_q not in c.get("name", "").lower():
+            continue
+        filtered.append((cid, c, cnt))
+
+    # Сортировка
+    rarity_order = {"Обычная ⚪️": 1, "Редкая 🟡": 2, "Эпическая 🟢": 3,
+                    "Легендарная 🔵": 4, "Мифическая 🔴": 5, "Божественная ⚫️": 6}
+
+    if sort_mode == "rdesc":
+        filtered.sort(key=lambda x: rarity_order.get(x[1].get('rarity'), 0), reverse=True)
+    elif sort_mode == "rasc":
+        filtered.sort(key=lambda x: rarity_order.get(x[1].get('rarity'), 0), reverse=False)
+    elif sort_mode == "stdesc":
+        filtered.sort(key=lambda x: (x[1].get('speed', 0) + x[1].get('strength', 0) + x[1].get('intellect', 0)),
+                      reverse=True)
+
+    return filtered
+
+
+def add_stash_controls(bld: InlineKeyboardBuilder, action: str, source: str, sort_mode: str, filt_mode: str,
+                       search_q: str):
+    s_names = {"rdesc": "Редкость ⬇️", "rasc": "Редкость ⬆️", "stdesc": "Статы ⬇️"}
+    f_names = {"all": "Все", "div": "Бож ⚫️", "myth": "Миф 🔴", "leg": "Лег 🔵", "epic": "Эпик 🟢", "rare": "Редк 🟡",
+               "com": "Обыч ⚪️"}
+    next_s = {"rdesc": "rasc", "rasc": "stdesc", "stdesc": "rdesc"}
+    next_f = {"all": "div", "div": "myth", "myth": "leg", "leg": "epic", "epic": "rare", "rare": "com", "com": "all"}
+
+    bld.row(
+        InlineKeyboardButton(text=f"🔃 {s_names.get(sort_mode, 'Сорт')}",
+                             callback_data=f"stash_sort:{action}:{next_s[sort_mode]}:{source}"),
+        InlineKeyboardButton(text=f"⚡️ Фильтр: {f_names.get(filt_mode, 'Все')}",
+                             callback_data=f"stash_filt:{action}:{next_f[filt_mode]}:{source}")
+    )
+
+    search_text = f"🔍 Поиск: {search_q}" if search_q else "🔍 Поиск по названию"
+    bld.row(InlineKeyboardButton(text=search_text, callback_data=f"stash_search:{action}:{source}"))
+    if search_q:
+        bld.row(InlineKeyboardButton(text="❌ Сбросить поиск", callback_data=f"stash_clear_search:{action}:{source}"))
+
+
+# --- ПОЛОЖИТЬ КАРТУ В СУНДУК ---
+
 @router.callback_query(F.data.startswith("stash_put:"))
-async def stash_put_cb(cq: CallbackQuery):
+async def stash_put_cb(cq: CallbackQuery, state: FSMContext):
     parts = cq.data.split(":")
     page = int(parts[1])
     source = parts[2] if len(parts) > 2 else "deck"
     uid = cq.from_user.id
+
+    data = await state.get_data()
+    sort_mode = data.get("stash_sort", "rdesc")
+    filt_mode = data.get("stash_filt", "all")
+    search_q = data.get("stash_search", "").lower()
 
     rows = db_exec("SELECT card_id, COUNT(*) FROM cards_inv WHERE user_id = ? GROUP BY card_id",
                    (uid,), fetchall=True)
     if not rows:
         return await cq.answer("В инвентаре нет карт.", show_alert=True)
 
-    rarity_order = {"Обычная ⚪️": 1, "Редкая 🟡": 2, "Эпическая 🟢": 3,
-                    "Легендарная 🔵": 4, "Мифическая 🔴": 5, "Божественная ⚫️": 6}
     items = []
     for cid, cnt in rows:
         c = CARDS.get(cid)
-        if not c:
-            continue
-        items.append((cid, c, cnt))
+        if c: items.append((cid, c, cnt))
 
-    items.sort(key=lambda x: rarity_order.get(x[1].get('rarity'), 0), reverse=True)
+    filtered_items = apply_stash_filters_and_sort(items, sort_mode, filt_mode, search_q)
 
-    total_pages = max(1, (len(items) + STASH_PAGE_SIZE - 1) // STASH_PAGE_SIZE)
+    total_pages = max(1, (len(filtered_items) + STASH_PAGE_SIZE - 1) // STASH_PAGE_SIZE)
     page = max(0, min(page, total_pages - 1))
-    chunk = items[page * STASH_PAGE_SIZE:(page + 1) * STASH_PAGE_SIZE]
+    chunk = filtered_items[page * STASH_PAGE_SIZE:(page + 1) * STASH_PAGE_SIZE]
 
     bld = InlineKeyboardBuilder()
     for cid, c, cnt in chunk:
         emoji = c['rarity'].split()[-1] if len(c['rarity'].split()) > 1 else ""
-        cnt_str = f" (в наличии: {cnt})" if cnt > 1 else ""
-        bld.button(text=f"{c['name']} {emoji}{cnt_str}",
+        cnt_str = f" ({cnt} шт)" if cnt > 1 else ""
+        stats = f"⚡️{c.get('speed', 0)} 💪{c.get('strength', 0)} 🧠{c.get('intellect', 0)}"
+        bld.button(text=f"«{c['name']}» {emoji} | {stats}{cnt_str}",
                    callback_data=f"stash_do_put:{cid}:{page}:{source}")
     bld.adjust(1)
+
+    add_stash_controls(bld, "put", source, sort_mode, filt_mode, search_q)
 
     nav = []
     if page > 0:
@@ -3365,16 +3608,20 @@ async def stash_put_cb(cq: CallbackQuery):
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"stash_menu:0:{source}"))
 
     try:
-        await cq.message.edit_text("🃏 Выберите карту, которую хотите положить в Сундук:",
-                                   reply_markup=bld.as_markup())
+        await cq.message.edit_text("📥 <b>Инвентарь</b>\nВыберите карту, которую хотите положить в Сундук:",
+                                   reply_markup=bld.as_markup(), parse_mode="HTML")
     except Exception:
-        await cq.message.answer("🃏 Выберите карту, которую хотите положить в Сундук:",
-                                reply_markup=bld.as_markup())
+        try:
+            await cq.message.delete()
+        except:
+            pass
+        await cq.message.answer("📥 <b>Инвентарь</b>\nВыберите карту, которую хотите положить в Сундук:",
+                                reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
 
 
 @router.callback_query(F.data.startswith("stash_do_put:"))
-async def stash_do_put_cb(cq: CallbackQuery):
+async def stash_do_put_cb(cq: CallbackQuery, state: FSMContext):
     parts = cq.data.split(":")
     cid = parts[1]
     page = parts[2]
@@ -3385,7 +3632,6 @@ async def stash_do_put_cb(cq: CallbackQuery):
     if in_deck:
         return await cq.answer("Эта карта стоит в активной колоде! Уберите её сначала.", show_alert=True)
 
-    # 🔥 НОВОЕ: Ограничение на 2 одинаковые карты в сундуке
     stash_count = db_exec("SELECT COUNT(*) FROM cards_stash WHERE user_id = ? AND card_id = ?", (uid, cid), fetch=True)
     if stash_count and stash_count[0] >= 2:
         return await cq.answer("❌ В сундуке нельзя хранить больше 2-х одинаковых карт!", show_alert=True)
@@ -3393,23 +3639,29 @@ async def stash_do_put_cb(cq: CallbackQuery):
     ok = stash_card(uid, cid)
     if not ok:
         return await cq.answer("Карта не найдена в инвентаре.", show_alert=True)
-        # === MANHWCARD PASS ===
+
     check_and_update_quests(uid, 'q_10_stash', 1)
 
     c = CARDS.get(cid, {})
     await cq.answer(f"📦 {c.get('name', cid)} → в Сундук", show_alert=False)
 
-    # 🔧 ИСПРАВЛЕНИЕ: Создаем копию объекта с новой датой
     new_cq = cq.model_copy(update={"data": f"stash_put:{page}:{source}"})
-    await stash_put_cb(new_cq)
+    await stash_put_cb(new_cq, state)
 
+
+# --- ЗАБРАТЬ КАРТУ ИЗ СУНДУКА ---
 
 @router.callback_query(F.data.startswith("stash_take:"))
-async def stash_take_cb(cq: CallbackQuery):
+async def stash_take_cb(cq: CallbackQuery, state: FSMContext):
     parts = cq.data.split(":")
     page = int(parts[1])
     source = parts[2] if len(parts) > 2 else "deck"
     uid = cq.from_user.id
+
+    data = await state.get_data()
+    sort_mode = data.get("stash_sort", "rdesc")
+    filt_mode = data.get("stash_filt", "all")
+    search_q = data.get("stash_search", "").lower()
 
     stash = get_stash(uid)
     if not stash:
@@ -3419,30 +3671,33 @@ async def stash_take_cb(cq: CallbackQuery):
     for cid in stash:
         counts[cid] = counts.get(cid, 0) + 1
 
-    unique_stash = list(counts.keys())
-    rarity_order = {"Обычная ⚪️": 1, "Редкая 🟡": 2, "Эпическая 🟢": 3,
-                    "Легендарная 🔵": 4, "Мифическая 🔴": 5, "Божественная ⚫️": 6}
     items = []
-    for cid in unique_stash:
+    for cid, cnt in counts.items():
         c = CARDS.get(cid)
-        if not c:
-            continue
-        items.append((cid, c, counts[cid]))
+        if c: items.append((cid, c, cnt))
 
-    items.sort(key=lambda x: rarity_order.get(x[1].get('rarity'), 0), reverse=True)
+    filtered_items = apply_stash_filters_and_sort(items, sort_mode, filt_mode, search_q)
 
-    total_pages = max(1, (len(items) + STASH_PAGE_SIZE - 1) // STASH_PAGE_SIZE)
-    page = max(0, min(page, total_pages - 1))
-    chunk = items[page * STASH_PAGE_SIZE:(page + 1) * STASH_PAGE_SIZE]
+    if not filtered_items and search_q:
+        # Если ничего не найдено
+        total_pages = 1
+        page = 0
+        chunk = []
+    else:
+        total_pages = max(1, (len(filtered_items) + STASH_PAGE_SIZE - 1) // STASH_PAGE_SIZE)
+        page = max(0, min(page, total_pages - 1))
+        chunk = filtered_items[page * STASH_PAGE_SIZE:(page + 1) * STASH_PAGE_SIZE]
 
     bld = InlineKeyboardBuilder()
     for cid, c, cnt in chunk:
         emoji = c['rarity'].split()[-1] if len(c['rarity'].split()) > 1 else ""
-        # Пишем '1 из X', чтобы игрок понимал, что забирает только одну карту
         cnt_str = f" (1 из {cnt})" if cnt > 1 else ""
-        bld.button(text=f"{c['name']} {emoji}{cnt_str}",
+        stats = f"⚡️{c.get('speed', 0)} 💪{c.get('strength', 0)} 🧠{c.get('intellect', 0)}"
+        bld.button(text=f"«{c['name']}» {emoji} | {stats}{cnt_str}",
                    callback_data=f"stash_do_take:{cid}:{page}:{source}")
     bld.adjust(1)
+
+    add_stash_controls(bld, "take", source, sort_mode, filt_mode, search_q)
 
     nav = []
     if page > 0:
@@ -3454,17 +3709,23 @@ async def stash_take_cb(cq: CallbackQuery):
         bld.row(*nav)
     bld.row(InlineKeyboardButton(text="Назад 🔙", callback_data=f"stash_menu:0:{source}"))
 
+    text = "📤 <b>Ваш Сундук</b>\nВыберите карту, которую хотите забрать:"
+    if not chunk and search_q:
+        text = "📤 <b>Ваш Сундук</b>\nКарты по вашему запросу не найдены."
+
     try:
-        await cq.message.edit_text("📤 Выберите карту, которую хотите забрать из Сундука:",
-                                   reply_markup=bld.as_markup())
+        await cq.message.edit_text(text, reply_markup=bld.as_markup(), parse_mode="HTML")
     except Exception:
-        await cq.message.answer("📤 Выберите карту, которую хотите забрать из Сундука:",
-                                reply_markup=bld.as_markup())
+        try:
+            await cq.message.delete()
+        except:
+            pass
+        await cq.message.answer(text, reply_markup=bld.as_markup(), parse_mode="HTML")
     await cq.answer()
 
 
 @router.callback_query(F.data.startswith("stash_do_take:"))
-async def stash_do_take_cb(cq: CallbackQuery):
+async def stash_do_take_cb(cq: CallbackQuery, state: FSMContext):
     parts = cq.data.split(":")
     cid = parts[1]
     page = parts[2]
@@ -3490,6 +3751,5 @@ async def stash_do_take_cb(cq: CallbackQuery):
     c = CARDS.get(cid, {})
     await cq.answer(f"📤 {c.get('name', cid)} → в инвентарь", show_alert=False)
 
-    # 🔧 ИСПРАВЛЕНИЕ: Создаем копию объекта с новой датой
     new_cq = cq.model_copy(update={"data": f"stash_take:{page}:{source}"})
-    await stash_take_cb(new_cq)
+    await stash_take_cb(new_cq, state)

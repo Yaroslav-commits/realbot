@@ -140,7 +140,7 @@ def _build_inv_main_text(uid: int) -> str:
 def _build_inv_main_kb() -> InlineKeyboardMarkup:
     bld = InlineKeyboardBuilder()
     bld.button(text="🎴 Просмотр карт",    callback_data="inv_view:0:all:0")
-    bld.button(text="🔍 Поиск по названию", callback_data="inv_search_start")
+    bld.button(text="🔍 Поиск по категориям", callback_data="inv_search_start")
     bld.button(text="📊 Коллекция",         callback_data="inv_collection")
     bld.button(text="📦 Сундук",            callback_data="stash_menu:0:inv")
     bld.row(InlineKeyboardButton(text="Мои скины 🏵️", callback_data="my_skins_categories"))
@@ -180,55 +180,222 @@ async def inv_main_cb(cq: CallbackQuery, state: FSMContext):
         await cq.message.answer(text, parse_mode="HTML", reply_markup=kb)
     await cq.answer()
 
-# ── Поиск по названию ──────────────────────────────────────────────────
+
+# ── Продвинутый Поиск ──────────────────────────────────────────────────
+
+class SearchState(StatesGroup):
+    waiting_for_name = State()
+    waiting_for_speed = State()
+    waiting_for_strength = State()
+    waiting_for_intellect = State()
+
 
 @router.callback_query(F.data == "inv_search_start")
-async def inv_search_start(cq: CallbackQuery, state: FSMContext):
-    await state.set_state(SearchState.waiting_for_query)
+async def inv_search_menu(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
     bld = InlineKeyboardBuilder()
-    bld.button(text="❌ Отмена", callback_data="inv_main")
+    bld.button(text="🔤 По названию", callback_data="inv_search_name")
+    bld.button(text="🪐 По вселенной", callback_data="inv_search_series")
+    bld.button(text="📊 По статам", callback_data="inv_search_stats")
+    bld.button(text="🔙 Назад", callback_data="inv_main")
+    bld.adjust(1, 1, 1, 1)
+
+    txt = "🔍 <b>Продвинутый поиск</b>\n\nВыберите, по какому критерию вы хотите найти свои карты:"
+
     try:
-        await cq.message.edit_text(
-            "🔍 <b>Поиск карты</b>\n\nВведите название (или его часть):",
-            parse_mode="HTML",
-            reply_markup=bld.as_markup()
-        )
+        await cq.message.edit_text(txt, parse_mode="HTML", reply_markup=bld.as_markup())
     except Exception:
         await cq.message.delete()
-        await cq.message.answer(
-            "🔍 <b>Поиск карты</b>\n\nВведите название (или его часть):",
-            parse_mode="HTML",
-            reply_markup=bld.as_markup()
-        )
+        await cq.message.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
     await cq.answer()
 
-@router.message(StateFilter(SearchState.waiting_for_query))
-async def inv_search_query(msg: types.Message, state: FSMContext):
+
+@router.callback_query(F.data == "inv_search_name")
+async def inv_search_name_start(cq: CallbackQuery, state: FSMContext):
+    await state.set_state(SearchState.waiting_for_name)
+    bld = InlineKeyboardBuilder()
+    bld.button(text="❌ Отмена", callback_data="inv_search_start")
+    try:
+        await cq.message.edit_text("🔍 <b>Поиск по названию</b>\n\nВведите название карты (или его часть):",
+                                   reply_markup=bld.as_markup(), parse_mode="HTML")
+    except:
+        await cq.message.answer("🔍 <b>Поиск по названию</b>\n\nВведите название карты (или его часть):",
+                                reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+
+# --- ПОИСК ПО ВСЕЛЕННОЙ (КНОПКИ) ---
+@router.callback_query(F.data == "inv_search_series")
+async def inv_search_series_start(cq: CallbackQuery, state: FSMContext):
     await state.clear()
+    await _render_series_page(cq, 0)
+
+
+@router.callback_query(F.data.startswith("inv_search_series_page:"))
+async def inv_search_series_page(cq: CallbackQuery):
+    page = int(cq.data.split(":")[1])
+    await _render_series_page(cq, page)
+
+
+async def _render_series_page(cq: CallbackQuery, page: int):
+    # Собираем уникальные названия вселенных из всех существующих карт
+    all_series = sorted(list(set(c.get('series', 'Неизвестно') for c in CARDS.values() if c.get('series'))))
+
+    items_per_page = 10
+    total_pages = max(1, (len(all_series) + items_per_page - 1) // items_per_page)
+    page = max(0, min(page, total_pages - 1))
+
+    start = page * items_per_page
+    page_series = all_series[start:start + items_per_page]
+
+    bld = InlineKeyboardBuilder()
+    for s in page_series:
+        # Лимит callback_data в Telegram 64 байта, поэтому безопасно обрезаем
+        safe_s = s[:40]
+        bld.button(text=s, callback_data=f"inv_s_sel:{safe_s}")
+
+    bld.adjust(1)
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"inv_search_series_page:{page - 1}"))
+    nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="ignore"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"inv_search_series_page:{page + 1}"))
+
+    if nav:
+        bld.row(*nav)
+
+    bld.row(InlineKeyboardButton(text="❌ Отмена", callback_data="inv_search_start"))
+
+    txt = "🪐 <b>Поиск по вселенной</b>\n\nВыберите нужную вселенную из списка ниже:"
+    try:
+        await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    except:
+        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("inv_s_sel:"))
+async def inv_series_selected(cq: CallbackQuery, state: FSMContext):
+    query = cq.data.split(":", 1)[1].lower()
+    await state.update_data(search_type="series", search_query=query)
+    await _process_search_and_show(cq, state, page=0)
+
+
+# --- ПОИСК ПО СТАТАМ ---
+@router.callback_query(F.data == "inv_search_stats")
+async def inv_search_stats_start(cq: CallbackQuery, state: FSMContext):
+    await state.set_state(SearchState.waiting_for_speed)
+    bld = InlineKeyboardBuilder()
+    bld.button(text="❌ Отмена", callback_data="inv_search_start")
+    try:
+        await cq.message.edit_text(
+            "⚡️ <b>Поиск по статам: Шаг 1/3</b>\n\nВведите целевое значение <b>Скорости</b> (или отправьте 0, если не важно):",
+            reply_markup=bld.as_markup(), parse_mode="HTML")
+    except:
+        pass
+    await cq.answer()
+
+
+@router.message(StateFilter(SearchState.waiting_for_name))
+async def inv_search_name_msg(msg: types.Message, state: FSMContext):
     query = (msg.text or "").strip().lower()
     if not query:
-        return await msg.answer("Пустой запрос. Попробуйте ещё раз.", parse_mode="HTML")
+        return await msg.answer("Пустой запрос. Попробуйте ещё раз.")
+    await state.update_data(search_type="name", search_query=query)
+    await state.set_state(None)
+    await _process_search_and_show(msg, state, page=0)
 
-    user_cids = _get_user_cids(msg.from_user.id)
-    matched = [
-        cid for cid in user_cids
-        if query in CARDS.get(cid, {}).get('name', '').lower()
-    ]
-    matched = _sort_cards(matched)
+
+@router.message(StateFilter(SearchState.waiting_for_speed))
+async def inv_search_speed_msg(msg: types.Message, state: FSMContext):
+    val = msg.text.strip()
+    if not val.isdigit(): return await msg.answer("Пожалуйста, введите число (0 или больше).")
+    await state.update_data(min_spd=int(val))
+    await state.set_state(SearchState.waiting_for_strength)
+    bld = InlineKeyboardBuilder()
+    bld.button(text="❌ Отмена", callback_data="inv_search_start")
+    await msg.answer("💪 <b>Поиск по статам: Шаг 2/3</b>\n\nВведите целевое значение <b>Силы</b> (или отправьте 0):",
+                     reply_markup=bld.as_markup(), parse_mode="HTML")
+
+
+@router.message(StateFilter(SearchState.waiting_for_strength))
+async def inv_search_strength_msg(msg: types.Message, state: FSMContext):
+    val = msg.text.strip()
+    if not val.isdigit(): return await msg.answer("Пожалуйста, введите число (0 или больше).")
+    await state.update_data(min_str=int(val))
+    await state.set_state(SearchState.waiting_for_intellect)
+    bld = InlineKeyboardBuilder()
+    bld.button(text="❌ Отмена", callback_data="inv_search_start")
+    await msg.answer(
+        "🧠 <b>Поиск по статам: Шаг 3/3</b>\n\nВведите целевое значение <b>Интеллекта</b> (или отправьте 0):",
+        reply_markup=bld.as_markup(), parse_mode="HTML")
+
+
+@router.message(StateFilter(SearchState.waiting_for_intellect))
+async def inv_search_intellect_msg(msg: types.Message, state: FSMContext):
+    val = msg.text.strip()
+    if not val.isdigit(): return await msg.answer("Пожалуйста, введите число (0 или больше).")
+    await state.update_data(min_int=int(val), search_type="stats")
+    await state.set_state(None)
+    await _process_search_and_show(msg, state, page=0)
+
+
+async def _process_search_and_show(target, state: FSMContext, page: int):
+    uid = target.from_user.id
+    data = await state.get_data()
+    search_type = data.get("search_type")
+
+    user_cids = _get_user_cids(uid)
+    matched = []
+
+    if search_type == "name":
+        query = data.get("search_query", "")
+        matched = [cid for cid in user_cids if query in CARDS.get(cid, {}).get('name', '').lower()]
+        matched = _sort_cards(matched)
+        info_txt = f"по названию «<b>{query}</b>»"
+
+    elif search_type == "series":
+        query = data.get("search_query", "")
+        matched = [cid for cid in user_cids if query in CARDS.get(cid, {}).get('series', 'неизвестно').lower()]
+        matched = _sort_cards(matched)
+        info_txt = f"по вселенной «<b>{query.title()}</b>»"
+
+    elif search_type == "stats":
+        spd = data.get("min_spd", 0)
+        str_ = data.get("min_str", 0)
+        int_ = data.get("min_int", 0)
+
+        def stat_distance(cid):
+            c = CARDS.get(cid, {})
+            dist = 0
+            # Считаем разницу только для статов, которые игрок указал (> 0)
+            if spd > 0: dist += abs(c.get('speed', 0) - spd)
+            if str_ > 0: dist += abs(c.get('strength', 0) - str_)
+            if int_ > 0: dist += abs(c.get('intellect', 0) - int_)
+            return dist
+
+        matched = list(user_cids)
+        # Сортируем: сначала самое близкое совпадение (dist ближе к 0), при равенстве - по наибольшей силе
+        matched.sort(key=lambda cid: (stat_distance(cid), -_card_power(cid)))
+        info_txt = f"по статам (Ближе к ⚡️{spd} 💪{str_} 🧠{int_})"
+    else:
+        return
+
     if not matched:
         bld = InlineKeyboardBuilder()
-        bld.button(text="🔙 Назад", callback_data="inv_main")
-        return await msg.answer(
-            f"🔍 По запросу «<b>{msg.text}</b>» карт не найдено.",
-            parse_mode="HTML",
-            reply_markup=bld.as_markup()
-        )
+        bld.button(text="🔙 К поиску", callback_data="inv_search_start")
+        txt = f"🔍 Карт {info_txt} не найдено."
+        if isinstance(target, types.Message):
+            await target.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
+        else:
+            try:
+                await target.message.edit_text(txt, parse_mode="HTML", reply_markup=bld.as_markup())
+            except:
+                await target.message.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
+        return
 
-    # Сохраняем результаты поиска и показываем первую страницу
-    await _send_search_results(msg, matched, page=0, query=msg.text)
-
-async def _send_search_results(target, matched: list, page: int, query: str):
-    """Отправляет страницу результатов поиска."""
     items_per_page = 12
     total_pages = max(1, (len(matched) + items_per_page - 1) // items_per_page)
     page = max(0, min(page, total_pages - 1))
@@ -237,54 +404,47 @@ async def _send_search_results(target, matched: list, page: int, query: str):
     page_cids = matched[start:start + items_per_page]
 
     bld = InlineKeyboardBuilder()
-
     for cid in page_cids:
         c = CARDS.get(cid)
         if c:
             emoji = c['rarity'].split()[-1] if len(c['rarity'].split()) > 1 else ""
-            power = _card_power(cid)
+            c_spd = c.get('speed', 0)
+            c_str = c.get('strength', 0)
+            c_int = c.get('intellect', 0)
+
             bld.row(types.InlineKeyboardButton(
-                text=f"{c['name']} {emoji} · {power}💥",
+                text=f"{c['name']} {emoji} · ⚡️{c_spd} 💪{c_str} 🧠{c_int}",
                 callback_data=f"viewcard:{cid}:{page}:all:0"
             ))
 
     nav = []
     if page > 0:
-        nav.append(types.InlineKeyboardButton(text="⬅️", callback_data=f"inv_search_page:{page - 1}:{query}"))
+        nav.append(types.InlineKeyboardButton(text="⬅️", callback_data=f"inv_search_page:{page - 1}"))
     nav.append(types.InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="ignore"))
     if page < total_pages - 1:
-        nav.append(types.InlineKeyboardButton(text="➡️", callback_data=f"inv_search_page:{page + 1}:{query}"))
+        nav.append(types.InlineKeyboardButton(text="➡️", callback_data=f"inv_search_page:{page + 1}"))
     if nav:
         bld.row(*nav)
 
-    bld.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="inv_main"))
+    bld.row(types.InlineKeyboardButton(text="🔍 Новый поиск", callback_data="inv_search_start"))
+    bld.row(types.InlineKeyboardButton(text="🔙 В инвентарь", callback_data="inv_main"))
 
-    txt = f"🔍 Результаты по «<b>{query}</b>»: {len(matched)} карт"
+    txt = f"🔍 <b>Результаты {info_txt}</b>\nНайдено карт: <b>{len(matched)}</b>"
 
     if isinstance(target, types.Message):
         await target.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
     else:
         try:
             await target.message.edit_text(txt, parse_mode="HTML", reply_markup=bld.as_markup())
-        except Exception:
-            await target.message.delete()
+        except:
             await target.message.answer(txt, parse_mode="HTML", reply_markup=bld.as_markup())
 
+
 @router.callback_query(F.data.startswith("inv_search_page:"))
-async def inv_search_page(cq: CallbackQuery):
-    parts = cq.data.split(":", 2)
-    page = int(parts[1])
-    query = parts[2] if len(parts) > 2 else ""
-
-    user_cids = _get_user_cids(cq.from_user.id)
-    matched = _sort_cards([
-        cid for cid in user_cids
-        if query.lower() in CARDS.get(cid, {}).get('name', '').lower()
-    ])
-    await _send_search_results(cq, matched, page=page, query=query)
+async def inv_search_page_cb(cq: CallbackQuery, state: FSMContext):
+    page = int(cq.data.split(":")[1])
+    await _process_search_and_show(cq, state, page=page)
     await cq.answer()
-
-# ── Просмотр с фильтром и листалкой ───────────────────────────────────
 
 @router.callback_query(F.data.startswith("inv_view:"))
 async def inv_view_paginated(cq: CallbackQuery):
@@ -1104,10 +1264,18 @@ async def _render_trade_page(cq: CallbackQuery, sender_id: int, page: int, sort_
 
     card_btns = []
     for cid in page_cards:
-        name = CARDS[cid]['name']
-        power = _card_power(cid)
+        c_info = CARDS[cid]
+        name = c_info['name']
+        c_spd = c_info.get('speed', 0)
+        c_str = c_info.get('strength', 0)
+        c_int = c_info.get('intellect', 0)
+
         card_btns.append(
-            InlineKeyboardButton(text=f"{name} · {power}💥", callback_data=f"trade_p2_conf:{sender_id}:{cid}"))
+            InlineKeyboardButton(
+                text=f"{name} · ⚡️{c_spd} 💪{c_str} 🧠{c_int}",
+                callback_data=f"trade_p2_conf:{sender_id}:{cid}"
+            )
+        )
 
     for i in range(0, len(card_btns), 2):
         bld.row(*card_btns[i:i + 2])
