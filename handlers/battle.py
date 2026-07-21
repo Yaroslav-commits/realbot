@@ -3550,7 +3550,7 @@ def add_stash_controls(bld: InlineKeyboardBuilder, action: str, source: str, sor
                              callback_data=f"stash_filt:{action}:{next_f[filt_mode]}:{source}")
     )
 
-    search_text = f"🔍 Поиск: {search_q}" if search_q else "🔍 Поиск по названию"
+    search_text = f"🔍 Поиск: {search_q}" if search_q else "🔍 Поиск по категориям"
     bld.row(InlineKeyboardButton(text=search_text, callback_data=f"stash_search:{action}:{source}"))
     if search_q:
         bld.row(InlineKeyboardButton(text="❌ Сбросить поиск", callback_data=f"stash_clear_search:{action}:{source}"))

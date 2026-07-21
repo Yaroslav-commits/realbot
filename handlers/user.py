@@ -85,7 +85,6 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
                 if sender_id == receiver_id:
                     return await msg.answer("❌ Вы не можете совершить обмен с самим собой!")
 
-                # ИСПРАВЛЕНО: Правильный путь импорта через handlers.deck, так как проект ищет модули от корня
                 from handlers.deck import PENDING_SKIN_TRADES, kb_trade_accept
                 from database.db import get_all_user_skins_by_type
 
@@ -130,11 +129,11 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
                     if receiver_id in PENDING_SKIN_TRADES and PENDING_SKIN_TRADES[receiver_id][
                         'sender_id'] == sender_id:
                         del PENDING_SKIN_TRADES[receiver_id]
-                        # ИСПРАВЛЕНО: kb_main — это переменная-объект, скобки () убраны, чтобы не было TypeError
+                        from handlers import kb_main
                         await msg.bot.send_message(
                             receiver_id,
                             "⏳ Время ожидания вышло. Заявка на обмен скинами автоматически обнулена.",
-                            reply_markup=kb_main
+                            reply_markup=kb_main()
                         )
                         await msg.bot.send_message(
                             sender_id,
@@ -162,23 +161,25 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
     trade_card_id = None
 
     if payload:
-        try:
-            padding = 4 - (len(payload) % 4)
-            padded_payload = payload + "=" * padding if padding != 4 else payload
-            raw = base64.urlsafe_b64decode(padded_payload.encode()).decode()
-            parts = raw.split(":", 2)
+        # Игнорируем промо-ссылку, чтобы она не мешала обычным проверкам
+        if payload != "adbonus":
+            try:
+                padding = 4 - (len(payload) % 4)
+                padded_payload = payload + "=" * padding if padding != 4 else payload
+                raw = base64.urlsafe_b64decode(padded_payload.encode()).decode()
+                parts = raw.split(":", 2)
 
-            if len(parts) == 3 and parts[0] == "trade":
-                is_trade = True
-                trade_sender_id = int(parts[1])
-                trade_card_id = parts[2]
-        except Exception:
-            pass
+                if len(parts) == 3 and parts[0] == "trade":
+                    is_trade = True
+                    trade_sender_id = int(parts[1])
+                    trade_card_id = parts[2]
+            except Exception:
+                pass
 
-        if not is_trade:
-            referrer = get_user_by_ref_code(payload)
-            if referrer:
-                referred_by = referrer[0]
+            if not is_trade:
+                referrer = get_user_by_ref_code(payload)
+                if referrer:
+                    referred_by = referrer[0]
 
     reward_amount = add_user(uid, msg.from_user.username, msg.from_user.first_name, referred_by)
 
@@ -186,7 +187,8 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
         try:
             await msg.bot.send_message(
                 referred_by,
-                f"🤝 По твоей ссылке зашёл новый игрок!\nТебе начислено: <b>{reward_amount}💴</b> и <b>3💳</b>"
+                f"🤝 По твоей ссылке зашёл новый игрок!\nТебе начислено: <b>{reward_amount}💴</b> и <b>3💳</b>",
+                parse_mode="HTML"
             )
         except Exception:
             pass
@@ -288,6 +290,31 @@ async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContex
             pass
 
         return
+
+    # =========================================================
+    # 🎁 ЧАСТЬ 2.5: ПРОМО-ССЫЛКА (adbonus)
+    # =========================================================
+    if payload == "adbonus":
+        db_exec("CREATE TABLE IF NOT EXISTS ad_bonus_claims (user_id INTEGER PRIMARY KEY)")
+        claimed = db_exec("SELECT 1 FROM ad_bonus_claims WHERE user_id = ?", (uid,), fetch=True)
+
+        if claimed:
+            await msg.answer("❌ <b>Вы уже получали стартовый бонус по этой ссылке!</b>", parse_mode="HTML")
+        else:
+            db_exec("INSERT INTO ad_bonus_claims (user_id) VALUES (?)", (uid,))
+            db_exec(
+                "UPDATE users SET attempts = attempts + 10, krw = krw + 250, battlecoin = battlecoin + 150 WHERE id = ?",
+                (uid,))
+
+            await msg.answer(
+                "🎊 <b>Вы перешли по уникальной ссылке!</b> 🎊\n\n"
+                "На ваш аккаунт успешно зачислен бонусный набор:\n"
+                "<blockquote>💳 Попытки: <b>+10</b>\n"
+                "💴 KRW: <b>+250</b>\n"
+                "🪙 BattleCoin: <b>+150</b></blockquote>\n\n"
+                "<i>Удачной игры и крутых дропов! 👇</i>",
+                parse_mode="HTML"
+            )
 
     # =========================================================
     # 🌟 ЧАСТЬ 3: ДЕФОЛТНЫЙ СТАРТ (ЕСЛИ ССЫЛКА ПУСТАЯ ИЛИ РЕФ)
