@@ -777,19 +777,19 @@ def generate_new_quests(user_id: int):
     for q_id in chosen_ids:
         q_data = ALL_QUESTS_POOL[q_id]
         user_quests[q_id] = {
-            "desc": q_data.get("name", "Задание"),  # <--- ТУТ БЕРЕТСЯ name
+            "name": q_data.get("name", "Задание"),
             "progress": 0,
             "target": q_data.get("target", 1),
-            "reward_xp": q_data.get("xp", 10),  # <--- А ТУТ БЕРЕТСЯ xp
-            "completed": False
+            "xp": q_data.get("xp", 10),
+            "done": False
         }
 
     # 4. Упаковываем в JSON
     quests_json = json.dumps(user_quests, ensure_ascii=False)
 
-    # 5. Сохраняем в базу (используем твой db_exec_sync)
+    # 5. Сохраняем в базу через db_exec
     try:
-        db_exec_sync("UPDATE users SET pass_quests = ? WHERE id = ?", (quests_json, user_id))
+        db_exec("UPDATE users SET pass_quests = ? WHERE id = ?", (quests_json, user_id))
     except Exception as e:
         import logging
         logging.error(f"Ошибка при сохранении новых квестов: {e}")

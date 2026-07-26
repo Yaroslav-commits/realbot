@@ -402,8 +402,7 @@ async def weekly_quest_reset_loop():
             now_msk = datetime.now(msk_tz)
             current_week = now_msk.isocalendar()[1]
 
-            # 🔥 ИСПРАВЛЕНИЕ: Убрали жесткую проверку часа!
-            # Теперь если сегодня Понедельник (0) и на этой неделе еще не сбрасывали — сбрасываем 100%
+            # Если сегодня Понедельник (0) и на этой неделе еще не сбрасывали — сбрасываем 100%
             if now_msk.weekday() == 0 and last_reset_week != current_week:
                 from database.db import generate_new_quests
 
@@ -411,9 +410,9 @@ async def weekly_quest_reset_loop():
                 users = db_exec_sync("SELECT id FROM users", fetchall=True)
                 for (uid,) in users:
                     try:
-                        generate_new_quests(uid[0])
+                        generate_new_quests(uid)  # <-- Убрали [0]
                     except Exception as e:
-                        logging.error(f"Ошибка квестов для {uid[0]}: {e}")
+                        logging.error(f"Ошибка квестов для {uid}: {e}")  # <-- Убрали [0]
 
                 last_reset_week = current_week
                 logging.info(f"Недельные задания успешно сброшены для недели #{current_week}!")
@@ -1154,10 +1153,10 @@ async def force_reset_quests_cmd(message: Message):
     count = 0
     for (uid,) in users:
         try:
-            generate_new_quests(uid[0])
+            generate_new_quests(uid)  # <-- Убрали [0]
             count += 1
         except Exception as e:
-            logging.error(f"Ошибка сброса квестов для {uid[0]}: {e}")
+            logging.error(f"Ошибка сброса квестов для {uid}: {e}")  # <-- Убрали [0]
 
     await message.answer(f"✅ Готово! Новые уникальные квесты успешно выданы {count} игрокам.")
 
