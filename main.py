@@ -596,7 +596,11 @@ def get_profile(user_id: int):
         bgs_rows = db_exec_sync("SELECT bg_id FROM bgs_inv WHERE user_id = ?", (user_id,), fetchall=True)
         unlocked_bgs = [row[0] for row in bgs_rows] if bgs_rows else []
 
-        all_titles_list = [{"id": k, "name": v} for k, v in TITLES.items()]
+        import re
+        all_titles_list = []
+        for k, v in TITLES.items():
+            clean_name = re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', v)
+            all_titles_list.append({"id": k, "name": clean_name})
 
         return {
             "diamond": user[0],

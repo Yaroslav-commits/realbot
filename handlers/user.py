@@ -548,26 +548,29 @@ def build_own_profile_text(u, viewer_id: int | None = None) -> str:
     pts = u[7]
 
     if u[14] and u[14] in TITLES:
-        title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n"
+        title_str = f"🔱 Титул: {TITLES[u[14]]}\n"
     else:
-        title_str = "\n"
+        title_str = ""
 
     status_emoji = "👑" if is_premium(uid) else "🧩"
     user_link = profile_user_name(u, viewer_id=viewer_id)
 
     return (
-        f" {status_emoji} Профиль - {user_link}\n"
+        f"{status_emoji} Профиль - {user_link}\n"
         f"━━━━━━━━━━━━━━━\n"
-        f'🆔 ID: <code>{u[0]}</code>\n'
+        f"🆔 ID: <code>{u[0]}</code>\n"
         f"{title_str}\n"
         f"<b>💰 Баланс:</b>\n"
         f"┌ 💎 Diamond — {u[3]}\n"
-        f'├ 💴 KRW — {u[4]}\n'
-        f"└ 🪙 BattleCoin — {u[5]}\n\n"
+        f"├ 💴 KRW — {u[4]}\n"
+        f"└ 🪙 BattleCoin — {u[5]}\n"
+        f"➖➖➖➖➖➖➖➖➖\n"
         f"<b>🎟 Попытки:</b>\n"
-        f"└ 💳 {u[6]}\n\n"
+        f"└ 💳 {u[6]}\n"
+        f"➖➖➖➖➖➖➖➖➖\n"
         f"<b>🏆 Ранг:</b>\n"
-        f'✨ {get_rank(pts)} • {pts}🏅\n\n'
+        f"✨ {get_rank(pts)} • {pts}🏅\n"
+        f"➖➖➖➖➖➖➖➖➖\n"
         f"<b>⚔️ Статистика боёв:</b>\n"
         f"├ 🏆 Побед — {u[8]}\n"
         f"├ ⚔️ Ничьих — {u[9]}\n"
@@ -649,28 +652,31 @@ async def profile(msg: types.Message):
     pts = u[7]
 
     if u[14] and u[14] in TITLES:
-        title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n"
+        title_str = f"🔱 Титул: {TITLES[u[14]]}\n"
     else:
-        title_str = "\n"
+        title_str = ""
 
-    # Эмодзи статуса
+        # Эмодзи статуса
     status_emoji = "👑" if is_premium(uid) else "🧩"
 
     user_link = profile_user_name(u, viewer_id=msg.from_user.id)
 
     txt = (
-        f" {status_emoji} Профиль - {user_link}\n"
+        f"{status_emoji} Профиль - {user_link}\n"
         f"━━━━━━━━━━━━━━━\n"
-        f'🆔 ID: <code>{u[0]}</code>\n'
+        f"🆔 ID: <code>{u[0]}</code>\n"
         f"{title_str}\n"
         f"<b>💰 Баланс:</b>\n"
         f"┌ 💎 Diamond — {u[3]}\n"
-        f'├ 💴 KRW — {u[4]}\n'
-        f"└ 🪙 BattleCoin — {u[5]}\n\n"
+        f"├ 💴 KRW — {u[4]}\n"
+        f"└ 🪙 BattleCoin — {u[5]}\n"
+        f"➖➖➖➖➖➖➖➖➖\n"
         f"<b>🎟 Попытки:</b>\n"
-        f"└ 💳 {u[6]}\n\n"
+        f"└ 💳 {u[6]}\n"
+        f"➖➖➖➖➖➖➖➖➖\n"
         f"<b>🏆 Ранг:</b>\n"
-        f'✨ {get_rank(pts)} • {pts}🏅\n\n'
+        f"✨ {get_rank(pts)} • {pts}🏅\n"
+        f"➖➖➖➖➖➖➖➖➖\n"
         f"<b>⚔️ Статистика боёв:</b>\n"
         f"├ 🏆 Побед — {u[8]}\n"
         f"├ ⚔️ Ничьих — {u[9]}\n"
@@ -767,25 +773,28 @@ async def cmd_profile(msg: types.Message):
     if is_anonymous(target_id) and target_id != msg.from_user.id and not is_admin:
         return await msg.answer("🥷 Этот игрок включил режим инкогнито. Его профиль скрыт.")
     pts = u[7]
-    title_str = f"🔱 Титул: {TITLES[u[14]]}\n\n" if u[14] and u[14] in TITLES else "\n"
+    title_str = f"🔱 Титул: {TITLES[u[14]]}\n" if u[14] and u[14] in TITLES else ""
     status_emoji = "👑" if is_premium(target_id) else "🧩"
     user_link = profile_user_name(u, viewer_id=msg.from_user.id, admin=is_admin)
 
     if is_admin:
         # Полный профиль для админа
         txt = (
-            f" {status_emoji} Профиль - {user_link}\n"
+            f"{status_emoji} Профиль - {user_link}\n"
             f"━━━━━━━━━━━━━━━\n"
-            f'🆔 ID: <code>{u[0]}</code>\n'
-            f"{title_str}"
+            f"🆔 ID: <code>{u[0]}</code>\n"
+            f"{title_str}\n"
             f"<b>💰 Баланс:</b>\n"
             f"┌ 💎 Diamond — {u[3]}\n"
-            f'├ 💴 KRW — {u[4]}\n'
-            f"└ 🪙 BattleCoin — {u[5]}\n\n"
+            f"├ 💴 KRW — {u[4]}\n"
+            f"└ 🪙 BattleCoin — {u[5]}\n"
+            f"➖➖➖➖➖➖➖➖➖\n"
             f"<b>🎟 Попытки:</b>\n"
-            f"└ 💳 {u[6]}\n\n"
+            f"└ 💳 {u[6]}\n"
+            f"➖➖➖➖➖➖➖➖➖\n"
             f"<b>🏆 Ранг:</b>\n"
-            f'✨ {get_rank(pts)} • {pts}🏅\n\n'
+            f"✨ {get_rank(pts)} • {pts}🏅\n"
+            f"➖➖➖➖➖➖➖➖➖\n"
             f"<b>⚔️ Статистика боёв:</b>\n"
             f"├ 🏆 Побед — {u[8]}\n"
             f"├ ⚔️ Ничьих — {u[9]}\n"
@@ -796,7 +805,7 @@ async def cmd_profile(msg: types.Message):
         txt = (
             f"{user_link} {status_emoji}\n"
             f"🆔 ID: <code>{u[0]}</code>\n"
-            f"{title_str}"
+            f"{title_str}\n"
             f"<blockquote>"
             f"💰 Баланс:\n"
             f"┌ 💎 Diamond — {u[3]}\n"
@@ -1101,19 +1110,33 @@ async def bgs_titles_cq(cq: CallbackQuery):
 
     bld = InlineKeyboardBuilder()
 
-    # Заполняем кнопки (это остается внутри цикла)
+    # Заполняем кнопки
     for itm in item_ids:
         if is_bg:
             name = BGS[itm].get("name", itm)
             callback = f"preview_bg:{itm}"
+            # Для фонов используем классический метод:
+            bld.button(text=name, callback_data=callback)
         else:
-            name = TITLES[itm]
+            raw_name = TITLES[itm]
             callback = f"preview_title:{itm}"
 
-        bld.button(text=name, callback_data=callback)
+            # Ищем ID премиум-эмодзи в названии титула
+            match = re.search(r"emoji-id=['\"](\d+)['\"]", raw_name)
 
-    # ❗️ ВАЖНО: Вышли из цикла (сдвинули код влево)
-    bld.adjust(2) # 👈 Формируем сетку: по 2 кнопки в ряд
+            if match:
+                emoji_id = match.group(1)
+                # Вырезаем тег вместе со смайликом-заглушкой, чтобы не было дублей эмодзи на кнопке
+                name = re.sub(r'<tg-emoji[^>]*>.*?</tg-emoji>', '', raw_name).strip()
+
+                # Добавляем кнопку со специальным параметром icon_custom_emoji_id
+                bld.button(text=name, callback_data=callback, icon_custom_emoji_id=emoji_id)
+            else:
+                # Если это обычный титул (без премиум-эмодзи), просто вырезаем HTML-теги
+                name = re.sub(r'<[^>]+>', '', raw_name).strip()
+                bld.button(text=name, callback_data=callback)
+
+    bld.adjust(2)  # Формируем сетку: по 2 кнопки в ряд
 
     # Отправляем один раз готовое меню со всеми кнопками
     text_msg = "🌄 Выберите фон для просмотра:" if is_bg else "🔱 Выберите титул для просмотра:"
@@ -1174,7 +1197,8 @@ async def preview_cq(cq: CallbackQuery):
             await cq.message.answer_photo(photo=FSInputFile(f"images/backgrounds/{bg_file}"), caption=caption, reply_markup=bld.as_markup())
     else:
         name = TITLES.get(itm, 'Титул')
-        await cq.message.answer(f"🔱 Предпросмотр титула: {name}", reply_markup=bld.as_markup())
+            # ИСПРАВЛЕНИЕ: Добавили parse_mode="HTML" для поддержки анимации
+        await cq.message.answer(f"🔱 Предпросмотр титула: {name}", reply_markup=bld.as_markup(), parse_mode="HTML")
 
     await cq.answer()
 
@@ -2706,50 +2730,12 @@ async def admin_cmds(msg: types.Message, state: FSMContext, bot: Bot):
         added = give_title_to_user(uid, val)
 
         if not added:
-            return await msg.answer(f"⚠️ У пользователя {uid} уже есть титул «{title_name}».")
+            # Очищаем титул от тегов для системного уведомления
+            clean_title = re.sub(r'<[^>]+>', '', title_name)
+            return await msg.answer(f"⚠️ У пользователя {uid} уже есть титул «{clean_title}».")
         try:
-            await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅")
-        except Exception:
-            pass
-        await msg.answer(f"✅ Титул выдан пользователю {uid}!")
-
-    elif cmd == "/give_background":
-        bg_data = BGS.get(val)
-        if not bg_data:
-            return await msg.answer(f"❌ Фон с ключом «{val}» не найден!")
-        added = give_bg_to_user(uid, val)
-
-        if not added:
-            return await msg.answer(f"⚠️ У пользователя {uid} уже есть фон «{bg_data.get('name', val)}».")
-        is_video = val in VIDEO_BGS
-        try:
-            bg_file = FSInputFile(f"images/backgrounds/{bg_data['file']}")  # Оставляем для фото
-            if is_video:
-                await send_cached_video(
-                    bot,
-                    chat_id=uid,
-                    file_path=f"images/backgrounds/{bg_data['file']}",
-                    caption="Получен фон от администратора ✅",
-                    supports_streaming=True
-                )
-            else:
-                await bot.send_photo(uid, photo=bg_file,
-                                     caption="Получен фон от администратора ✅")
-        except Exception:
-            pass
-        await msg.answer(f"✅ Фон «{bg_data.get('name', val)}» выдан пользователю {uid}!")
-
-    elif cmd == "/give_title":
-        if val not in TITLES:
-            return await msg.answer(f"❌ Титул с ключом «{val}» не найден!")
-
-        title_name = TITLES[val]
-        added = give_title_to_user(uid, val)
-
-        if not added:
-            return await msg.answer(f"⚠️ У пользователя {uid} уже есть титул «{title_name}».")
-        try:
-            await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅")
+            # Включаем HTML для отправки игроку, чтобы он увидел анимацию сразу
+            await bot.send_message(uid, f"Получен титул «{title_name}» от администратора ✅", parse_mode="HTML")
         except Exception:
             pass
         await msg.answer(f"✅ Титул выдан пользователю {uid}!")
