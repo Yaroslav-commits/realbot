@@ -17,9 +17,10 @@ from fastapi.responses import RedirectResponse
 
 from aiogram.types import (
     WebAppInfo, MenuButtonWebApp,
-    CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton,
+    CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
 )
 from aiogram import Bot, Dispatcher, Router, F
+from aiogram.filters import Command
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
@@ -401,9 +402,9 @@ async def weekly_quest_reset_loop():
             now_msk = datetime.now(msk_tz)
             current_week = now_msk.isocalendar()[1]
 
-            # Если сегодня Понедельник (0), время между 00:00 и 00:59,
-            # и на этой неделе мы еще не обновляли
-            if now_msk.weekday() == 0 and now_msk.hour == 0 and last_reset_week != current_week:
+            # 🔥 ИСПРАВЛЕНИЕ: Убрали жесткую проверку часа!
+            # Теперь если сегодня Понедельник (0) и на этой неделе еще не сбрасывали — сбрасываем 100%
+            if now_msk.weekday() == 0 and last_reset_week != current_week:
                 from database.db import generate_new_quests
 
                 # Получаем всех юзеров
@@ -420,7 +421,7 @@ async def weekly_quest_reset_loop():
         except Exception as e:
             logging.error(f"Ошибка в цикле сброса недельных заданий: {e}")
 
-        # Проверяем каждые 5 минут. Этого достаточно, чтобы точно поймать нужный час.
+        # Проверяем каждые 5 минут
         await asyncio.sleep(300)
 
 
@@ -1136,6 +1137,29 @@ async def moderate_submission(cq: CallbackQuery):
             pass
         await cq.answer("Отклонено")
 
+
+# ============================================================
+#  АДМИН-КОМАНДА: ПРИНУДИТЕЛЬНЫЙ СБРОС КВЕСТОВ
+# ============================================================
+@mod_router.message(Command("reset_quests"))
+async def force_reset_quests_cmd(message: Message):
+    # Проверка, что команду вызвал именно админ
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    await message.answer("🔄 Начинаю глобальный сброс квестов для всех игроков. Подождите...")
+
+    from database.db import generate_new_quests
+    users = db_exec_sync("SELECT id FROM users", fetchall=True)
+    count = 0
+    for (uid,) in users:
+        try:
+            generate_new_quests(uid[0])
+            count += 1
+        except Exception as e:
+            logging.error(f"Ошибка сброса квестов для {uid[0]}: {e}")
+
+    await message.answer(f"✅ Готово! Новые уникальные квесты успешно выданы {count} игрокам.")
 
 # ============================================================
 #  ТОПЫ И РЕЙТИНГИ ИГРОКОВ (ВЫДАЧА ТОП-25)
