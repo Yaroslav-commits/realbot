@@ -747,38 +747,47 @@ async def profile(msg: types.Message):
             parse_mode="HTML"
         )
 
-
 @router.message(Command("profile"))
 async def cmd_profile(msg: types.Message):
     is_admin = msg.from_user.id in ADMIN_IDS
     target_id = None
 
     args = msg.text.split()
+    # 1. Если Админ ввёл ID
     if len(args) > 1 and is_admin:
         try:
             target_id = int(args[1])
         except ValueError:
-            return await msg.answer("❌ Неверный формат ID. Использование: /profile <id>")
+            return await msg.answer("❌ Неверный формат ID. Использование: <code>/profile &lt;id&gt;</code>", parse_mode="HTML")
+    # 2. Если команда отправлена ответом на сообщение игрока
     elif msg.reply_to_message:
         target_id = msg.reply_to_message.from_user.id
+    # 3. Если просто введена команда /profile без аргументов — показываем свой профиль
     else:
-        return await msg.answer(
-            "❌ Ответьте на сообщение игрока командой /profile, чтобы посмотреть его профиль." +
-            (" Или используйте /profile <id>." if is_admin else "")
-        )
+        target_id = msg.from_user.id
 
     u = get_user(target_id)
+    # Авто-регистрация, если пользователь впервые ввёл /profile
+    if not u and target_id == msg.from_user.id:
+        add_user(target_id, msg.from_user.username, msg.from_user.first_name)
+        u = get_user(target_id)
+
     if not u:
-        return await msg.answer("❌ Игрок не найден в базе бл..")
+        return await msg.answer("❌ Игрок не найден в базе.")
+
+    # Проверка режима инкогнито при просмотре чужого профиля
     if is_anonymous(target_id) and target_id != msg.from_user.id and not is_admin:
         return await msg.answer("🥷 Этот игрок включил режим инкогнито. Его профиль скрыт.")
+
     pts = u[7]
     title_str = f"🔱 Титул: {TITLES[u[14]]}\n" if u[14] and u[14] in TITLES else ""
     status_emoji = "👑" if is_premium(target_id) else "🧩"
     user_link = profile_user_name(u, viewer_id=msg.from_user.id, admin=is_admin)
 
-    if is_admin:
-        # Полный профиль для админа
+    is_self = (target_id == msg.from_user.id)
+
+    # ПОЛНЫЙ ПРОФИЛЬ (для себя или для Админа)
+    if is_admin or is_self:
         txt = (
             f"{status_emoji} Профиль - {user_link}\n"
             f"━━━━━━━━━━━━━━━\n"
@@ -800,8 +809,8 @@ async def cmd_profile(msg: types.Message):
             f"├ ⚔️ Ничьих — {u[9]}\n"
             f"└ ☠️ Поражений — {u[10]}"
         )
+    # УРЕЗАННЫЙ ПРОФИЛЬ (при просмотре чужого профиля ответом на сообщение)
     else:
-        # Урезанный профиль для обычных игроков (с красивой цитатой)
         txt = (
             f"{user_link} {status_emoji}\n"
             f"🆔 ID: <code>{u[0]}</code>\n"
@@ -816,17 +825,11 @@ async def cmd_profile(msg: types.Message):
             f"</blockquote>"
         )
 
-    # Превращаем обычные символы в кастомные HTML эмодзи, как в стандартном профиле
-    txt = txt.replace("🆔", '🆔')
-    txt = txt.replace("💴", '💴')
-    txt = txt.replace("🏅", '🏅')
-
     bg_key = u[13] or 'default'
     bg_data = BGS.get(bg_key, BGS['default'])
     bg_file = FSInputFile(f"images/backgrounds/{bg_data.get('file')}")
 
     try:
-        # Проверяем, видео фон или фото
         if bg_key in VIDEO_BGS:
             await send_cached_video(
                 msg.bot,
@@ -842,7 +845,6 @@ async def cmd_profile(msg: types.Message):
             await msg.answer_photo(photo=bg_file, caption=txt, parse_mode="HTML")
     except Exception:
         await msg.answer(f"{txt}\n\n[Фон не загрузился.]", parse_mode="HTML")
-
 
 # ============ НАСТРОЙКИ ============
 @router.callback_query(F.data == "settings")

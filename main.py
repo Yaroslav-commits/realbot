@@ -392,26 +392,36 @@ def migrate_profile_stats():
 
 
 async def weekly_quest_reset_loop():
-    """Фоновая задача для тихого сброса недельных заданий каждый понедельник в 00:00 МСК"""
+    """Фоновая задача для надежного сброса недельных заданий по понедельникам"""
     msk_tz = timezone(timedelta(hours=3))
+    last_reset_week = None  # Запоминаем номер недели, чтобы не спамить сброс
+
     while True:
-        now_msk = datetime.now(msk_tz)
-        # Если наступил Понедельник (0) и время ровно 00:00
-        if now_msk.weekday() == 0 and now_msk.hour == 0 and now_msk.minute == 0:
-            try:
+        try:
+            now_msk = datetime.now(msk_tz)
+            current_week = now_msk.isocalendar()[1]
+
+            # Если сегодня Понедельник (0), время между 00:00 и 00:59,
+            # и на этой неделе мы еще не обновляли
+            if now_msk.weekday() == 0 and now_msk.hour == 0 and last_reset_week != current_week:
                 from database.db import generate_new_quests
+
+                # Получаем всех юзеров
                 users = db_exec_sync("SELECT id FROM users", fetchall=True)
                 for (uid,) in users:
-                    generate_new_quests(uid[0])
-                logging.info("Недельные задания пасса успешно сброшены и обновлены для всех игроков.")
-            except Exception as e:
-                logging.error(f"Ошибка при автоматическом сбросе недельных заданий: {e}")
+                    try:
+                        generate_new_quests(uid[0])
+                    except Exception as e:
+                        logging.error(f"Ошибка квестов для {uid[0]}: {e}")
 
-            # Засыпаем на 60 секунд, чтобы код не выполнился повторно в эту же минуту
-            await asyncio.sleep(60)
+                last_reset_week = current_week
+                logging.info(f"Недельные задания успешно сброшены для недели #{current_week}!")
 
-        # Проверяем время каждые 30 секунд
-        await asyncio.sleep(30)
+        except Exception as e:
+            logging.error(f"Ошибка в цикле сброса недельных заданий: {e}")
+
+        # Проверяем каждые 5 минут. Этого достаточно, чтобы точно поймать нужный час.
+        await asyncio.sleep(300)
 
 
 @asynccontextmanager

@@ -763,23 +763,37 @@ ALL_QUESTS_POOL = {
     "q_3_epic_packs": {"name": "Откройте 3 эпических пака", "target": 3, "xp": 150}
 }
 
+def generate_new_quests(user_id: int):
+    """Генерирует 3 уникальных квеста для игрока из ALL_QUESTS_POOL"""
 
-def generate_new_quests(uid: int):
-    """Генерирует 4 уникальных задания без повторов из пула 18 заданий"""
-    quest_keys = random.sample(list(ALL_QUESTS_POOL.keys()), 4)
+    # 1. Получаем список всех ID квестов (ключей словаря)
+    all_quest_ids = list(ALL_QUESTS_POOL.keys())
+
+    # 2. Выбираем ровно 3 уникальных ID (без повторений!)
+    chosen_ids = random.sample(all_quest_ids, 3)
+
+    # 3. Собираем индивидуальный словарь квестов для игрока
     user_quests = {}
-
-    for key in quest_keys:
-        q_data = ALL_QUESTS_POOL[key]
-        user_quests[key] = {
-            "name": q_data["name"],
+    for q_id in chosen_ids:
+        q_data = ALL_QUESTS_POOL[q_id]
+        user_quests[q_id] = {
+            "desc": q_data.get("name", "Задание"),  # <--- ТУТ БЕРЕТСЯ name
             "progress": 0,
-            "target": q_data["target"],
-            "xp": q_data["xp"],
-            "done": False
+            "target": q_data.get("target", 1),
+            "reward_xp": q_data.get("xp", 10),  # <--- А ТУТ БЕРЕТСЯ xp
+            "completed": False
         }
 
-    db_exec("UPDATE users SET pass_quests = ? WHERE id = ?", (json.dumps(user_quests, ensure_ascii=False), uid))
+    # 4. Упаковываем в JSON
+    quests_json = json.dumps(user_quests, ensure_ascii=False)
+
+    # 5. Сохраняем в базу (используем твой db_exec_sync)
+    try:
+        db_exec_sync("UPDATE users SET pass_quests = ? WHERE id = ?", (quests_json, user_id))
+    except Exception as e:
+        import logging
+        logging.error(f"Ошибка при сохранении новых квестов: {e}")
+
     return user_quests
 
 
