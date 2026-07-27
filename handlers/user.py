@@ -357,9 +357,9 @@ async def get_card_cmd(msg: types.Message):
 
     last_click = anti_spam_locks.get(uid)
 
-    # Если уже идет крутка или клик был менее 1.5 секунд назад
+    # Если уже идет крутка или клик был менее 0.6 секунд назад
     if lock.locked() or (last_click and (now_time - last_click).total_seconds() < 0.6):
-        anti_spam_locks[uid] = now_time # Обновляем таймер, чтобы спамер продолжал ждать
+        anti_spam_locks[uid] = now_time  # Обновляем таймер, чтобы спамер продолжал ждать
         warnings = [
             "Ах герой, полегче, ты меня заспамил 🥵",
             "Воу воу воин, куда ты так спешишь, будь медленнее 🛡",
@@ -399,20 +399,25 @@ async def get_card_cmd(msg: types.Message):
         user_is_premium = is_premium(uid)
         cooldown_hours = 1 if user_is_premium else GET_COOLDOWN_HOURS
 
-        # Сначала проверяем кулдаун (если попыток нет)
-        if attempts <= 0:
-            try:
-                last_get = datetime.strptime(u[11], "%Y-%m-%d %H:%M:%S")
-            except Exception:
-                last_get = datetime.min
-            if (now - last_get).total_seconds() < cooldown_hours * 3600:
-                rem = int(cooldown_hours * 3600 - (now - last_get).total_seconds())
-                return await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
+        # Считываем время последней бесплатной крутки
+        try:
+            last_get = datetime.strptime(u[11], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            last_get = datetime.min
+
+        # ПРОВЕРЯЕМ: Готова ли бесплатная крутка?
+        free_pull_ready = (now - last_get).total_seconds() >= cooldown_hours * 3600
+
+        # Если бесплатная не готова И платных попыток 0 — отказываем
+        if not free_pull_ready and attempts <= 0:
+            rem = int(cooldown_hours * 3600 - (now - last_get).total_seconds())
+            return await msg.answer(f"⏳ Следующая карта через {rem // 3600}ч {(rem % 3600) // 60}м.")
 
         # Получаем карту (Premium — повышенный шанс)
         card_key = pull_random_card(uid=uid, premium=user_is_premium)
         if not card_key:
             return await msg.answer("❌ Ошибка: пул карт пуст или произошла ошибка.")
+
         is_new, krw, c = give_card_to_user(uid, card_key)
         # Если карта или данные повреждены — не списываем попытку
         if c is None:
@@ -439,8 +444,6 @@ async def get_card_cmd(msg: types.Message):
                    f"<b>🧠 Интеллект:</b> {c['intellect']}")
 
         # Божественные карты приходят видео, остальные — фото.
-
-        # Божественные карты приходят видео, остальные — фото.
         try:
             if "Божественная" in c.get("rarity", "") and c.get("video"):
                 await send_cached_video(
@@ -454,25 +457,24 @@ async def get_card_cmd(msg: types.Message):
                     supports_streaming=True
                 )
             else:
-                await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True, parse_mode="HTML")
+                await msg.answer_photo(photo=FSInputFile(f"images/cards/{c['file']}"), caption=txt, has_spoiler=True,
+                                       parse_mode="HTML")
         except Exception:
             try:
                 await msg.answer(txt, parse_mode="HTML")
             except:
                 return await msg.answer("❌ Не удалось открутить.")
 
-        # Списываем попытку ТОЛЬКО после успешной отправки
-        if attempts > 0:
-            new_attempts = attempts - 1
-            db_exec("UPDATE users SET attempts = ? WHERE id = ?", (new_attempts, uid))
-            if new_attempts == 0:
-                # Последняя попытка использована — запускаем кулдаун и сбрасываем флаг уведомления
-                db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
-                        (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
-        else:
-            # Попыток 0 — кулдаун уже идёт, обновляем last_get и сбрасываем флаг
+        # --- ИСПРАВЛЕННАЯ ЛОГИКА СПИСАНИЯ КРУТКИ ---
+        if free_pull_ready:
+            # Использована БЕСПЛАТНАЯ крутка. Сбрасываем таймер, попытки НЕ ТРОГАЕМ!
             db_exec("UPDATE users SET last_get = ?, cooldown_notified = 0 WHERE id = ?",
                     (now.strftime("%Y-%m-%d %H:%M:%S"), uid))
+        else:
+            # Использована ПЛАТНАЯ крутка (попытка). Отнимаем попытку.
+            # Таймер last_get НЕ ТРОГАЕМ — бесплатная крутка продолжает откатываться в фоне!
+            new_attempts = attempts - 1
+            db_exec("UPDATE users SET attempts = ? WHERE id = ?", (new_attempts, uid))
 
         # === ROYALE PASS: ТИХОЕ НАЧИСЛЕНИЕ ЗА КРУТКУ (10 XP) ===
         from database.db import add_pass_xp, check_and_update_quests
