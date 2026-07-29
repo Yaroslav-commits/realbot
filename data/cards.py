@@ -401,7 +401,7 @@ CARDS = {
 "odalyan": {"name": "Одалян", "rarity": "Эпическая 🟢", "style": "Уличный (Гапрена)", "series": "Лукизм", "speed": 79, "strength": 79, "intellect": 75, "file": "oh.png", "exclusive": False},
 "an_hyeonson": {"name": "Ан Хёнсон", "rarity": "Эпическая 🟢", "style": "Железный кулак", "series": "Лукизм", "speed": 60, "strength": 62, "intellect": 60, "file": "anson.png", "exclusive": False},
 "hong_jayeol": {"name": "Хон Джаёль", "rarity": "Эпическая 🟢", "style": "Система", "series": "Лукизм", "speed": 61, "strength": 60, "intellect": 61, "file": "jael.png", "exclusive": False},
-"kim_gapryeon": {"name": "Ким Гапрён", "rarity": "Мифическая 🔴", "style": "Уличный (Гапрена)", "series": "Лукизм", "speed": 98, "strength": 100, "intellect": 98, "file": "gapryeon.jpeg", "exclusive": False},
+"kim_gapryeon": {"name": "Ким Гапрён", "rarity": "Мифическая 🔴", "style": "Уличный [Берсерк 🩸]", "series": "Лукизм", "speed": 98, "strength": 100, "intellect": 98, "file": "gapryeon.jpeg", "exclusive": False},
 "shingen_yamazaki": {"name": "Шинген Ямадзаки", "rarity": "Мифическая 🔴", "style": "Каратэ", "series": "Лукизм", "speed": 97, "strength": 99, "intellect": 95, "file": "shingen_yamazaki.jpeg", "exclusive": False},
 "yohan_son": {"name": "Йохан Сон", "rarity": "Легендарная 🔵", "style": "Универсал (копирование)", "series": "Лукизм", "speed": 89, "strength": 87, "intellect": 86, "file": "yohan.png", "exclusive": False},
 "jinran": {"name": "Джинран", "rarity": "Легендарная 🔵", "style": "Уличный (Волк)", "series": "Лукизм", "speed": 85, "strength": 86, "intellect": 88, "file": "jinran.png", "exclusive": False},
@@ -412,12 +412,12 @@ CARDS = {
 "kazuma_sato": {"name": "Казума Сато", "rarity": "Редкая 🟡", "style": "Сумо", "series": "Лукизм", "speed": 58, "strength": 59, "intellect": 58, "file": "kazuma.png", "exclusive": False},
 "akira": {"name": "Акира", "rarity": "Редкая 🟡", "style": "Уличный ✊", "series": "Лукизм", "speed": 59, "strength": 58, "intellect": 50, "file": "akira.png", "exclusive": False},
 "hyeon_sejin": {"name": "Хён Седжин", "rarity": "Редкая 🟡", "style": "Звериный", "series": "Лукизм", "speed": 54, "strength": 53, "intellect": 58, "file": "hyon.png", "exclusive": False},
-"shin_arim": {"name": "Шин Арим", "rarity": "Редкая 🟡", "style": "Бокс 🥊", "series": "Лукизм", "speed": 55, "strength": 54, "intellect": 54, "file": "arim.png", "exclusive": False},
-"min_jinhun": {"name": "Мин Джинхун", "rarity": "Редкая 🟡", "style": "Бокс 🥊", "series": "Лукизм", "speed": 57, "strength": 52, "intellect": 54, "file": "min.png", "exclusive": False},
+"shin_arim": {"name": "Шин Арим", "rarity": "Редкая 🟡", "style": "Бокс", "series": "Лукизм", "speed": 55, "strength": 54, "intellect": 54, "file": "arim.png", "exclusive": False},
+"min_jinhun": {"name": "Мин Джинхун", "rarity": "Редкая 🟡", "style": "Бокс", "series": "Лукизм", "speed": 57, "strength": 52, "intellect": 54, "file": "min.png", "exclusive": False},
 "kwak_jihan": {"name": "Квак Джихан", "rarity": "Редкая 🟡", "style": "Лезвия рук", "series": "Лукизм", "speed": 55, "strength": 51, "intellect": 55, "file": "jihan.png", "exclusive": False},
-"kwak_jibom": {"name": "Квак Джибом", "rarity": "Редкая 🟡", "style": "Борьба 🤼", "series": "Лукизм", "speed": 52, "strength": 56, "intellect": 54, "file": "jibom.png", "exclusive": False},
-"watanabe_kokuin": {"name": "Ватанабэ Кокуин", "rarity": "Редкая 🟡", "style": "Каратэ 🥋", "series": "Лукизм", "speed": 51, "strength": 49, "intellect": 52, "file": "koku.png", "exclusive": False},
-"takeshi_matsumoto": {"name": "Такеши Матсумото", "rarity": "Редкая 🟡", "style": "Каратэ 🥋", "series": "Лукизм", "speed": 48, "strength": 47, "intellect": 51, "file": "takeshi.png", "exclusive": False},
+"kwak_jibom": {"name": "Квак Джибом", "rarity": "Редкая 🟡", "style": "Борьба", "series": "Лукизм", "speed": 52, "strength": 56, "intellect": 54, "file": "jibom.png", "exclusive": False},
+"watanabe_kokuin": {"name": "Ватанабэ Кокуин", "rarity": "Редкая 🟡", "style": "Каратэ", "series": "Лукизм", "speed": 51, "strength": 49, "intellect": 52, "file": "koku.png", "exclusive": False},
+"takeshi_matsumoto": {"name": "Такеши Матсумото", "rarity": "Редкая 🟡", "style": "Каратэ", "series": "Лукизм", "speed": 48, "strength": 47, "intellect": 51, "file": "takeshi.png", "exclusive": False},
 "doctor_cho": {"name": "Доктор Чжо", "rarity": "Редкая 🟡", "style": "Ядовитый", "series": "Лукизм", "speed": 37, "strength": 38, "intellect": 37, "file": "joe.png", "exclusive": False},
 "haye_ul": {"name": "Ха Е Уль", "rarity": "Редкая 🟡", "style": "Тхэквондо", "series": "Лукизм", "speed": 36, "strength": 37, "intellect": 36, "file": "eul.png", "exclusive": False},
 "wang_junsok": {"name": "Ван Джунсок", "rarity": "Эпическая 🟢", "style": "Уличный", "series": "Лукизм", "speed": 78, "strength": 79, "intellect": 76, "file": "wang_junsok.jpeg", "exclusive": False},
@@ -741,6 +741,46 @@ CARDS = {
 "exclusive_card_1": {"name": "Юк Сонджи и Джин Хобин", "rarity": "Легендарная 🔵", "style": "Дзюдо", "series": "Лукизм", "speed": 90, "strength": 90, "intellect": 85, "file": "exclusive_card_1.png", "exclusive": True},
 "excluzive_card_jaehwan": {"name": "Дже Хван", "rarity": "Мифическая 🔴", "style": "Выпад", "series": "Мир после падения", "speed": 99, "strength": 100, "intellect": 100, "file": "excluzive_card_jaehwan.jpeg", "exclusive": True},
 }
+
+# 1. Копирование: Копирует активный стат врага (упирается в макс. лимит редкости твоей карты)
+COPY_STYLE = [
+    "yohan_son",
+    "kang_dagyeom",
+    "ouen"
+]
+
+# 2. Восстание: Крадет 10% от стата врага и добавляет к твоему стату
+RISE_STYLE = [
+    "kim_u_dzhin",
+    "igris",
+    "red_igris",
+    "ber"
+]
+
+# 3. Берсерк: +10 к активному стату сейчас, но на следующий раунд твоя следующая карта получает дебафф -10 (не ниже порога)
+BERSERK_STYLE = [
+    "kim_gapryeon", "lee_jinson"
+]
+
+# 4. Пространство: Блокирует ульту врага в этом раунде ("Немота") и дает +2 к твоему стату
+SPACE_STYLE = [
+    "enryu",
+    "baam",
+    "urek_mazino"
+]
+
+# 5. Пробивание: Игнорирует минус от стиля врага и срезает стат противника (-5 для лег/мификов, -10 для эпиков)
+PIERCE_STYLE = [
+    "ronan",
+    "cha_hae_in"
+]
+
+# 6. Уклонение: 50% шанс опустить стат врага в этом раунде до его минимального порога (91/81/60)
+EVADE_STYLE = [
+    "seong_tae_hun",
+    "lee_ji_hoon",
+    "lineman"
+]
 
 RARITIES = {
     "Обычная ⚪️": {"chance": 54.8, "dup": (1, 10)},

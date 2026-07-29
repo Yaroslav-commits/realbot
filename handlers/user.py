@@ -6,7 +6,7 @@ import sqlite3
 import random
 import calendar
 from html import escape
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, quote
 from datetime import datetime, timedelta, timezone
 from aiogram import Bot, F, types
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
@@ -70,6 +70,82 @@ class NicknameState(StatesGroup):
 async def start_cmd(msg: types.Message, command: CommandObject, state: FSMContext):
     payload = command.args  # Получаем данные из ссылки
     uid = msg.from_user.id
+
+    # =========================================================
+    # ⚔️ ЧАСТЬ 0: ДРУЖЕСКИЙ БОЙ (btl_)
+    # =========================================================
+    if payload and payload.startswith("btl_"):
+        try:
+            raw_id = payload.split("_")[1]
+            padding = 4 - (len(raw_id) % 4)
+            padded_raw = raw_id + "=" * padding if padding != 4 else raw_id
+            host_id = int(base64.urlsafe_b64decode(padded_raw.encode()).decode())
+        except Exception:
+            return await msg.answer("❌ Неверная или устаревшая ссылка на бой.")
+
+        challenger_id = uid
+        if host_id == challenger_id:
+            return await msg.answer("❌ Вы не можете бросить вызов самому себе!")
+
+        host_u = get_user(host_id)
+        if not host_u:
+            return await msg.answer("❌ Игрок-создатель ссылки не найден.")
+
+        deck = db_exec("SELECT card_id FROM decks WHERE user_id = ?", (challenger_id,), fetchall=True)
+        if len(deck) != 6:
+            return await msg.answer("❌ Сначала соберите колоду из 6 карт, чтобы бросить вызов!")
+
+        challenger_u = get_user(challenger_id)
+        last_b = datetime.strptime(challenger_u[12], "%Y-%m-%d %H:%M:%S")
+        now = datetime.now()
+        cd_hours_challenger = 0.5 if is_premium(challenger_id) else BATTLE_COOLDOWN_HOURS
+        if (now - last_b).total_seconds() < cd_hours_challenger * 3600:
+            rem = int(cd_hours_challenger * 3600 - (now - last_b).total_seconds())
+            return await msg.answer(f"⏳ У вас кулдаун битвы: {rem // 3600}ч {(rem % 3600) // 60}м")
+
+        req_time = int(now.timestamp())
+        req_key = f"{challenger_id}_{req_time}"
+
+        from handlers import battle
+
+        bld_chall = InlineKeyboardBuilder()
+        bld_chall.button(text="Отозвать ❌", callback_data=f"f_cancel:{req_key}")
+
+        chall_msg = await msg.answer(
+            f"⚔️ <b>Вызов брошен!</b>\nОжидаем ответа от игрока <a href='tg://user?id={host_id}'>{escape(host_u[2] or 'Игрок')}</a>...",
+            reply_markup=bld_chall.as_markup(), parse_mode="HTML"
+        )
+
+        battle.PENDING_FRIENDLY_BATTLES[req_key] = {
+            "host_id": host_id,
+            "challenger_id": challenger_id,
+            "chall_msg_id": chall_msg.message_id,
+            "status": "pending"
+        }
+
+        rank_str = get_rank(challenger_u[7])
+        title_val = challenger_u[14]
+        title_str = f"🔱 Титул: {TITLES.get(title_val)}\n" if title_val and title_val in TITLES else ""
+
+        bld_host = InlineKeyboardBuilder()
+        bld_host.button(text="Принять ✅", callback_data=f"f_acc:{req_key}")
+        bld_host.button(text="Отказать ❌", callback_data=f"f_dec:{req_key}")
+        bld_host.adjust(2)
+
+        try:
+            host_msg = await msg.bot.send_message(
+                host_id,
+                f"⚔️ <b>Новый вызов на дружеский бой!</b>\n\n"
+                f"👤 Игрок: <a href='tg://user?id={challenger_id}'>{escape(challenger_u[2] or 'Игрок')}</a>\n"
+                f"🏆 Ранг: {rank_str}\n{title_str}\n"
+                f"<i>⏳ Заявка истекает через 1 минуту.</i>",
+                reply_markup=bld_host.as_markup(), parse_mode="HTML"
+            )
+            battle.PENDING_FRIENDLY_BATTLES[req_key]["host_msg_id"] = host_msg.message_id
+        except Exception:
+            await msg.answer("❌ Не удалось отправить вызов (возможно, игрок заблокировал бота).")
+            battle.PENDING_FRIENDLY_BATTLES.pop(req_key, None)
+        return
 
     # =========================================================
     # ♻️ ЧАСТЬ 1: ПРОВЕРКА НА ТРЕЙД СКИНАМИ (sktrad_)
@@ -1010,8 +1086,8 @@ async def referral_system_cq(cq: CallbackQuery, bot: Bot):
 
     share_url = (
         "https://t.me/share/url"
-        f"?url={quote_plus(ref_link)}"
-        f"&text={quote_plus('Залетай в ManhwCard 🎴 По моей ссылке дадут бонус!')}"
+        f"?url={quote(ref_link)}"
+        f"&text={quote('Залетай в ManhwCard 🎴 По моей ссылке дадут бонус!')}"
     )
 
     bld = InlineKeyboardBuilder()

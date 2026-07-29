@@ -21,7 +21,8 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
                     MAIN_PRIZE_NORMAL_TITLE, MAIN_PRIZE_ROYALE_CARD)
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         NORMAL_PASS, ROYALE_PASS, is_divine,
-                        AWAKENED_SKIN, ABSOLUTE_SKIN)
+                        AWAKENED_SKIN, ABSOLUTE_SKIN,
+                        COPY_STYLE, RISE_STYLE, BERSERK_STYLE, SPACE_STYLE, PIERCE_STYLE, EVADE_STYLE)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user, is_premium,
                          stash_card, unstash_card, get_stash, get_active_skin,
@@ -168,117 +169,177 @@ async def admin_add_points(msg: types.Message):
     await msg.answer(f"✅ <b>Успешно!</b>\nИгроку <code>{target_id}</code> тихо начислено <b>{amount}</b> очков ранга.",
                      parse_mode="HTML")
 
+
+@router.message(Command("reset_cd"))
+async def admin_reset_cd(msg: types.Message):
+    # Проверка на админа
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    args = msg.text.split()
+    target_id = msg.from_user.id  # По умолчанию сбрасываем себе
+
+    # Если передан ID игрока
+    if len(args) > 1:
+        try:
+            target_id = int(args[1])
+        except ValueError:
+            return await msg.answer("❌ ID игрока должен быть числом!\nИспользование: <code>/reset_cd [ID]</code>",
+                                    parse_mode="HTML")
+
+    # Сбрасываем таймер в базе данных на 2000 год (чтобы КД 100% прошел)
+    db_exec("UPDATE users SET last_battle = '2000-01-01 00:00:00' WHERE id = ?", (target_id,))
+
+    # Красивое уведомление
+    if target_id == msg.from_user.id:
+        await msg.answer("✅ <b>Твой кулдаун на битву успешно сброшен!</b>\nМожешь снова искать противника ⚔️",
+                         parse_mode="HTML")
+    else:
+        await msg.answer(f"✅ <b>Успешно!</b>\nКулдаун на битву сброшен для игрока <code>{target_id}</code> ⚔️",
+                         parse_mode="HTML")
+
+
+import base64
+from urllib.parse import quote
+
+# Хранилище заявок на бой
+PENDING_FRIENDLY_BATTLES = {}
+
+
 @router.callback_query(F.data == "friendly_match_start")
-async def friendly_match_start(cq: CallbackQuery, state: FSMContext):
+async def friendly_match_start(cq: CallbackQuery, bot: Bot):
+    bot_info = await bot.get_me()
+
+    # Делаем ссылку уникальной и безопасной (прячем ID в Base64)
+    b64_id = base64.urlsafe_b64encode(str(cq.from_user.id).encode()).decode().rstrip('=')
+    link = f"https://t.me/{bot_info.username}?start=btl_{b64_id}"
+
+    txt = (
+        "<tg-emoji emoji-id='5454172148782359440'>🗡️</tg-emoji> Скидывай ссылку в чат или друзьям и начните свое дружеское сражение, копируй ссылку или пересылай по кнопке <tg-emoji emoji-id='5231102735817918643'>👇</tg-emoji>\n\n"
+        f"<code>{link}</code>"
+    )
+
+    # Идеальный текст без плюсиков
+    share_text = "👆Готов к битве со мной? Тогда переходи по ссылке выше 🗡️"
+    share_url = f"https://t.me/share/url?url={quote(link)}&text={quote(share_text)}"
+
     bld = InlineKeyboardBuilder()
-    bld.button(text="Отменить", callback_data="cancel_friendly")
-    await cq.message.answer("Отправьте ID игрока с которым хотите сыграть", reply_markup=bld.as_markup())
-    await state.set_state(BattleState.waiting_for_friend_id)
+    bld.button(text="Отправить в чат 📨", url=share_url)
+    bld.button(text="Назад 🔙", callback_data="b_menu_back")
+    bld.adjust(1)
+
+    try:
+        await cq.message.edit_caption(caption=txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    except Exception:
+        try:
+            await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+        except:
+            pass
     await cq.answer()
 
-@router.callback_query(F.data == "cancel_friendly")
-async def cancel_friendly(cq: CallbackQuery, state: FSMContext):
-    await state.clear()
-    await cq.message.delete()
-    await cq.message.answer("Запрос отменен.")
 
-@router.message(BattleState.waiting_for_friend_id)
-async def process_friend_id(msg: types.Message, state: FSMContext):
-    try:
-        target_id = int(msg.text)
-    except ValueError:
-        return await msg.answer("Пожалуйста, отправьте корректный ID (число).")
+@router.callback_query(F.data.startswith("f_acc:"))
+async def friendly_accept(cq: CallbackQuery):
+    req_key = cq.data.split(":")[1]
+    req = PENDING_FRIENDLY_BATTLES.get(req_key)
 
-    if target_id == msg.from_user.id:
-        return await msg.answer("Нельзя сыграть с самим собой!")
+    if not req or req["status"] != "pending":
+        await cq.message.edit_text("⏳ Заявка на бой устарела или была отозвана.", reply_markup=None)
+        return await cq.answer("Неактуально!", show_alert=True)
 
-    target_user = get_user(target_id)
-    if not target_user:
-        return await msg.answer("Игрок с таким ID не найден.")
+    req_time = int(req_key.split("_")[1])
+    if int(datetime.now().timestamp()) - req_time > 60:
+        req["status"] = "expired"
+        await cq.message.edit_text("⏳ Заявка на бой истекла (прошла 1 минута).", reply_markup=None)
+        return await cq.answer("Истекло время!", show_alert=True)
 
-    deck = db_exec("SELECT card_id FROM decks WHERE user_id = ?", (msg.from_user.id,), fetchall=True)
+    host_id = req["host_id"]
+    challenger_id = req["challenger_id"]
+
+    if host_id != cq.from_user.id:
+        return await cq.answer("Это не ваша заявка!", show_alert=True)
+
+    # --- VERIFY HOST ---
+    deck = db_exec("SELECT card_id FROM decks WHERE user_id = ?", (host_id,), fetchall=True)
     if len(deck) != 6:
-        await state.clear()
-        return await msg.answer("Сначала соберите колоду из 6 карт!")
-    u = get_user(msg.from_user.id)
-    last_b = datetime.strptime(u[12], "%Y-%m-%d %H:%M:%S")
+        return await cq.answer("У вас не собрана колода!", show_alert=True)
+
+    u_host = get_user(host_id)
+    last_b = datetime.strptime(u_host[12], "%Y-%m-%d %H:%M:%S")
     now = datetime.now()
+    cd_hours_host = 0.5 if is_premium(host_id) else BATTLE_COOLDOWN_HOURS
+    if (now - last_b).total_seconds() < cd_hours_host * 3600:
+        rem = int(cd_hours_host * 3600 - (now - last_b).total_seconds())
+        return await cq.answer(f"У вас кулдаун битвы: {rem // 3600}ч {(rem % 3600) // 60}м", show_alert=True)
 
-    cd_hours = 0.5 if is_premium(msg.from_user.id) else BATTLE_COOLDOWN_HOURS
+    # --- VERIFY CHALLENGER ---
+    u_chall = get_user(challenger_id)
+    last_b_c = datetime.strptime(u_chall[12], "%Y-%m-%d %H:%M:%S")
+    cd_hours_chall = 0.5 if is_premium(challenger_id) else BATTLE_COOLDOWN_HOURS
+    if (now - last_b_c).total_seconds() < cd_hours_chall * 3600:
+        return await cq.answer("У инициатора боя сейчас кулдаун.", show_alert=True)
 
-    if (now - last_b).total_seconds() < cd_hours * 3600:
-        rem = int(cd_hours * 3600 - (now - last_b).total_seconds())
-        await state.clear()
-        return await msg.answer(f"⏳ Кулдаун битвы: {rem // 3600}ч {(rem % 3600) // 60}м")
-    my_name = u[2]
-    await state.clear()
-
-    bld = InlineKeyboardBuilder()
-    bld.button(text="Согласиться", callback_data=f"accept_f:{msg.from_user.id}")
-    bld.button(text="Отказаться", callback_data=f"decline_f:{msg.from_user.id}")
-    bld.adjust(2)
+    req["status"] = "accepted"
+    await cq.message.edit_text("✅ <b>Вызов принят!</b> Бой начинается.", parse_mode="HTML", reply_markup=None)
 
     try:
-        await msg.bot.send_message(target_id, f"{my_name} вызывает тебя на дружеский бой", reply_markup=bld.as_markup())
-        await msg.answer("Запрос отправлен")
-    except Exception:
-        await msg.answer("Не удалось отправить запрос. Возможно, игрок заблокировал бота.")
+        await cq.bot.edit_message_text(
+            "✅ <b>Противник принял вызов!</b> Бой начинается.",
+            chat_id=challenger_id, message_id=req["chall_msg_id"], parse_mode="HTML", reply_markup=None
+        )
+    except:
+        pass
+
+    await start_battle(host_id, challenger_id, cq.bot, friendly=True)
+    await cq.answer()
 
 
-@router.callback_query(F.data.startswith("decline_f:"))
-async def decline_f(cq: CallbackQuery):
-    _, sender_id = cq.data.split(":")
-    await cq.message.delete()
+@router.callback_query(F.data.startswith("f_dec:"))
+async def friendly_decline(cq: CallbackQuery):
+    req_key = cq.data.split(":")[1]
+    req = PENDING_FRIENDLY_BATTLES.get(req_key)
+
+    if not req or req["status"] != "pending":
+        await cq.message.edit_text("⏳ Заявка на бой устарела или была отозвана.", reply_markup=None)
+        return await cq.answer()
+
+    req["status"] = "declined"
+    await cq.message.edit_text("❌ Вы отклонили вызов.", reply_markup=None)
+
     try:
-        await cq.bot.send_message(int(sender_id), "Произошел отказ от дружеского боя.")
+        await cq.bot.edit_message_text(
+            "❌ Противник отклонил ваш вызов.",
+            chat_id=req["challenger_id"], message_id=req["chall_msg_id"], reply_markup=None
+        )
     except:
         pass
     await cq.answer()
 
 
-@router.callback_query(F.data.startswith("accept_f:"))
-async def accept_f(cq: CallbackQuery):
-    _, sender_id = cq.data.split(":")
-    sender_id = int(sender_id)
-    target_id = cq.from_user.id
+@router.callback_query(F.data.startswith("f_cancel:"))
+async def friendly_cancel(cq: CallbackQuery):
+    req_key = cq.data.split(":")[1]
+    req = PENDING_FRIENDLY_BATTLES.get(req_key)
 
-    await cq.message.delete()
+    if not req or req["status"] != "pending":
+        await cq.message.edit_text("⏳ Заявка уже обработана или истекла.", reply_markup=None)
+        return await cq.answer()
 
-    deck = db_exec("SELECT card_id FROM decks WHERE user_id = ?", (target_id,), fetchall=True)
-    if len(deck) != 6:
-        await cq.answer("У вас не собрана колода!", show_alert=True)
+    if req["challenger_id"] != cq.from_user.id:
+        return await cq.answer("Это не ваша заявка!", show_alert=True)
+
+    req["status"] = "cancelled"
+    await cq.message.edit_text("❌ Вы отозвали вызов.", reply_markup=None)
+
+    if "host_msg_id" in req:
         try:
-            await cq.bot.send_message(sender_id, "Игрок не может принять бой (не собрана колода).")
+            await cq.bot.edit_message_text(
+                "❌ Противник отозвал свой вызов.",
+                chat_id=req["host_id"], message_id=req["host_msg_id"], reply_markup=None
+            )
         except:
             pass
-        return
-
-    u = get_user(target_id)
-    last_b = datetime.strptime(u[12], "%Y-%m-%d %H:%M:%S")
-    now = datetime.now()
-    cd_hours_target = 0.5 if is_premium(target_id) else BATTLE_COOLDOWN_HOURS
-    if (now - last_b).total_seconds() < cd_hours_target * 3600:
-        rem = int(cd_hours_target * 3600 - (now - last_b).total_seconds())
-        await cq.answer(f"У вас кулдаун битвы: {rem // 3600}ч {(rem % 3600) // 60}м", show_alert=True)
-        try:
-            await cq.bot.send_message(sender_id, "У игрока кулдаун битвы. Он не может принять бой.")
-        except:
-            pass
-        return
-
-    u_sender = get_user(sender_id)
-    last_b_s = datetime.strptime(u_sender[12], "%Y-%m-%d %H:%M:%S")
-    cd_hours_sender = 0.5 if is_premium(sender_id) else BATTLE_COOLDOWN_HOURS
-    if (now - last_b_s).total_seconds() < cd_hours_sender * 3600:
-        await cq.answer("У инициатора боя сейчас кулдаун.", show_alert=True)
-        try:
-            await cq.bot.send_message(sender_id, "Ваш кулдаун не позволяет начать бой.")
-        except:
-            pass
-        return
-
-
-    await start_battle(sender_id, target_id, cq.bot, friendly=True)
+    await cq.answer()
 
 
 # ============ СИСТЕМА УПРАВЛЕНИЯ КОЛОДАМИ (ОБНОВЛЕННАЯ) ============
@@ -296,22 +357,44 @@ async def my_deck_menu(cq: CallbackQuery):
 
 @router.callback_query(F.data == "view_deck")
 async def view_deck(cq: CallbackQuery):
-    """Показ карт текущей активной колоды"""
-    deck = db_exec("SELECT card_id FROM decks WHERE user_id = ? ORDER BY slot_index", (cq.from_user.id,), fetchall=True)
+    """Показ карт текущей активной колоды с учётом установленных скинов"""
+    uid = cq.from_user.id
+    deck = db_exec("SELECT card_id FROM decks WHERE user_id = ? ORDER BY slot_index", (uid,), fetchall=True)
     if len(deck) != 6:
         return await cq.answer("Колода не собрана полностью!", show_alert=True)
 
     rarity_order = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2,
                     "Обычная ⚪️": 1}
-    c_objs = [(cid, CARDS[cid]) for (cid,) in deck]
+    c_objs = [(cid, CARDS[cid]) for (cid,) in deck if cid in CARDS]
     c_objs.sort(key=lambda x: rarity_order.get(x[1]['rarity'], 0), reverse=True)
 
     media = []
     for i, (cid, c) in enumerate(c_objs):
-        txt_card = f"{i + 1}. {c['name']} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
-        media.append(types.InputMediaPhoto(media=FSInputFile(f"images/cards/{c['file']}"), caption=txt_card))
+        # Получаем пути к медиа с учётом надетого скина (арта/видео/значка)
+        asset_path, is_video, skin_label = get_card_media_info(uid, cid, c)
+        txt_card = f"{i + 1}. {c['name']}{skin_label} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
 
-    await cq.message.answer_media_group(media=media)
+        if is_video:
+            media.append(types.InputMediaVideo(
+                media=FSInputFile(asset_path),
+                caption=txt_card,
+                width=960,
+                height=1280,
+                supports_streaming=True
+            ))
+        else:
+            media.append(types.InputMediaPhoto(
+                media=FSInputFile(asset_path),
+                caption=txt_card
+            ))
+
+    try:
+        await cq.message.answer_media_group(media=media)
+    except Exception as e:
+        logging.error(f"Failed to send deck media group to {uid}: {e}")
+        await cq.answer("❌ Ошибка при отображении колоды.", show_alert=True)
+        return
+
     await cq.answer()
 
 
@@ -950,9 +1033,16 @@ async def start_battle(p1, p2, bot: Bot, friendly=False):
         title2_str = TITLES.get(title2_val) if title2_val else None
         title_line2 = f"· Титул: {title2_str}\n" if title2_str else ""
 
-    GAMES[gid] = {'p1': p1, 'p2': p2, 'd1': deck1.copy(), 'd2': deck2.copy(), 'n2': name2, 'r2': rank2,
-                  'p1_c': None, 'p2_c': None, 'p1_s': None, 'p2_s': None, 'score1': 0, 'score2': 0, 'round': 1,
-                  'friendly': friendly, 'resolving': False}
+    GAMES[gid] = {
+        'p1': p1, 'p2': p2, 'd1': deck1.copy(), 'd2': deck2.copy(), 'n2': name2, 'r2': rank2,
+        'p1_c': None, 'p2_c': None, 'p1_s': None, 'p2_s': None, 'score1': 0, 'score2': 0, 'round': 1,
+        'friendly': friendly, 'resolving': False,
+        # === НОВЫЕ ТРЕКЕРЫ ДЛЯ НАВЫКОВ ===
+        'p1_skill_uses': 2, 'p2_skill_uses': 2,  # Лимит 2 ульты за бой
+        'p1_use_skill': False, 'p2_use_skill': False,  # Юзает ли ульту в ТЕКУЩЕМ раунде
+        'p1_next_debuff': 0, 'p2_next_debuff': 0,  # Штраф от Берсерка на СЛЕДУЮЩИЙ раунд
+        'p1_copy_used': False, 'p2_copy_used': False  # Трекер пассивки Копирования
+    }
 
     if p2 == -1:
         db_exec("UPDATE users SET last_battle = ?, battle_cooldown_notified = 0 WHERE id = ?",
@@ -1062,7 +1152,19 @@ async def auto_style_choice(gid, uid, round_num, msg_id, bot):
             await bot.delete_message(uid, msg_id)
         except:
             pass
-        await process_style_choice(gid, uid, random_style, bot)
+        # Если время вышло, бот бьет обычной атакой (is_skill = False)
+        await process_style_choice(gid, uid, random_style, False, bot)
+
+
+def get_card_skill_info(card_id: str):
+    """Возвращает название и эмодзи навыка карты."""
+    if card_id in COPY_STYLE: return "👁️ Копирование"
+    if card_id in RISE_STYLE: return "🌑 Восстание"
+    if card_id in BERSERK_STYLE: return "🩸 Берсерк"
+    if card_id in SPACE_STYLE: return "🌊 Пространство"
+    if card_id in PIERCE_STYLE: return "⚔️ Пробивание"
+    if card_id in EVADE_STYLE: return "🌪 Уклонение"
+    return None
 
 
 async def process_card_choice(gid, uid, card, bot):
@@ -1081,32 +1183,77 @@ async def process_card_choice(gid, uid, card, bot):
         g['p2_c'] = card
         g['d2'].remove(card)
 
-    bld = InlineKeyboardBuilder()
-    bld.button(text="⚡️ Скорость", callback_data=f"b_style:{gid}:spd")
-    bld.button(text="💪 Сила", callback_data=f"b_style:{gid}:str")
-    bld.button(text="🧠 Интеллект", callback_data=f"b_style:{gid}:int")
-
     card_data = CARDS[card]
     asset_path, is_video, skin_label = get_card_media_info(uid, card, card_data)
 
-    txt = f"Выбрана карта: {card_data['name']}{skin_label}\nВыберите ⚔️ Атаку \nСтили: ⚡️ Скорость, 💪 Сила, 🧠 Интеллект.\n\nНа выбор дается 30 секунд"
+    # Определяем наличие ульты и её название
+    skill_uses = g['p1_skill_uses'] if is_p1 else g['p2_skill_uses']
+    skill_name = get_card_skill_info(card)
+
+    is_passive_copy = (card in COPY_STYLE)
+    has_active_skill = card in (RISE_STYLE + BERSERK_STYLE + SPACE_STYLE + PIERCE_STYLE + EVADE_STYLE)
+
+    bld = InlineKeyboardBuilder()
+    # 0 - обычный удар, 1 - ульта
+    if has_active_skill and skill_uses > 0:
+        bld.row(
+            InlineKeyboardButton(text="⚡️ Скорость", callback_data=f"b_style:{gid}:spd:0"),
+            InlineKeyboardButton(text=f"💥 Ульта ({skill_uses})", callback_data=f"b_style:{gid}:spd:1")
+        )
+        bld.row(
+            InlineKeyboardButton(text="💪 Сила", callback_data=f"b_style:{gid}:str:0"),
+            InlineKeyboardButton(text=f"💥 Ульта ({skill_uses})", callback_data=f"b_style:{gid}:str:1")
+        )
+        bld.row(
+            InlineKeyboardButton(text="🧠 Интеллект", callback_data=f"b_style:{gid}:int:0"),
+            InlineKeyboardButton(text=f"💥 Ульта ({skill_uses})", callback_data=f"b_style:{gid}:int:1")
+        )
+        skill_text = (
+            f"<blockquote>✨ <b>Навык карты: {skill_name}</b>\n"
+            f"💥 Доступно для применения: <b>{skill_uses}/2</b></blockquote>\n\n"
+        )
+    else:
+        bld.row(InlineKeyboardButton(text="⚡️ Скорость", callback_data=f"b_style:{gid}:spd:0"))
+        bld.row(InlineKeyboardButton(text="💪 Сила", callback_data=f"b_style:{gid}:str:0"))
+        bld.row(InlineKeyboardButton(text="🧠 Интеллект", callback_data=f"b_style:{gid}:int:0"))
+
+        # Информируем о пассивке Копирования
+        if is_passive_copy:
+            copy_used = g.get('p1_copy_used', False) if is_p1 else g.get('p2_copy_used', False)
+            if not copy_used:
+                skill_text = (
+                    f"<blockquote>✨ <b>Навык карты: {skill_name} (Пассивный)</b>\n"
+                    f"🌀 Сработает автоматически 1 раз за бой!</blockquote>\n\n"
+                )
+            else:
+                skill_text = f"<blockquote>✨ <b>Навык карты: {skill_name}</b>\n❌ Уже использован в этом бою.</blockquote>\n\n"
+        else:
+            skill_text = ""
+
+    txt = (
+        f"🃏 Выбрана карта: <b>{card_data['name']}{skin_label}</b>\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"⚔️ Выберите Атаку:\n\n"
+        f"{skill_text}"
+        f"⏳ На выбор дается 30 секунд"
+    )
 
     msg = None
     try:
         if is_video:
             msg = await send_cached_video(
                 bot, chat_id=uid, file_path=asset_path, caption=txt,
-                width=960, height=1280,
+                width=960, height=1280, parse_mode="HTML",
                 reply_markup=bld.as_markup(), supports_streaming=True
             )
         else:
             msg = await bot.send_photo(
-                uid, photo=FSInputFile(asset_path), caption=txt, reply_markup=bld.as_markup()
+                uid, photo=FSInputFile(asset_path), caption=txt, parse_mode="HTML", reply_markup=bld.as_markup()
             )
     except Exception as e:
         logging.error(f"send card media failed for {uid}, card={card}: {e}")
         try:
-            msg = await bot.send_message(uid, txt, reply_markup=bld.as_markup())
+            msg = await bot.send_message(uid, txt, parse_mode="HTML", reply_markup=bld.as_markup())
         except Exception as e2:
             logging.error(f"fallback send_message failed for {uid}: {e2}")
 
@@ -1114,11 +1261,13 @@ async def process_card_choice(gid, uid, card, bot):
         current_round = g['round']
         asyncio.create_task(auto_style_choice(gid, uid, current_round, msg.message_id, bot))
 
+    # Логика бота
     if g['p2'] == -1 and g['p2_c'] is None:
         bot_c = random.choice(g['d2'])
         g['p2_c'] = bot_c
         g['d2'].remove(bot_c)
         g['p2_s'] = random.choice(['spd', 'str', 'int'])
+        g['p2_use_skill'] = False
 
         if g['p1_s'] and g['p2_s']:
             if not g.get('resolving'):
@@ -1143,7 +1292,7 @@ async def process_card_choice(gid, uid, card, bot):
                 if gid in GAMES: GAMES[gid]['resolving'] = False
 
 
-async def process_style_choice(gid, uid, style, bot):
+async def process_style_choice(gid, uid, style, is_skill, bot):
     g = GAMES.get(gid)
     if not g: return
     if g.get('resolving'): return
@@ -1152,9 +1301,21 @@ async def process_style_choice(gid, uid, style, bot):
     if is_p1:
         if g['p1_s'] is not None: return
         g['p1_s'] = style
+        # Фиксируем использование навыка
+        if is_skill and g['p1_skill_uses'] > 0:
+            g['p1_use_skill'] = True
+            g['p1_skill_uses'] -= 1
+        else:
+            g['p1_use_skill'] = False
     else:
         if g['p2_s'] is not None: return
         g['p2_s'] = style
+        # Фиксируем использование навыка
+        if is_skill and g['p2_skill_uses'] > 0:
+            g['p2_use_skill'] = True
+            g['p2_skill_uses'] -= 1
+        else:
+            g['p2_use_skill'] = False
 
     # БЛОКИРОВКА: Проверяем и блокируем до любых await!
     should_resolve = False
@@ -1187,6 +1348,7 @@ async def process_style_choice(gid, uid, style, bot):
             if gid in GAMES:
                 GAMES[gid]['round'] += 1
                 GAMES[gid]['p1_c'] = GAMES[gid]['p2_c'] = GAMES[gid]['p1_s'] = GAMES[gid]['p2_s'] = None
+                GAMES[gid]['p1_use_skill'] = GAMES[gid]['p2_use_skill'] = False
                 try:
                     await bot.send_message(GAMES[gid]['p1'],
                                            "⚠️ Возникла сетевая ошибка в прошлом раунде, раунд пропущен.")
@@ -1205,18 +1367,35 @@ async def process_style_choice(gid, uid, style, bot):
 
         if gid in GAMES: GAMES[gid]['resolving'] = False
 
+
 async def send_card_choice(uid, deck_left, gid, bot):
     g = GAMES.get(gid)
     if not g: return
 
+    is_p1 = (uid == g['p1'])
+    debuff = g['p1_next_debuff'] if is_p1 else g['p2_next_debuff']
+
     c_objs = [(cid, CARDS[cid]) for cid in set(deck_left)]
-    rarity_order = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2, "Обычная ⚪️": 1}
+    rarity_order = {"Божественная ⚫️": 6, "Мифическая 🔴": 5, "Легендарная 🔵": 4, "Эпическая 🟢": 3, "Редкая 🟡": 2,
+                    "Обычная ⚪️": 1}
     c_objs.sort(key=lambda x: rarity_order.get(x[1]['rarity'], 0), reverse=True)
 
     media = []
     for i, (cid, c) in enumerate(c_objs):
         asset_path, is_video, skin_label = get_card_media_info(uid, cid, c)
-        txt_card = f"{i + 1}. {c['name']}{skin_label} ({c['rarity']})\n⚡️{c['speed']} | 💪{c['strength']} | 🧠{c['intellect']}"
+
+        spd, str_val, int_val = c['speed'], c['strength'], c['intellect']
+
+        # Если есть дебафф от Берсерка, сразу показываем игроку сниженные статы!
+        if debuff != 0:
+            r = c.get('rarity', '')
+            min_lim = 91 if 'Божественная' in r or 'Мифическая' in r else (
+                81 if 'Легендарная' in r else (60 if 'Эпическая' in r else 1))
+            spd = max(min_lim, spd + debuff)
+            str_val = max(min_lim, str_val + debuff)
+            int_val = max(min_lim, int_val + debuff)
+
+        txt_card = f"{i + 1}. {c['name']}{skin_label} ({c['rarity']})\n⚡️{spd} | 💪{str_val} | 🧠{int_val}"
         if is_video:
             media.append(types.InputMediaVideo(
                 media=FSInputFile(asset_path),
@@ -1237,9 +1416,14 @@ async def send_card_choice(uid, deck_left, gid, bot):
         bld.button(text=c['name'], callback_data=f"b_card:{gid}:{cid}")
     bld.adjust(2)
 
-    txt = f"—————————————————\n\nРаунд {g['round']}.\nВыберите 🎴 карту для атаки\n\n⏳ На выбор дается 30 секунд"
+    # Красивое предупреждение об истощении
+    debuff_warning = ""
+    if debuff != 0:
+        debuff_warning = f"⚠️ <b>Внимание: Истощение!</b>\nВсе ваши статы временно снижены на {abs(debuff)} (до порога редкости).\n\n"
+
+    txt = f"—————————————————\n\nРаунд {g['round']}.\n{debuff_warning}Выберите 🎴 карту для атаки\n\n⏳ На выбор дается 30 секунд"
     try:
-        msg = await bot.send_message(uid, txt, reply_markup=bld.as_markup())
+        msg = await bot.send_message(uid, txt, reply_markup=bld.as_markup(), parse_mode="HTML")
         asyncio.create_task(auto_card_choice(gid, uid, g['round'], msg.message_id, bot))
     except Exception as e:
         logging.error(f"Failed to send card choice keyboard: {e}")
@@ -1263,7 +1447,12 @@ async def b_card(cq: CallbackQuery):
 
 @router.callback_query(F.data.startswith("b_style:"))
 async def b_style(cq: CallbackQuery):
-    _, gid, style = cq.data.split(":")
+    parts = cq.data.split(":")
+    gid = parts[1]
+    style = parts[2]
+    # Читаем флаг активации ульты (0 - обычная, 1 - ульта)
+    is_skill = (parts[3] == "1") if len(parts) > 3 else False
+
     g = GAMES.get(gid)
     if not g: return await cq.answer("Игра окончена.", show_alert=True)
     is_p1 = (cq.from_user.id == g['p1'])
@@ -1275,7 +1464,19 @@ async def b_style(cq: CallbackQuery):
         await cq.message.delete()
     except Exception:
         pass
-    await process_style_choice(gid, cq.from_user.id, style, cq.bot)
+    await process_style_choice(gid, cq.from_user.id, style, is_skill, cq.bot)
+
+def get_rarity_limits(card_dict):
+    """Возвращает (минимум, максимум) статов для редкости карты."""
+    rarity = card_dict.get('rarity', '')
+    if 'Божественная' in rarity or 'Мифическая' in rarity:
+        return 91, 100
+    elif 'Легендарная' in rarity:
+        return 81, 90
+    elif 'Эпическая' in rarity:
+        return 60, 80
+    else:
+        return 1, 100
 
 async def resolve_round(gid, bot):
     g = GAMES[gid]
@@ -1294,38 +1495,160 @@ async def resolve_round(gid, bot):
         n2 = get_user(g['p2'])[2]
         n2_link = f"<a href='tg://user?id={g['p2']}'>{n2}</a>"
 
-    val1, val2 = c1[s_map[g['p1_s']][2]], c2[s_map[g['p2_s']][2]]
-    adv = check_advantage(g['p1_s'], g['p2_s'])
+    val1 = c1[s_map[g['p1_s']][2]]
+    val2 = c2[s_map[g['p2_s']][2]]
+
+    val1_base, val2_base = val1, val2
 
     # === MANHWCARD PASS: ЗАДАНИЯ НА СТИЛИ ===
     if g['p1'] != -1:
-        if g['p1_s'] == 'spd':
-            check_and_update_quests(g['p1'], 'q_15_style_spd', 1)
-        elif g['p1_s'] == 'str':
-            check_and_update_quests(g['p1'], 'q_15_style_str', 1)
-        elif g['p1_s'] == 'int':
-            check_and_update_quests(g['p1'], 'q_15_style_int', 1)
+        if g['p1_s'] == 'spd': check_and_update_quests(g['p1'], 'q_15_style_spd', 1)
+        elif g['p1_s'] == 'str': check_and_update_quests(g['p1'], 'q_15_style_str', 1)
+        elif g['p1_s'] == 'int': check_and_update_quests(g['p1'], 'q_15_style_int', 1)
 
     if g['p2'] != -1:
-        if g['p2_s'] == 'spd':
-            check_and_update_quests(g['p2'], 'q_15_style_spd', 1)
-        elif g['p2_s'] == 'str':
-            check_and_update_quests(g['p2'], 'q_15_style_str', 1)
-        elif g['p2_s'] == 'int':
-            check_and_update_quests(g['p2'], 'q_15_style_int', 1)
+        if g['p2_s'] == 'spd': check_and_update_quests(g['p2'], 'q_15_style_spd', 1)
+        elif g['p2_s'] == 'str': check_and_update_quests(g['p2'], 'q_15_style_str', 1)
+        elif g['p2_s'] == 'int': check_and_update_quests(g['p2'], 'q_15_style_int', 1)
     # ========================================
 
+    skill_log_1, skill_log_2 = [], []
+
+    # --- 1. ПРИМЕНЕНИЕ ДЕБАФФА ПРОШЛОГО БЕРСЕРКА ---
+    if g.get('p1_next_debuff', 0) != 0:
+        debuff = g['p1_next_debuff']
+        g['p1_next_debuff'] = 0
+        min1, _ = get_rarity_limits(c1)
+        val1 = max(min1, val1 + debuff)
+        skill_log_1.append(f"⚠️ <b>Истощение (от прошлого Берсерка):</b> Стат снижен на {abs(debuff)} (текущий: {val1})")
+
+    if g.get('p2_next_debuff', 0) != 0:
+        debuff = g['p2_next_debuff']
+        g['p2_next_debuff'] = 0
+        min2, _ = get_rarity_limits(c2)
+        val2 = max(min2, val2 + debuff)
+        skill_log_2.append(f"⚠️ <b>Истощение (от прошлого Берсерка):</b> Стат снижен на {abs(debuff)} (текущий: {val2})")
+
+    # --- 2. ПРОВЕРКА НЕМОТИ (ПРОСТРАНСТВО) ---
+    p1_is_space = (g['p1_c'] in SPACE_STYLE) and g['p1_use_skill']
+    p2_is_space = (g['p2_c'] in SPACE_STYLE) and g['p2_use_skill']
+
+    p1_skill_blocked = g['p1_use_skill'] and p2_is_space and not p1_is_space
+    p2_skill_blocked = g['p2_use_skill'] and p1_is_space and not p2_is_space
+
+    if p1_skill_blocked:
+        skill_log_1.append("🚫 <b>Навык заблокирован</b> Пространством противника!")
+    if p2_skill_blocked:
+        skill_log_2.append("🚫 <b>Навык заблокирован</b> Пространством противника!")
+
+    # --- 2.5 ПАССИВНОЕ КОПИРОВАНИЕ ---
+    cid1, cid2 = g['p1_c'], g['p2_c']
+    min1, max1 = get_rarity_limits(c1)
+    min2, max2 = get_rarity_limits(c2)
+
+    if cid1 in COPY_STYLE and not g.get('p1_copy_used', False):
+        target_val = min(max1, val2_base)
+        if target_val > val1:
+            val1 = target_val
+            skill_log_1.append(f"👁️ <b>Пассивка (Копирование):</b> Автоматически скопирован стат врага ➔ {val1}")
+        else:
+            skill_log_1.append(f"👁️ <b>Пассивка (Копирование):</b> Ваш стат ({val1}) выше вражеского ({val2_base}), сохранен собственный стат!")
+        g['p1_copy_used'] = True
+
+    if cid2 in COPY_STYLE and not g.get('p2_copy_used', False):
+        target_val = min(max2, val1_base)
+        if target_val > val2:
+            val2 = target_val
+            skill_log_2.append(f"👁️ <b>Пассивка (Копирование):</b> Автоматически скопирован стат врага ➔ {val2}")
+        else:
+            skill_log_2.append(f"👁️ <b>Пассивка (Копирование):</b> Ваш стат ({val2}) выше вражеского ({val1_base}), сохранен собственный стат!")
+        g['p2_copy_used'] = True
+
+    # --- 3. РАСЧЕТ АКТИВНОЙ УЛЬТЫ ДЛЯ ИГРОКА 1 ---
+    p1_pierce = False
+    if g['p1_use_skill'] and not p1_skill_blocked:
+        if cid1 in RISE_STYLE:
+            stolen = int(val2_base * 0.10)
+            val1 += stolen
+            skill_log_1.append(f"🌑 <b>Ульта (Восстание):</b> Поглощено 10% стата врага (+{stolen})")
+        elif cid1 in BERSERK_STYLE:
+            if g['round'] == 5:
+                val1 += 5
+                skill_log_1.append(
+                    "🩸 <b>Ульта (Берсерк):</b> Атака +5! <i>(Финальный раунд - бафф уменьшен)</i>")
+            else:
+                val1 += 10
+                g['p1_next_debuff'] = -8
+                skill_log_1.append(
+                    "🩸 <b>Ульта (Берсерк):</b> Атака +10! <i>(На следующий раунд наложится Истощение -8)</i>")
+        elif cid1 in SPACE_STYLE:
+            val1 += 2
+            skill_log_1.append("🌊 <b>Ульта (Пространство):</b> Немота на врага! (+2 к атакующему стату)")
+        elif cid1 in PIERCE_STYLE:
+            p1_pierce = True
+            cut = 5 if ('Мифическая' in c2.get('rarity', '') or 'Легендарная' in c2.get('rarity', '')) else 10
+            val2 = max(min2, val2 - cut)
+            skill_log_1.append(f"⚔️ <b>Ульта (Пробивание):</b> Защита врага игнорируется! Стат врага снижен (-{cut})")
+        elif cid1 in EVADE_STYLE:
+            if random.random() < 0.5:
+                val2 = min2
+                skill_log_1.append(f"🌪 <b>Ульта (Уклонение):</b> Успешный уворот! Стат врага снижен до минимума ({min2})")
+            else:
+                skill_log_1.append("🌪 <b>Ульта (Уклонение):</b> Уклонение не сработало!")
+
+    # --- 4. РАСЧЕТ АКТИВНОЙ УЛЬТЫ ДЛЯ ИГРОКА 2 ---
+    p2_pierce = False
+    if g['p2_use_skill'] and not p2_skill_blocked:
+        if cid2 in RISE_STYLE:
+            stolen = int(val1_base * 0.10)
+            val2 += stolen
+            skill_log_2.append(f"🌑 <b>Ульта (Восстание):</b> Поглощено 10% стата врага (+{stolen})")
+        elif cid2 in BERSERK_STYLE:
+            if g['round'] == 5:
+                val2 += 5
+                skill_log_2.append(
+                    "🩸 <b>Ульта (Берсерк):</b> Атака +5! <i>(Финальный раунд - бафф уменьшен)</i>")
+            else:
+                val2 += 10
+                g['p2_next_debuff'] = -8
+                skill_log_2.append(
+                    "🩸 <b>Ульта (Берсерк):</b> Атака +10! <i>(На следующий раунд наложится Истощение -8)</i>")
+        elif cid2 in SPACE_STYLE:
+            val2 += 2
+            skill_log_2.append("🌊 <b>Ульта (Пространство):</b> Немота на врага! (+2 к атакующему стату)")
+        elif cid2 in PIERCE_STYLE:
+            p2_pierce = True
+            cut = 5 if ('Мифическая' in c1.get('rarity', '') or 'Легендарная' in c1.get('rarity', '')) else 10
+            val1 = max(min1, val1 - cut)
+            skill_log_2.append(f"⚔️ <b>Ульта (Пробивание):</b> Защита врага игнорируется! Стат врага снижен (-{cut})")
+        elif cid2 in EVADE_STYLE:
+            if random.random() < 0.5:
+                val1 = min1
+                skill_log_2.append(f"🌪 <b>Ульта (Уклонение):</b> Успешный уворот! Стат врага снижен до минимума ({min1})")
+            else:
+                skill_log_2.append("🌪 <b>Ульта (Уклонение):</b> Уклонение не сработало!")
+
+    # --- 5. ПРЕИМУЩЕСТВО СТИЛЕЙ И ИТОГОВЫЙ УРОН ---
+    adv = check_advantage(g['p1_s'], g['p2_s'])
     m1, m2 = 1.0, 1.0
     bonus_txt_1, bonus_txt_2 = "", ""
 
     if adv == 1:
-        m2 = 0.9
-        bonus_txt_1 = f"{s_map[g['p2_s']][0]} -10% ↘️"
-        bonus_txt_2 = f"{s_map[g['p2_s']][0]} -10% ↘️"
+        if not p2_pierce:
+            m2 = 0.9
+            bonus_txt_1 = f"{s_map[g['p2_s']][0]} -10% ↘️"
+            bonus_txt_2 = f"{s_map[g['p2_s']][0]} -10% ↘️"
+        else:
+            bonus_txt_1 = "Пробивание врага сработало! Дебафф от стиля отменен."
+            bonus_txt_2 = "Пробивание сработало! Дебафф от стиля отменен."
     elif adv == -1:
-        m1 = 0.9
-        bonus_txt_1 = f"{s_map[g['p1_s']][0]} -10% ↘️"
-        bonus_txt_2 = f"{s_map[g['p1_s']][0]} -10% ↘️"
+        if not p1_pierce:
+            m1 = 0.9
+            bonus_txt_1 = f"{s_map[g['p1_s']][0]} -10% ↘️"
+            bonus_txt_2 = f"{s_map[g['p1_s']][0]} -10% ↘️"
+        else:
+            bonus_txt_1 = "Пробивание сработало! Дебафф от стиля отменен."
+            bonus_txt_2 = "Пробивание врага сработало! Дебафф от стиля отменен."
 
     f1, f2 = int(val1 * m1), int(val2 * m2)
 
@@ -1341,12 +1664,21 @@ async def resolve_round(gid, bot):
     else:
         winner_name = "Ничья"
 
-    def format_text(p_name, e_name, score_p, score_e, p_s, e_s, p_val, e_val, p_final, e_final, b_txt, p_emoji, e_emoji):
+    def format_text(p_name, e_name, score_p, score_e, p_s, e_s, p_val, e_val, p_final, e_final, b_txt, p_emoji, e_emoji, p_logs, e_logs):
         t = (f"⬆️ Ваша карта | Карта врага ⬆️\nРаунд - {g['round']}\n\n"
              f"Счет:\n{p_name} {p_emoji} - {score_p}\n{e_name} {e_emoji} - {score_e}\n\n"
              f"⚔️ Вы совершаете {s_map[p_s][1]} атаку\nУровень атаки: {p_val}\n\n"
              f"🛡️ Противник ставит {s_map[e_s][1]} защиту\nУровень защиты: {e_val}\n\n")
-        if adv != 0: t += f"Бонус\n{b_txt}\n\n"
+
+        # Логи ульт
+        if p_logs:
+            t += "<b>Ваш навык:</b>\n" + "\n".join(p_logs) + "\n\n"
+        if e_logs:
+            t += "<b>Навык противника:</b>\n" + "\n".join(e_logs) + "\n\n"
+
+        if adv != 0 and b_txt:
+            t += f"Бонус стиля:\n{b_txt}\n\n"
+
         t += (f"Итоговый уровень атаки {s_map[p_s][0].split()[0]} : {p_final}\n"
               f"Итоговый уровень защиты {s_map[e_s][0].split()[0]}: {e_final}\n\n")
         t += f"Раунд завершился в ничью!" if winner_name == "Ничья" else f"Раунд выиграл {winner_name}"
@@ -1356,9 +1688,7 @@ async def resolve_round(gid, bot):
     c1_path, c1_is_video, c1_label = get_card_media_info(g['p1'], g['p1_c'], c1)
     c2_path, c2_is_video, c2_label = get_card_media_info(g['p2'], g['p2_c'], c2)
 
-    # Локальная функция для динамической сборки медиа с учетом скинов
-    def create_media(path_main, is_video_main, path_secondary, is_video_secondary, card_main, card_secondary,
-                     caption_txt):
+    def create_media(path_main, is_video_main, path_secondary, is_video_secondary, card_main, card_secondary, caption_txt):
         m = []
         if is_video_main:
             m.append(types.InputMediaVideo(
@@ -1378,7 +1708,7 @@ async def resolve_round(gid, bot):
         return m
 
     try:
-        txt1 = format_text(n1, n2_link, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1, val2, f1, f2, bonus_txt_1, emoji1, emoji2)
+        txt1 = format_text(n1, n2_link, g['score1'], g['score2'], g['p1_s'], g['p2_s'], val1_base, val2_base, f1, f2, bonus_txt_1, emoji1, emoji2, skill_log_1, skill_log_2)
         media1 = create_media(c1_path, c1_is_video, c2_path, c2_is_video, c1, c2, txt1)
         await bot.send_media_group(g['p1'], media=media1)
     except Exception as e:
@@ -1386,14 +1716,16 @@ async def resolve_round(gid, bot):
 
     if g['p2'] != -1:
         try:
-            txt2 = format_text(n2_link, n1, g['score2'], g['score1'], g['p2_s'], g['p1_s'], val2, val1, f2, f1, bonus_txt_2, emoji2, emoji1)
+            txt2 = format_text(n2_link, n1, g['score2'], g['score1'], g['p2_s'], g['p1_s'], val2_base, val1_base, f2, f1, bonus_txt_2, emoji2, emoji1, skill_log_2, skill_log_1)
             media2 = create_media(c2_path, c2_is_video, c1_path, c1_is_video, c2, c1, txt2)
             await bot.send_media_group(g['p2'], media=media2)
         except Exception as e:
             logging.error(f"Error sending round result to p2: {e}")
 
+    # Сбрасываем текущий выбор карт и флаги ульт для следующего раунда
     g['round'] += 1
     g['p1_c'] = g['p2_c'] = g['p1_s'] = g['p2_s'] = None
+    g['p1_use_skill'] = g['p2_use_skill'] = False
 
     if g['round'] > 5:
         await finish_game(gid, bot)
@@ -1409,7 +1741,6 @@ async def resolve_round(gid, bot):
                 await send_card_choice(g['p2'], g['d2'], gid, bot)
             except Exception as e:
                 logging.error(f"Error sending card choice to p2: {e}")
-
 
 async def finish_game(gid, bot):
     # Используем .get() на случай, если игра уже удалилась (защита от двойного вызова)
