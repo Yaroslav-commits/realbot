@@ -103,8 +103,9 @@ async def battle_menu(msg: types.Message):
            f'🏅 {u[7]} Очков | Ранг {get_rank(u[7])}\n'
            f"Победа / Ничья / Поражение :\n"
            f"{u[8]} / {u[9]} / {u[10]}\n"
-           f"━━━━━━━━━━━━━━━\n\n"
-           f"Каждое сражение фиксируется в хронике данных.")
+           f"━━━━━━━━━━━━━━━\n"
+           f"Каждое сражение фиксируется в хронике данных.\n\n"
+           f"<tg-emoji emoji-id='5267267636055520629'>👁️</tg-emoji> [Гайд по битвам](https://telegra.ph/Gajd-Pole-Bitvy-07-29)")
 
     bld = InlineKeyboardBuilder()
     bld.button(text="Найти противника 👁️", callback_data="find_match")
@@ -2011,8 +2012,9 @@ async def b_menu_back_cb(cq: CallbackQuery):
            f'🏅 {u[7]} Очков | Ранг {get_rank(u[7])}\n'
            f"Победа / Ничья / Поражение :\n"
            f"{u[8]} / {u[9]} / {u[10]}\n"
-           f"━━━━━━━━━━━━━━━\n\n"
-           f"Каждое сражение фиксируется в хронике данных.")
+           f"━━━━━━━━━━━━━━━\n"
+           f"Каждое сражение фиксируется в хронике данных.\n\n"
+           f"<tg-emoji emoji-id='5267267636055520629'>👁️</tg-emoji> [Гайд по битвам](https://telegra.ph/Gajd-Pole-Bitvy-07-29)")
 
     bld = InlineKeyboardBuilder()
     bld.button(text="Найти противника 👁️", callback_data="find_match")
@@ -3599,29 +3601,109 @@ async def distribute_all_top_rewards(bot: Bot):
     return count_curr, count_cards
 
 
-@router.message(Command("fix_hwang"))
-async def admin_fix_hwang_card(msg: types.Message, bot: Bot):
-    """Временная админ-команда для починки старого ID карты в базе данных"""
-    # Проверка на админа (замени ADMIN_IDS на свою переменную, если она импортируется иначе)
+@router.message(Command("check_broken_cards"))
+async def admin_check_broken_cards(msg: types.Message):
+    """Ищет все сломанные/несуществующие ID карт в базе данных"""
     if msg.from_user.id not in ADMIN_IDS:
         return
 
-    old_id = "hwang_jae_won"
-    new_id = "hwang_jae_won1"
+    # Список таблиц и колонок, где хранятся ID карт
+    tables_columns = {
+        "cards_inv": "card_id",
+        "cards_stash": "card_id",
+        "decks": "card_id",
+        "multi_deck_slots": "card_id",
+        "favorite_cards": "card_id",
+        "skins_inv": "card_id"
+    }
+
+    broken_ids = set()
+
+    for table, col in tables_columns.items():
+        try:
+            # Достаем все уникальные ID из каждой таблицы
+            rows = db_exec(f"SELECT DISTINCT {col} FROM {table}", fetchall=True)
+            if rows:
+                for row in rows:
+                    cid = row[0]
+                    # Если ID есть в БД, но его нет в словаре CARDS — это фантом
+                    if cid and cid not in CARDS:
+                        broken_ids.add(cid)
+        except Exception:
+            pass  # Пропускаем, если какой-то таблицы вдруг нет
+
+    # Отдельная проверка для слотов крафта (там 5 колонок)
+    try:
+        craft_rows = db_exec("SELECT slot1, slot2, slot3, slot4, slot5 FROM craft_slots", fetchall=True)
+        if craft_rows:
+            for row in craft_rows:
+                for cid in row:
+                    if cid and cid not in CARDS:
+                        broken_ids.add(cid)
+    except Exception:
+        pass
+
+    if not broken_ids:
+        return await msg.answer("✅ <b>Всё идеально!</b>\nВ базе данных нет сломанных или удаленных ID карт.",
+                                parse_mode="HTML")
+
+    txt = "⚠️ <b>Внимание! Найдены фантомные ID карт в базе:</b>\n\n"
+    for bid in broken_ids:
+        txt += f"<code>{bid}</code>\n"
+
+    txt += "\nИспользуйте команду <code>/replace_card [старый_ID] [новый_ID]</code>, чтобы безопасно заменить их на актуальные."
+    await msg.answer(txt, parse_mode="HTML")
+
+
+@router.message(Command("replace_card"))
+async def admin_replace_card(msg: types.Message):
+    """Универсальная команда для безопасной замены ID карты во ВСЕХ таблицах"""
+    if msg.from_user.id not in ADMIN_IDS:
+        return
+
+    args = msg.text.split()
+    if len(args) != 3:
+        return await msg.answer(
+            "❌ <b>Формат:</b> <code>/replace_card [старый_ID] [новый_ID]</code>\n"
+            "<b>Пример:</b> <code>/replace_card hwang_jae_won hwang_jae_won1</code>",
+            parse_mode="HTML"
+        )
+
+    old_id = args[1]
+    new_id = args[2]
+
+    # Жесткая защита: проверяем, существует ли новый ID в игре
+    if new_id not in CARDS:
+        return await msg.answer(
+            f"❌ <b>Ошибка:</b> Новый ID <code>{new_id}</code> не найден в словаре CARDS! Замена отменена для безопасности.",
+            parse_mode="HTML")
 
     try:
-        # Обновляем все связанные таблицы
+        # Массово и безопасно обновляем все возможные таблицы
         db_exec("UPDATE cards_inv SET card_id = ? WHERE card_id = ?", (new_id, old_id))
+        db_exec("UPDATE cards_stash SET card_id = ? WHERE card_id = ?", (new_id, old_id))
         db_exec("UPDATE decks SET card_id = ? WHERE card_id = ?", (new_id, old_id))
         db_exec("UPDATE multi_deck_slots SET card_id = ? WHERE card_id = ?", (new_id, old_id))
-        db_exec("UPDATE cards_stash SET card_id = ? WHERE card_id = ?", (new_id, old_id))
+
         try:
             db_exec("UPDATE favorite_cards SET card_id = ? WHERE card_id = ?", (new_id, old_id))
         except:
-            pass  # Если вдруг такой таблицы нет, пропускаем
+            pass
+
+        try:
+            db_exec("UPDATE skins_inv SET card_id = ? WHERE card_id = ?", (new_id, old_id))
+        except:
+            pass
+
+        # Обновляем все 5 слотов в крафт-машине
+        for i in range(1, 6):
+            try:
+                db_exec(f"UPDATE craft_slots SET slot{i} = ? WHERE slot{i} = ?", (new_id, old_id))
+            except:
+                pass
 
         await msg.answer(
-            f"✅ <b>Успешно!</b>\nВсе старые карты <code>{old_id}</code> в базе данных были заменены на <code>{new_id}</code>.\nОшибок в боях больше быть не должно!",
+            f"✅ <b>Успешно!</b>\nВсе записи со старой картой <code>{old_id}</code> были заменены на <code>{new_id}</code> во всех инвентарях и колодах.",
             parse_mode="HTML")
     except Exception as e:
         await msg.answer(f"❌ Произошла ошибка при обновлении БД: {e}")
