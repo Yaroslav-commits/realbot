@@ -105,7 +105,7 @@ async def battle_menu(msg: types.Message):
            f"{u[8]} / {u[9]} / {u[10]}\n"
            f"━━━━━━━━━━━━━━━\n"
            f"Каждое сражение фиксируется в хронике данных.\n\n"
-           f"<tg-emoji emoji-id='5267267636055520629'>👁️</tg-emoji> [Гайд по битвам](https://telegra.ph/Gajd-Pole-Bitvy-07-29)")
+           f"<tg-emoji emoji-id='5267267636055520629'>👁️</tg-emoji> <a href='https://telegra.ph/Gajd-Pole-Bitvy-07-29'>Гайд по битвам</a>")
 
     bld = InlineKeyboardBuilder()
     bld.button(text="Найти противника 👁️", callback_data="find_match")
@@ -2014,7 +2014,7 @@ async def b_menu_back_cb(cq: CallbackQuery):
            f"{u[8]} / {u[9]} / {u[10]}\n"
            f"━━━━━━━━━━━━━━━\n"
            f"Каждое сражение фиксируется в хронике данных.\n\n"
-           f"<tg-emoji emoji-id='5267267636055520629'>👁️</tg-emoji> [Гайд по битвам](https://telegra.ph/Gajd-Pole-Bitvy-07-29)")
+           f"<tg-emoji emoji-id='5267267636055520629'>👁️</tg-emoji> <a href='https://telegra.ph/Gajd-Pole-Bitvy-07-29'>Гайд по битвам</a>")
 
     bld = InlineKeyboardBuilder()
     bld.button(text="Найти противника 👁️", callback_data="find_match")
