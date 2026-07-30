@@ -112,7 +112,7 @@ def _build_inv_main_text(uid: int) -> str:
     total_all = len(CARDS)
 
     lines = [
-        "🌌 <b>ГЛАВНОЕ МЕНЮ ИНВЕНТАРЯ</b> 🌌",
+        "<tg-emoji emoji-id='5438154974490022622'>🌌</tg-emoji> <b>ГЛАВНОЕ МЕНЮ ИНВЕНТАРЯ</b> <tg-emoji emoji-id='5438154974490022622'>🌌</tg-emoji>",
         "━━━━━━━━━━━━━━━━━━━━━",
         f"<tg-emoji emoji-id='5231200819986047254'>📦</tg-emoji> <b>Коллекция:</b> {total} / {total_all} карт",
         "",
@@ -126,7 +126,7 @@ def _build_inv_main_text(uid: int) -> str:
     if total:
         top_cids = _sort_cards(all_cids)[:3]
         lines.append("")
-        lines.append("⚡️ <b>Авангард (Топ-3):</b>")
+        lines.append("<tg-emoji emoji-id='5258203794772085854'>⚡️</tg-emoji> <b>Авангард (Топ-3):</b>")
         for i, cid in enumerate(top_cids, 1):
             c = CARDS.get(cid)
             if c:
@@ -134,7 +134,7 @@ def _build_inv_main_text(uid: int) -> str:
                 lines.append(f"  {i}. {c['name']} — 💥 {power}")
 
     lines.append("━━━━━━━━━━━━━━━━━━━━━")
-    lines.append("<i>👇 Выберите нужное действие:</i>")
+    lines.append("<i><tg-emoji emoji-id='5296773623292388914'>👇</tg-emoji> Выберите нужное действие:</i>")
     return "\n".join(lines)
 
 def _build_inv_main_kb() -> InlineKeyboardMarkup:
@@ -284,6 +284,40 @@ async def inv_series_selected(cq: CallbackQuery, state: FSMContext):
     await _process_search_and_show(cq, state, page=0)
 
 
+@router.callback_query(F.data == "inv_search_skill")
+async def inv_search_skill_start(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
+    bld = InlineKeyboardBuilder()
+    skills = [
+        ("👁️ Копирование", "Копирование"),
+        ("🌑 Восстание", "Восстание"),
+        ("🩸 Берсерк", "Берсерк"),
+        ("🌊 Пространство", "Пространство"),
+        ("⚔️ Пробивание", "Пробивание"),
+        ("🌪 Уклонение", "Уклонение"),
+        ("⚪ Базовый", "Базовый")  # Для карт без навыка
+    ]
+
+    for label, slug in skills:
+        bld.button(text=label, callback_data=f"inv_sk_sel:{slug}")
+
+    bld.adjust(2)  # Выстраиваем кнопки в 2 столбца
+    bld.row(InlineKeyboardButton(text="🔙 Назад", callback_data="inv_search_start"))
+
+    txt = "✨ <b>Поиск по навыкам</b>\n\nВыберите интересующий вас стиль боя:"
+    try:
+        await cq.message.edit_text(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    except:
+        await cq.message.answer(txt, reply_markup=bld.as_markup(), parse_mode="HTML")
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("inv_sk_sel:"))
+async def inv_skill_selected(cq: CallbackQuery, state: FSMContext):
+    query = cq.data.split(":", 1)[1]
+    await state.update_data(search_type="skill", search_query=query)
+    await _process_search_and_show(cq, state, page=0)
+
 # --- ПОИСК ПО СТАТАМ ---
 @router.callback_query(F.data == "inv_search_stats")
 async def inv_search_stats_start(cq: CallbackQuery, state: FSMContext):
@@ -381,6 +415,14 @@ async def _process_search_and_show(target, state: FSMContext, page: int):
         # Сортируем: сначала самое близкое совпадение (dist ближе к 0), при равенстве - по наибольшей силе
         matched.sort(key=lambda cid: (stat_distance(cid), -_card_power(cid)))
         info_txt = f"по статам (Ближе к ⚡️{spd} 💪{str_} 🧠{int_})"
+
+    elif search_type == "skill":
+        query = data.get("search_query", "")
+        # Проверяем стиль карты. Если стиля нет, считаем её "Базовый"
+        matched = [cid for cid in user_cids if CARDS.get(cid, {}).get('style', 'Базовый') == query]
+        matched = _sort_cards(matched)
+        info_txt = f"по навыку «<b>{query}</b>»"
+
     else:
         return
 
@@ -596,12 +638,12 @@ async def inv_collection_cb(cq: CallbackQuery):
     bar = "█" * filled + "░" * (10 - filled)
 
     lines = [
-        "📊 <b>Коллекция</b>",
+        "<tg-emoji emoji-id='5231200819986047254'>📦</tg-emoji> <b>Коллекция</b>",
         "",
         f"Прогресс: [{bar}] {total_pct}%",
         f"Собрано: <b>{owned_total}</b> / {total_cards} карт",
         "",
-        "💎 <b>По редкостям:</b>",
+        "<tg-emoji emoji-id='5201914481671682382'>⚜️</tg-emoji> <b>По редкостям:</b>",
         "<blockquote>"
     ]
     rarity_lines = []
@@ -619,7 +661,7 @@ async def inv_collection_cb(cq: CallbackQuery):
     lines.append("\n".join(rarity_lines))
     lines.append("</blockquote>")
 
-    # Вселенные
+    # === ВСЕЛЕННЫЕ (Скрываемые / Только с собранными картами) ===
     series_map: dict[str, dict] = {}
     for cid, c in CARDS.items():
         s = c.get('series', 'Неизвестно')
@@ -630,19 +672,30 @@ async def inv_collection_cb(cq: CallbackQuery):
 
     sorted_series = sorted(series_map.items(), key=lambda x: x[1]['owned'], reverse=True)
 
-    lines += ["", "🪐 <b>Вселенные:</b>", "<blockquote>"]
+    # Используем expandable цитату (свёрнута по умолчанию)
+    lines += ["", "<tg-emoji emoji-id='5211138022724091185'>🪐</tg-emoji> <b>Вселенные (нажми, чтобы развернуть):</b>", "<blockquote expandable>"]
     series_lines = []
+
     for s_name, s_data in sorted_series:
+        # 1. Показываем ТОЛЬКО те вселенные, у которых открыта хотя бы 1 карта
+        if s_data['owned'] == 0:
+            continue
+
         pct_s = int((s_data['owned'] / s_data['total']) * 100) if s_data['total'] else 0
-        mark = "✅" if pct_s == 100 else ("🔥" if pct_s >= 50 else "")
+        mark = "✅" if pct_s == 100 else ("🔥" if pct_s >= 50 else "📦")
         series_lines.append(f"{mark} {s_name}: {s_data['owned']}/{s_data['total']} ({pct_s}%)")
+
+    # Если игрок вообще ещё ничего не собрал
+    if not series_lines:
+        series_lines.append("<i>У вас пока нет собранных карт ни из одной вселенной.</i>")
+
     lines.append("\n".join(series_lines))
     lines.append("</blockquote>")
 
     txt = "\n".join(lines)
     bld = InlineKeyboardBuilder()
     bld.button(text="🎴 К картам", callback_data="inv_view:0:all")
-    bld.button(text="🔙 Назад",    callback_data="inv_main")
+    bld.button(text="🔙 Назад", callback_data="inv_main")
     bld.adjust(2)
 
     try:

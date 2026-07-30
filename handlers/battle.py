@@ -1568,9 +1568,9 @@ async def resolve_round(gid, bot):
     p1_pierce = False
     if g['p1_use_skill'] and not p1_skill_blocked:
         if cid1 in RISE_STYLE:
-            stolen = int(val2_base * 0.10)
+            stolen = int(val2_base * 0.07)
             val1 += stolen
-            skill_log_1.append(f"🌑 <b>Ульта (Восстание):</b> Поглощено 10% стата врага (+{stolen})")
+            skill_log_1.append(f"🌑 <b>Ульта (Восстание):</b> Поглощено 7% стата врага (+{stolen})")
         elif cid1 in BERSERK_STYLE:
             if g['round'] == 5:
                 val1 += 5
@@ -1600,9 +1600,9 @@ async def resolve_round(gid, bot):
     p2_pierce = False
     if g['p2_use_skill'] and not p2_skill_blocked:
         if cid2 in RISE_STYLE:
-            stolen = int(val1_base * 0.10)
+            stolen = int(val1_base * 0.07)
             val2 += stolen
-            skill_log_2.append(f"🌑 <b>Ульта (Восстание):</b> Поглощено 10% стата врага (+{stolen})")
+            skill_log_2.append(f"🌑 <b>Ульта (Восстание):</b> Поглощено 7% стата врага (+{stolen})")
         elif cid2 in BERSERK_STYLE:
             if g['round'] == 5:
                 val2 += 5
@@ -2764,9 +2764,9 @@ async def _show_bet_menu(cq: CallbackQuery, game: str = ""):
     balance = u[5]  # battlecoin
     _, bet = _get_bet_data(uid)
 
-    hot = "💥 Крупные выигрыши"
+    hot = "<tg-emoji emoji-id='5276032951342088188'>💥</tg-emoji> Крупные выигрыши"
     txt = (
-        f"🎰 Выберите игру\n\n"
+        f"<tg-emoji emoji-id='5235989279024373566'>🎰</tg-emoji> Выберите игру\n\n"
         f"Баланс — {balance} 🪙\n"
         f"Ставка — {bet} 🪙\n\n"
         f"{hot}"
@@ -2959,12 +2959,12 @@ async def b_bet_play_cb(cq: CallbackQuery):
 
             net = prize - bet
             txt = (
-                f"🎉 Выигрыш +{net} 🪙\n\n"
+                f"<tg-emoji emoji-id='5201730588351945766'>🎉</tg-emoji> Выигрыш +{net} 🪙\n\n"
                 f"Выбрано: {choice_label}\n"
                 f"Выпало: {result_label}\n"
             )
             if jackpot_bonus:
-                txt += f"\n💎 JACKPOT!\nБонус: +{jackpot_bonus} 🪙\n"
+                txt += f"\n<tg-emoji emoji-id='5188464800174190349'>💎</tg-emoji> JACKPOT!\nБонус: +{jackpot_bonus} 🪙\n"
 
             if streak > 0 and streak % 5 == 0:
                 bonus = 75
@@ -2978,7 +2978,7 @@ async def b_bet_play_cb(cq: CallbackQuery):
             streak = 0
             _save_bet(uid, streak, bet)
             txt = (
-                f"💔 Могло быть +{int(bet * multiplier) - bet} 🪙\n\n"
+                f"<tg-emoji emoji-id='5924675271914426175'>💔</tg-emoji> Могло быть +{int(bet * multiplier) - bet} 🪙\n\n"
                 f"Выбрано: {choice_label}\n"
                 f"Выпало: {result_label}\n"
             )
