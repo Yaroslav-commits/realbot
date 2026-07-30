@@ -112,29 +112,29 @@ def _build_inv_main_text(uid: int) -> str:
     total_all = len(CARDS)
 
     lines = [
-        "🧳 <b>Мои Карты</b>",
+        "🌌 <b>ГЛАВНОЕ МЕНЮ ИНВЕНТАРЯ</b> 🌌",
+        "━━━━━━━━━━━━━━━━━━━━━",
+        f"<tg-emoji emoji-id='5231200819986047254'>📦</tg-emoji> <b>Коллекция:</b> {total} / {total_all} карт",
         "",
-        f"📦 Коллекция: <b>{total}</b> из <b>{total_all}</b> карт",
-        "",
-        "💎 По редкостям:",
+        "<tg-emoji emoji-id='5201914481671682382'>⚜️</tg-emoji> <b>Распределение по редкости:</b>"
     ]
     for _, slug, label in RARITY_FILTERS:
         count = sum(1 for cid in all_cids if CARDS.get(cid, {}).get('rarity') == label)
         if count:
-            lines.append(f"  {label}: <b>{count}</b>")
+            lines.append(f"  └ {label}: <b>{count}</b> шт.")
 
     if total:
         top_cids = _sort_cards(all_cids)[:3]
         lines.append("")
-        lines.append("⚡️ Топ-3 по силе:")
+        lines.append("⚡️ <b>Авангард (Топ-3):</b>")
         for i, cid in enumerate(top_cids, 1):
             c = CARDS.get(cid)
             if c:
                 power = _card_power(cid)
-                lines.append(f"  {i}. {c['name']} {c['rarity'].split()[-1]} — {power} 💥")
+                lines.append(f"  {i}. {c['name']} — 💥 {power}")
 
-    lines.append("")
-    lines.append("Выбери раздел 👇")
+    lines.append("━━━━━━━━━━━━━━━━━━━━━")
+    lines.append("<i>👇 Выберите нужное действие:</i>")
     return "\n".join(lines)
 
 def _build_inv_main_kb() -> InlineKeyboardMarkup:
@@ -197,8 +197,9 @@ async def inv_search_menu(cq: CallbackQuery, state: FSMContext):
     bld.button(text="🔤 По названию", callback_data="inv_search_name")
     bld.button(text="🪐 По вселенной", callback_data="inv_search_series")
     bld.button(text="📊 По статам", callback_data="inv_search_stats")
+    bld.button(text="✨ По навыку", callback_data="inv_search_skill")
     bld.button(text="🔙 Назад", callback_data="inv_main")
-    bld.adjust(1, 1, 1, 1)
+    bld.adjust(1, 1, 2, 1)
 
     txt = "🔍 <b>Продвинутый поиск</b>\n\nВыберите, по какому критерию вы хотите найти свои карты:"
 

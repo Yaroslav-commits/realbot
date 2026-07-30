@@ -3238,3 +3238,26 @@ async def cmd_give_skin(msg: types.Message, bot: Bot):
         await msg.answer(f"✅ {skin_label} облик для карты «{card_name}» успешно выдан игроку <code>{uid}</code>!", parse_mode="HTML")
     else:
         await msg.answer(f"⚠️ У игрока <code>{uid}</code> уже есть этот облик!", parse_mode="HTML")
+
+
+from aiogram import types, F
+from aiogram.filters import Command
+from config import ADMIN_IDS
+
+WEB_MAINTENANCE = False
+
+@router.message(Command("web_close"))
+async def cmd_web_close(message: types.Message):
+    # Защита: проверяем, что команду вызвал админ
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    global WEB_MAINTENANCE
+    WEB_MAINTENANCE = not WEB_MAINTENANCE  # Переключаем статус (Туда-сюда)
+
+    if WEB_MAINTENANCE:
+        status_text = "🔴 <b>Web App ЗАКРЫТ</b>\nВключен режим технических работ."
+    else:
+        status_text = "🟢 <b>Web App ОТКРЫТ</b>\nТехнические работы завершены."
+
+    await message.answer(status_text, parse_mode="HTML")
