@@ -332,7 +332,7 @@ async def start_bot():
     WEBAPP_URL = "https://yaroslav-commits.github.io/cards-catalog-manhw/"
 
     await bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(text="🃏 Каталог", web_app=WebAppInfo(url=WEBAPP_URL))
+        menu_button=MenuButtonWebApp(text="ManhwCard", web_app=WebAppInfo(url=WEBAPP_URL))
     )
 
     await bot.delete_webhook(drop_pending_updates=True)
@@ -495,17 +495,9 @@ DAILY_REWARDS = {
 WEB_MAINTENANCE = False
 
 
-@app.get("/api/profile/{user_id}")
 def get_profile(user_id: int):
-    # 🔥 ПРОВЕРКА НА ТЕХНИЧЕСКИЕ РАБОТЫ ДЛЯ ОБЫЧНЫХ ИГРОКОВ
-    from config import ADMIN_IDS
-    if WEB_MAINTENANCE and user_id not in ADMIN_IDS:
-        return {
-            "maintenance": True,
-            "message": "🛠 Идут технические работы! Устанавливаем обновление."
-        }
-
     try:
+        # Автоматически проверяем и создаем новые колонки для Пасса, если их нет
         for col, col_type in [
             ("pass_level", "INTEGER DEFAULT 1"),
             ("pass_xp", "INTEGER DEFAULT 0"),
@@ -583,6 +575,7 @@ def get_profile(user_id: int):
         needs_recovery = (days_passed > 1 and 0 < daily_day < 30)
 
         is_prem = is_premium(user_id)
+
         # Собираем карты и из инвентаря, и из сундука
         cards_rows = db_exec_sync(
             """
@@ -592,6 +585,18 @@ def get_profile(user_id: int):
             """, (user_id, user_id), fetchall=True
         )
         owned_cards = [row[0] for row in cards_rows] if cards_rows else []
+
+        # 🔥 СОБИРАЕМ СКИНЫ ИЗ БАЗЫ ДАННЫХ
+        skins_rows = db_exec_sync(
+            "SELECT card_id, skin_type FROM skins_inv WHERE user_id = ?",
+            (user_id,), fetchall=True
+        )
+        owned_skins = {}
+        if skins_rows:
+            for cid, stype in skins_rows:
+                if stype not in owned_skins:
+                    owned_skins[stype] = []
+                owned_skins[stype].append(cid)
 
         # Статистика боёв
         wins = user[3] or 0
@@ -621,60 +626,33 @@ def get_profile(user_id: int):
             clean_name = re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', v)
             all_titles_list.append({"id": k, "name": clean_name})
 
-            # ==========================================
-            # 🔥 АПГРЕЙД КАТАЛОГА: СКИНЫ И НАВЫКИ
-            # ==========================================
+        # 🔥 ПОДГОТАВЛИВАЕМ ГЛОБАЛЬНЫЕ ДАННЫЕ СТИЛЕЙ И СКИНОВ ДЛЯ ФРОНТА
+        from data.cards import EVENT_CARDS_LIST, AWAKENED_SKIN, ABSOLUTE_SKIN
+        from data.cards import COPY_STYLE, RISE_STYLE, BERSERK_STYLE, SPACE_STYLE, PIERCE_STYLE, EVADE_STYLE
 
-            # 1. Достаем инвентарь скинов игрока
-            skins_rows = db_exec_sync(
-                "SELECT card_id, skin_type FROM skins_inv WHERE user_id = ?",
-                (user_id,), fetchall=True
-            )
-            owned_skins = {"awakened": [], "absolute": []}
-            if skins_rows:
-                for cid, stype in skins_rows:
-                    if stype in owned_skins:
-                        owned_skins[stype].append(cid)
+        # Упаковываем скины для передачи на фронт (Web App отрисует их сам)
+        all_skins_data = {
+            "awakened": AWAKENED_SKIN,
+            "absolute": ABSOLUTE_SKIN
+        }
 
-            # 2. Подгружаем глобальные данные стилей и скинов
-            from data.cards import EVENT_CARDS_LIST, AWAKENED_SKIN, ABSOLUTE_SKIN, CARDS
-            from data.cards import COPY_STYLE, RISE_STYLE, BERSERK_STYLE, SPACE_STYLE, PIERCE_STYLE, EVADE_STYLE
-
-            # 3. Меняем форматы файлов на лету под твои .webp и .webm
-            processed_awakened = {}
-            for k, v in AWAKENED_SKIN.items():
-                processed_awakened[k] = v.copy()
-                if "skin_art_file" in v:
-                    processed_awakened[k]["skin_art_file"] = v["skin_art_file"].rsplit('.', 1)[0] + '.webp'
-
-            processed_absolute = {}
-            for k, v in ABSOLUTE_SKIN.items():
-                processed_absolute[k] = v.copy()
-                if "skin_video_file" in v:
-                    processed_absolute[k]["skin_video_file"] = v["skin_video_file"].rsplit('.', 1)[0] + '.webm'
-
-            all_skins_data = {
-                "awakened": processed_awakened,
-                "absolute": processed_absolute
-            }
-
-            # 4. Карта стилей (навыков) для фильтрации
-            styles_map = {}
-            for cid in CARDS.keys():
-                if cid in COPY_STYLE:
-                    styles_map[cid] = "Копирование"
-                elif cid in RISE_STYLE:
-                    styles_map[cid] = "Восстание"
-                elif cid in BERSERK_STYLE:
-                    styles_map[cid] = "Берсерк"
-                elif cid in SPACE_STYLE:
-                    styles_map[cid] = "Пространство"
-                elif cid in PIERCE_STYLE:
-                    styles_map[cid] = "Пробивание"
-                elif cid in EVADE_STYLE:
-                    styles_map[cid] = "Уклонение"
-                else:
-                    styles_map[cid] = "Базовый"
+        # Упаковываем инфу о стилях (для фильтров в Web App) С ЭМОДЗИ
+        styles_map = {}
+        for cid in CARDS.keys():
+            if cid in COPY_STYLE:
+                styles_map[cid] = "👁 Копирование"
+            elif cid in RISE_STYLE:
+                styles_map[cid] = "🌑 Восстание"
+            elif cid in BERSERK_STYLE:
+                styles_map[cid] = "🩸 Берсерк"
+            elif cid in SPACE_STYLE:
+                styles_map[cid] = "🌊 Пространство"
+            elif cid in PIERCE_STYLE:
+                styles_map[cid] = "⚔️ Пробивание"
+            elif cid in EVADE_STYLE:
+                styles_map[cid] = "🌪 Уклонение"
+            else:
+                styles_map[cid] = "Базовый"
 
         return {
             "diamond": user[0],
@@ -683,14 +661,10 @@ def get_profile(user_id: int):
             "attempts": user[12] if len(user) > 12 else 0,
             "is_premium": is_prem,
             "owned_cards": owned_cards,
-
-            # === 🔥 НОВОЕ ДЛЯ КАТАЛОГА ===
-            "owned_skins": owned_skins,
-            "all_skins_data": all_skins_data,
-            "event_cards": EVENT_CARDS_LIST,
-            "styles_map": styles_map,
-            # ==============================
-
+            "owned_skins": owned_skins,  # <-- Передаем инвентарь скинов игрока
+            "all_skins_data": all_skins_data,  # <-- Передаем базу всех скинов (из cards.py)
+            "event_cards": EVENT_CARDS_LIST,  # <-- Ивентовые карты (для фильтра)
+            "styles_map": styles_map,  # <-- Карта стилей для фильтров
             "daily_day": daily_day,
             "can_claim_daily": can_claim_daily,
             "needs_recovery": needs_recovery,
