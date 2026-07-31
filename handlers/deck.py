@@ -24,7 +24,9 @@ from config import (BOT_TOKEN, ADMIN_IDS, DB_PATH,
                     MAIN_PRIZE_NORMAL_TITLE, MAIN_PRIZE_ROYALE_CARD)
 from data.cards import (CARDS, RARITIES, BGS, VIDEO_BGS, TITLES,
                         NORMAL_PASS, ROYALE_PASS, is_divine,
-                        AWAKENED_SKIN, ABSOLUTE_SKIN)
+                        AWAKENED_SKIN, ABSOLUTE_SKIN,
+    COPY_STYLE, RISE_STYLE, BERSERK_STYLE,
+    SPACE_STYLE, PIERCE_STYLE, EVADE_STYLE)
 from database.db import (db_exec, init_db, get_user, add_user, get_rank,
                          pull_random_card, give_card_to_user,
                          get_active_skin, get_user_skins_for_card, equip_skin, get_all_user_skins_by_type, swap_skins, unequip_skin,
@@ -32,7 +34,7 @@ from database.db import (db_exec, init_db, get_user, add_user, get_rank,
 from handlers import (router, TradeState, SettingsState, PromoState,
                       MATCH_QUEUE, GAMES, PENDING_TRADES, kb_main)
 from media_cache import send_cached_video
-
+from config import is_owner
 
 # ============ ИНВЕНТАРЬ И ТРЕЙД ============
 RARITY_ORDER = {
@@ -53,6 +55,49 @@ RARITY_FILTERS = [
     ("⚪️", "common",     "Обычная ⚪️"),
 ]
 
+SKILL_MAP = {
+    # 👁️ Копирование
+    "копирование": COPY_STYLE,
+    "👁️ копирование": COPY_STYLE,
+    "👁 копирование": COPY_STYLE,
+    "копирование 👁️": COPY_STYLE,
+    "копирование 👁": COPY_STYLE,
+    "👁️": COPY_STYLE,
+    "👁": COPY_STYLE,
+
+    # 🌑 Восстание
+    "восстание": RISE_STYLE,
+    "🌑 восстание": RISE_STYLE,
+    "восстание 🌑": RISE_STYLE,
+    "🌑": RISE_STYLE,
+
+    # 🩸 Берсерк
+    "берсерк": BERSERK_STYLE,
+    "🩸 берсерк": BERSERK_STYLE,
+    "берсерк 🩸": BERSERK_STYLE,
+    "🩸": BERSERK_STYLE,
+
+    # 🌊 Пространство
+    "пространство": SPACE_STYLE,
+    "🌊 пространство": SPACE_STYLE,
+    "пространство 🌊": SPACE_STYLE,
+    "🌊": SPACE_STYLE,
+
+    # ⚔️ Пробивание
+    "пробивание": PIERCE_STYLE,
+    "⚔️ пробивание": PIERCE_STYLE,
+    "⚔ пробивание": PIERCE_STYLE,
+    "пробивание ⚔️": PIERCE_STYLE,
+    "пробивание ⚔": PIERCE_STYLE,
+    "⚔️": PIERCE_STYLE,
+    "⚔": PIERCE_STYLE,
+
+    # 🌪 Уклонение
+    "уклонение": EVADE_STYLE,
+    "🌪 уклонение": EVADE_STYLE,
+    "уклонение 🌪": EVADE_STYLE,
+    "🌪": EVADE_STYLE,
+}
 RARITY_SLUG_TO_LABEL = {slug: label for _, slug, label in RARITY_FILTERS}
 
 class SearchState(StatesGroup):
@@ -416,12 +461,52 @@ async def _process_search_and_show(target, state: FSMContext, page: int):
         matched.sort(key=lambda cid: (stat_distance(cid), -_card_power(cid)))
         info_txt = f"по статам (Ближе к ⚡️{spd} 💪{str_} 🧠{int_})"
 
+
     elif search_type == "skill":
+
         query = data.get("search_query", "")
-        # Проверяем стиль карты. Если стиля нет, считаем её "Базовый"
-        matched = [cid for cid in user_cids if CARDS.get(cid, {}).get('style', 'Базовый') == query]
+
+        query_lower = query.lower().strip()
+
+        # Обработка кнопки "Базовый" (карты без навыков)
+
+        if query_lower == "базовый":
+
+            # Собираем все ID карт с навыками в одну кучу
+
+            all_skill_ids = set(
+
+                COPY_STYLE + RISE_STYLE + BERSERK_STYLE +
+
+                SPACE_STYLE + PIERCE_STYLE + EVADE_STYLE
+
+            )
+
+            # Оставляем только те карты, которых НЕТ в списке навыков
+
+            matched = [cid for cid in user_cids if cid not in all_skill_ids]
+
+            info_txt = "без навыка (Базовые карты)"
+
+
+        # Обработка конкретного навыка
+
+        elif query_lower in SKILL_MAP:
+
+            target_ids = SKILL_MAP[query_lower]
+
+            matched = [cid for cid in user_cids if cid in target_ids]
+
+            info_txt = f"по навыку «<b>{query}</b>»"
+
+
+        else:
+
+            matched = []
+
+            info_txt = "по неизвестному навыку"
+
         matched = _sort_cards(matched)
-        info_txt = f"по навыку «<b>{query}</b>»"
 
     else:
         return

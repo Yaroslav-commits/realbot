@@ -913,7 +913,7 @@ async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, 
         try:
             await cq.message.edit_media(
                 media=types.InputMediaPhoto(media=PASS_ROYALE_IMG_1,
-                                            caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\n🃏 Лимитированная карта: Ронан\n⚠️ Данный пасс у вас ещё не приобретен."),
+                                            caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\n🃏 Лимитированная карта: Ю Соль Ха\n⚠️ Данный пасс у вас ещё не приобретен."),
                 reply_markup=bld.as_markup()
             )
         except Exception:
@@ -922,7 +922,7 @@ async def render_pass_page(cq: CallbackQuery, p_type: str, page: int, u: tuple, 
             except:
                 pass
             await cq.message.answer_photo(photo=PASS_ROYALE_IMG_1,
-                                          caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\n🃏 Лимитированная карта: Ронан\n\n⚠️ Данный пасс у вас ещё не приобретен.",
+                                          caption="🌠 Рояль пасс\n\n425 алмазов 💎\n4x больше наград 🏆\n🃏 Лимитированная карта: Ю Соль Ха\n\n⚠️ Данный пасс у вас ещё не приобретен.",
                                           reply_markup=bld.as_markup())
         return
 
