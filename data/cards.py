@@ -811,6 +811,7 @@ SPACE_STYLE = [
     "han_ga_yun",
     "yu_cha_ryeon",
     "deung_yu_myeong",
+    "yoo_seol_ha",
 ]
 
 # 5. Пробивание: Игнорирует минус от стиля врага и срезает стат противника
