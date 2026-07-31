@@ -2590,7 +2590,7 @@ async def b_spin_buy_cb(cq: CallbackQuery):
     await cq.answer(f"✅ Куплено {att} попыток!", show_alert=True)
     # === ДОБАВИТЬ В КОНЕЦ battle.py (ФУНКЦИЯ ДЛЯ ВЫДАЧИ ТОП-20) ===
 
-CRAFT_GIF_PATH   = "images/shop/craft_animation.mp4"   # путь к mp4 (Telegram сам покажет как GIF)
+CRAFT_GIF_PATH   = "images/shop/craft_animation.MP4"   # путь к mp4 (Telegram сам покажет как GIF)
 CRAFT_GIF_WIDTH  = 960          # ширина анимации крафта
 CRAFT_GIF_HEIGHT = 480          # высота анимации крафта
 _CRAFT_GIF_FILE_ID: str | None = None   # кеш file_id анимации крафта (заполняется после первой отправки)
