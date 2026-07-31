@@ -27,8 +27,8 @@ from aiogram.enums import ParseMode
 from pydantic import BaseModel
 
 from config import BOT_TOKEN, DB_PATH
-from database.db import init_db, is_premium, pull_random_card, give_card_to_user, add_pass_xp, check_and_update_quests
-from data.cards import TITLES
+from database.db import db_exec, init_db, is_premium, pull_random_card, give_card_to_user, add_pass_xp, check_and_update_quests
+from data.cards import TITLES, CARDS, RARITIES, AWAKENED_SKIN, ABSOLUTE_SKIN
 from handlers import router
 
 # Импорты хендлеров
@@ -38,6 +38,7 @@ from handlers import battle as _battle  # noqa: F401
 from handlers.pass_shop import shop as _shop  # noqa: F401
 from handlers.user import cooldown_notification_scheduler, battle_cooldown_notification_scheduler
 from handlers.battle import auto_top_distributor
+
 
 # ============================================================
 #  НАСТРОЙКИ РАЗДЕЛА «ЗАРАБОТОК»  (меняй значения тут)
@@ -491,10 +492,7 @@ DAILY_REWARDS = {
     30: {'pack': 'mythic'}
 }
 
-# Глобальный флаг тех. работ
-WEB_MAINTENANCE = False
-
-
+@app.get("/api/profile/{user_id}")
 def get_profile(user_id: int):
     try:
         # Автоматически проверяем и создаем новые колонки для Пасса, если их нет
@@ -575,7 +573,6 @@ def get_profile(user_id: int):
         needs_recovery = (days_passed > 1 and 0 < daily_day < 30)
 
         is_prem = is_premium(user_id)
-
         # Собираем карты и из инвентаря, и из сундука
         cards_rows = db_exec_sync(
             """
@@ -585,18 +582,6 @@ def get_profile(user_id: int):
             """, (user_id, user_id), fetchall=True
         )
         owned_cards = [row[0] for row in cards_rows] if cards_rows else []
-
-        # 🔥 СОБИРАЕМ СКИНЫ ИЗ БАЗЫ ДАННЫХ
-        skins_rows = db_exec_sync(
-            "SELECT card_id, skin_type FROM skins_inv WHERE user_id = ?",
-            (user_id,), fetchall=True
-        )
-        owned_skins = {}
-        if skins_rows:
-            for cid, stype in skins_rows:
-                if stype not in owned_skins:
-                    owned_skins[stype] = []
-                owned_skins[stype].append(cid)
 
         # Статистика боёв
         wins = user[3] or 0
@@ -620,39 +605,34 @@ def get_profile(user_id: int):
         bgs_rows = db_exec_sync("SELECT bg_id FROM bgs_inv WHERE user_id = ?", (user_id,), fetchall=True)
         unlocked_bgs = [row[0] for row in bgs_rows] if bgs_rows else []
 
+        # ==================== ДОБАВЛЯЕМ СЮДА ====================
+        # Инвентарь скинов игрока
+        skins_rows = db_exec_sync("SELECT card_id, skin_type FROM skins_inv WHERE user_id = ?", (user_id,),
+                                  fetchall=True)
+        owned_skins = [f"{row[0]}_{row[1]}" for row in skins_rows] if skins_rows else []
+
+        # Загружаем базу всех скинов
+        from data.cards import AWAKENED_SKIN, ABSOLUTE_SKIN
+        all_skins_data = []
+        for cid, sdata in AWAKENED_SKIN.items():
+            all_skins_data.append({
+                "card_id": cid,
+                "type": "awakened",
+                "file": sdata.get("skin_art_file")
+            })
+        for cid, sdata in ABSOLUTE_SKIN.items():
+            all_skins_data.append({
+                "card_id": cid,
+                "type": "absolute",
+                "file": sdata.get("skin_video_file")
+            })
+        # ========================================================
+
         import re
         all_titles_list = []
         for k, v in TITLES.items():
             clean_name = re.sub(r'<tg-emoji[^>]*>(.*?)</tg-emoji>', r'\1', v)
             all_titles_list.append({"id": k, "name": clean_name})
-
-        # 🔥 ПОДГОТАВЛИВАЕМ ГЛОБАЛЬНЫЕ ДАННЫЕ СТИЛЕЙ И СКИНОВ ДЛЯ ФРОНТА
-        from data.cards import EVENT_CARDS_LIST, AWAKENED_SKIN, ABSOLUTE_SKIN
-        from data.cards import COPY_STYLE, RISE_STYLE, BERSERK_STYLE, SPACE_STYLE, PIERCE_STYLE, EVADE_STYLE
-
-        # Упаковываем скины для передачи на фронт (Web App отрисует их сам)
-        all_skins_data = {
-            "awakened": AWAKENED_SKIN,
-            "absolute": ABSOLUTE_SKIN
-        }
-
-        # Упаковываем инфу о стилях (для фильтров в Web App) С ЭМОДЗИ
-        styles_map = {}
-        for cid in CARDS.keys():
-            if cid in COPY_STYLE:
-                styles_map[cid] = "👁 Копирование"
-            elif cid in RISE_STYLE:
-                styles_map[cid] = "🌑 Восстание"
-            elif cid in BERSERK_STYLE:
-                styles_map[cid] = "🩸 Берсерк"
-            elif cid in SPACE_STYLE:
-                styles_map[cid] = "🌊 Пространство"
-            elif cid in PIERCE_STYLE:
-                styles_map[cid] = "⚔️ Пробивание"
-            elif cid in EVADE_STYLE:
-                styles_map[cid] = "🌪 Уклонение"
-            else:
-                styles_map[cid] = "Базовый"
 
         return {
             "diamond": user[0],
@@ -661,10 +641,6 @@ def get_profile(user_id: int):
             "attempts": user[12] if len(user) > 12 else 0,
             "is_premium": is_prem,
             "owned_cards": owned_cards,
-            "owned_skins": owned_skins,  # <-- Передаем инвентарь скинов игрока
-            "all_skins_data": all_skins_data,  # <-- Передаем базу всех скинов (из cards.py)
-            "event_cards": EVENT_CARDS_LIST,  # <-- Ивентовые карты (для фильтра)
-            "styles_map": styles_map,  # <-- Карта стилей для фильтров
             "daily_day": daily_day,
             "can_claim_daily": can_claim_daily,
             "needs_recovery": needs_recovery,
@@ -681,7 +657,10 @@ def get_profile(user_id: int):
             "pass_level": user[8] if user[8] is not None else 1,
             "pass_xp": user[9] if user[9] is not None else 0,
             "claimed_pass_levels": user[10] if user[10] is not None else 1,
-            "pass_quests": pass_quests_dict
+            "pass_quests": pass_quests_dict,
+            "owned_skins": owned_skins,
+            "all_skins_data": all_skins_data
+            # ==========================================
         }
     except Exception as e:
         logging.error(f"Error in get_profile: {e}")
