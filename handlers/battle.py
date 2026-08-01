@@ -111,9 +111,10 @@ async def battle_menu(msg: types.Message):
     bld.button(text="Найти противника 👁️", callback_data="find_match")
     bld.button(text="Дружеский бой 🔪", callback_data="friendly_match_start")
     bld.button(text="Моя колода 🗂️", callback_data="my_deck")
+    bld.button(text="Подземелье", callback_data="b_world", icon_custom_emoji_id="5294438969264599086")
     bld.button(text="🛒 BattleShop", callback_data="b_shop_main")
     bld.button(text="🔝 ТОП И РАНГИ", callback_data="b_top_ranks")
-    bld.adjust(1, 2, 1, 1)
+    bld.adjust(1, 2, 1, 1, 1)
 
     if os.path.exists("images/shop/battle.jpeg"):
         await msg.answer_photo(photo=FSInputFile("images/shop/battle.jpeg"), caption=txt, reply_markup=bld.as_markup())
@@ -2020,9 +2021,10 @@ async def b_menu_back_cb(cq: CallbackQuery):
     bld.button(text="Найти противника 👁️", callback_data="find_match")
     bld.button(text="Дружеский бой 🔪", callback_data="friendly_match_start")
     bld.button(text="Моя колода 🗂️", callback_data="my_deck")
+    bld.button(text="Подземелье", callback_data="b_world", icon_custom_emoji_id="5294438969264599086")
     bld.button(text="🛒 BattleShop", callback_data="b_shop_main")
     bld.button(text="🔝 ТОП И РАНГИ", callback_data="b_top_ranks")
-    bld.adjust(1, 2, 1, 1)
+    bld.adjust(1, 2, 1, 1, 1)
 
     if os.path.exists("images/shop/battle.jpeg"):
         await cq.message.answer_photo(photo=FSInputFile("images/shop/battle.jpeg"), caption=txt,
@@ -4181,3 +4183,7 @@ async def stash_do_take_cb(cq: CallbackQuery, state: FSMContext):
 
     new_cq = cq.model_copy(update={"data": f"stash_take:{page}:{source}"})
     await stash_take_cb(new_cq, state)
+
+@router.callback_query(F.data == "b_world")
+async def b_world(cq: CallbackQuery):
+    await cq.answer("Разрабатываем 🫨", show_alert=True)
