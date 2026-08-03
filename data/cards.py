@@ -11,6 +11,7 @@ EVENT_CARDS_LIST = [
 ]
 # ================== БАЗА ДАННЫХ ==================
 CARDS = {
+"jinx": {"name": "Джу Дже Гён и Ким Дан", "rarity": "Эпическая 🟢", "style": "ММА [🌪 Уклонение]", "series": "Джинкс", "speed": 80, "strength": 80, "intellect": 80, "file": "jinx.jpeg", "exclusive": True},
 "yoo_seol_ha": {"name": "Ю Соль Ха", "rarity": "Легендарная 🔵", "style": "Грозовой бес [🌊 Пространство]", "series": "Мир после падения", "speed": 90, "strength": 89, "intellect": 89, "file": "yoo_seol_ha.jpeg", "exclusive": True},
 # ========== Убить Героя ===============
 "kim_u_dzhin": {"name": "Ким У-Джин", "rarity": "Мифическая 🔴", "style": "Армия Смерти [🌑 Восстание]", "series": "Убить Героя", "speed": 97, "strength": 97, "intellect": 98, "file": "kim_u_dzhin.jpeg", "exclusive": False},

@@ -76,5 +76,19 @@
         "height": 720,
         "price": 99999,
         "id": "lookism_summer"
+    },
+    {
+        "name": "Jin-Woo vs Antares",
+        "file": "jin_woo_antares.mp4",
+        "width": 1280,
+        "height": 720,
+        "price": 8999,
+        "id": "jin_woo_antares"
+    },
+    {
+        "name": "The Evil Ring",
+        "file": "evil_ring.jpeg",
+        "price": 1500,
+        "id": "evil_ring"
     }
 ]
